@@ -136,9 +136,8 @@ const JobCard = () => {
   };
 
   async function onLoad() {
-    if (upworkJobs.length === 0) {
-      setLoading(true);
-    }
+    setLoading(true);
+
     setError(null);
     try {
       const res = await fetch(
@@ -198,7 +197,7 @@ const JobCard = () => {
 
   // --- Render ---
 
-  if (loading && upworkJobs.length === 0) {
+  if (loading) {
     return (
       <div className="flex justify-center items-center h-screen text-2xl font-semibold">
         <p>Loading jobs...</p>
