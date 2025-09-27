@@ -135,34 +135,6 @@ const JobCard = () => {
     }));
   };
 
-  const requestNotificationPermission = () => {
-    if ("Notification" in window) {
-      if (Notification.permission !== "granted") {
-        Notification.requestPermission();
-      }
-    }
-  };
-
-  const showNotification = (job) => {
-    if ("Notification" in window && Notification.permission === "granted") {
-      const notification = new Notification(`New Upwork Job: ${job.title}`, {
-        body: ` | Budget: ${
-          job.hourlyBudgetType || job.fixedPriceAmount?.displayValue
-        }`,
-        icon: "/upwork-logo.png",
-        tag: job.id,
-      });
-
-      notification.onclick = () => {
-        window.open(`https://www.upwork.com/jobs/${job.ciphertext}`, "_blank");
-      };
-
-      if (audioRef.current) {
-        audioRef.current.play();
-      }
-    }
-  };
-
   async function onLoad() {
     if (upworkJobs.length === 0) {
       setLoading(true);
@@ -189,11 +161,6 @@ const JobCard = () => {
           }
         }
 
-        if (newlyFoundJobs.length > 0) {
-          // console.log(`Found ${newlyFoundJobs.length} new jobs!`);
-          newlyFoundJobs.forEach((job) => showNotification(job));
-        }
-
         return newlyFetchedJobs;
       });
     } catch (err) {
@@ -213,7 +180,6 @@ const JobCard = () => {
   // --- Effects ---
 
   useEffect(() => {
-    requestNotificationPermission();
     onLoad();
 
     const refreshInterval = setInterval(() => {
@@ -250,8 +216,6 @@ const JobCard = () => {
 
   return (
     <div className="container mx-auto px-4">
-      <audio ref={audioRef} src="/notification.mp3" preload="auto" />
-
       {/* Timer and Refresh Button */}
       <div className="flex justify-between items-center my-4 p-4 bg-gray-100 rounded-lg shadow-inner">
         <div className="flex items-center space-x-2">
