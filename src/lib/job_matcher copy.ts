@@ -23,8 +23,8 @@ async function loadJobsFromCSV() {
 
   const res = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/jobs`);
   const csvData = await res.text();
-  console.log(res);
-  console.log(csvData);
+  // console.log(res);
+  // console.log(csvData);
 
 
 

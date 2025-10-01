@@ -9,7 +9,7 @@ export async function POST(req: Request) {
     const response = await fetch(`${process.env.NEXT_PUBLIC_API_PATH}auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userName, password }),
+        body: JSON.stringify({ userid: userName, password }),
     });
 
     if (!response.ok) {

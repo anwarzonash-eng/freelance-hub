@@ -1,6 +1,7 @@
 // app/components/AuthActions.tsx
 import { cookies } from "next/headers";
 import LogoutButton from "./LogoutButton";
+import { use } from "react";
 
 export default async function AuthActions() {
   const cookieStore = await cookies(); // In server components this is sync

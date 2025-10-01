@@ -1,6 +1,8 @@
 // components/Header.jsx
+
 import Link from "next/link";
 import AuthActions from "./auth/AuthActions";
+import { use } from "react";
 
 const Header = () => {
   return (
