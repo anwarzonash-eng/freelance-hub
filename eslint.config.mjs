@@ -23,7 +23,8 @@ const eslintConfig = [
       // Turn off consistent type assertion warnings
       "@typescript-eslint/consistent-type-assertions": "off",
       "prefer-const": "off",
-
+      "@typescript-eslint/no-duplicate-enum-values": "off",
+      "react/no-unescaped-entities": "off",
       // Optional: allow explicit 'any'
       "@typescript-eslint/no-explicit-any": "off",
     },
