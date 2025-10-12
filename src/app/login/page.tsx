@@ -25,10 +25,11 @@ export default function LoginPage() {
       });
 
       if (res.ok) {
+        window.location.reload();
         // Successful login:
         // Loading state remains TRUE until the new page loads.
-        router.refresh();
-        router.push("/"); // redirect to home/dashboard
+        // router.refresh();
+        // router.push("/"); // redirect to home/dashboard
         // We do NOT set setLoading(false) here. The new page loading
         // will naturally unmount this component, ending the loading state.
       } else {

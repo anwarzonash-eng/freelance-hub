@@ -13,14 +13,17 @@ export default function LogoutButton() {
     setLoading(true);
 
     try {
-      await fetch("/api/auth/logout", { method: "POST" });
+      const success = await fetch("/api/auth/logout", { method: "POST" });
+      if (success.ok) {
+        // router.refresh();
+        router.push("/login");
+        window.location.reload();
+      }
 
       // On success:
       // The loading state remains TRUE until the new page loads,
       // covering the router.refresh() (which forces a re-render/middleware check)
       // and the final router.push("/login") redirect.
-      router.refresh();
-      router.push("/login");
 
       // We don't need to set loading to false here, as the component
       // will be unmounted when the user is redirected to the login page.
@@ -37,7 +40,7 @@ export default function LogoutButton() {
       onClick={handleLogout}
       // 5. Disable the button while loading
       disabled={loading}
-      className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:bg-red-400 disabled:cursor-wait transition-colors"
+      className=""
     >
       {/* 6. Display dynamic text based on the loading state */}
       {loading ? "Logging Out..." : "Logout"}
