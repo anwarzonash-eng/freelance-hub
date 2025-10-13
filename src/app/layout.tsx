@@ -40,7 +40,7 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const useData = getAuthStatus();
+  const useData = await getAuthStatus();
 
   return (
     <html lang="en" suppressHydrationWarning={true}>
