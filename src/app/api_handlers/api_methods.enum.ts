@@ -1,3 +1,4 @@
+'use client'
 export enum ApiMethod {
     GET = 'GET',
     POST = 'POST',

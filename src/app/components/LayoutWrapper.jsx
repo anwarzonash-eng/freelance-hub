@@ -36,6 +36,8 @@ const LayoutWrapper = ({ children, useData }) => {
         />
       )}
 
+      {!useData.authenticated && <h1>Hello</h1>}
+
       {/* 2. Main Content Area */}
       <main
         className={`flex-1 transition-all duration-300 ${contentMarginClass} overflow-y-auto`}

@@ -1,3 +1,4 @@
+'use client'
 export interface IApiParams {
     // For replacing placeholders in the route like /sales/:id
     path?: Record<string, string | number>;

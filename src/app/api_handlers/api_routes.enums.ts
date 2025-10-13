@@ -1,5 +1,5 @@
 // ./src/enums/apiRoutes.ts
-
+'use client'
 
 export enum CampaignAPIRoutes {
     ADD = 'campaigns/add',
