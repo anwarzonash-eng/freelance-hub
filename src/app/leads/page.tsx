@@ -356,7 +356,7 @@ const LeadsComponent = () => {
               val?.trim().toLowerCase() === "true" || val?.trim() === "1";
 
             // Apply valueOrNull utility to ALL row values before assignment
-            const cleanedRow = {};
+            const cleanedRow: any = {};
             for (const key in row) {
               cleanedRow[key] = valueOrNull(row[key]);
             }

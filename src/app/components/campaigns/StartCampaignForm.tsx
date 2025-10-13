@@ -1,6 +1,6 @@
 import React, { FC, useState, useMemo } from "react";
 import GenericPopup from "../popups/GenericPopup";
-import NewsletterManager from "../newsletters/page";
+import NewsletterManager from "../newsletters/NewsletterManager";
 
 // --- TYPE DEFINITIONS ---
 type StartCampaignFormProps = {
@@ -22,11 +22,11 @@ type CampaignPayload = {
 };
 
 // --- COMPONENT ---
-const StartCampaignForm: FC<StartCampaignFormProps> = ({
+const StartCampaignForm: FC<any> = ({
   recipientIds,
   onClose,
   onLaunchCampaign,
-}) => {
+}: any) => {
   // Consolidated State for Form Fields
   const [formState, setFormState] = useState({
     title: "",
