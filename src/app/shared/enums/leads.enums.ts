@@ -4,8 +4,9 @@ export enum LeadSource {
     FLEX_JOBS = 'flex_jobs',
     UPWORK = 'upwork',
     STUDENT = 'student',
-    BOUGHT_NEW_DOMAINS = "bought_new_domains"
-
+    BOUGHT_NEW_DOMAINS = "bought_new_domains",
+    LINKEDIN = "linkedin",
+    INDEED = 'indeed'
 }
 
 export enum EmailStatus {
