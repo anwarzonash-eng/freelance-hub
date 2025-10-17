@@ -10,7 +10,10 @@ export const config = {
 };
 
 export async function middleware(request: NextRequest) {
-    const { pathname } = request.nextUrl;
+    const path = request.nextUrl.pathname;
+    const query = request.nextUrl.search;
+    const pathname = `${path}${query}`;
+
     const isPublicPath = publicPaths.includes(pathname);
 
     const cookieStore = await cookies();
@@ -46,7 +49,9 @@ export async function middleware(request: NextRequest) {
     const allowedRoutes = userData.roles || [];
 
     // Normalize path: trim trailing slash unless it's the root '/'
+
     const currentPath = pathname === '/' ? '/' : pathname.replace(/\/$/, '');
+
 
     // Check for access:
     // This grants access if the roles array contains "*" OR if the specific path is included.
