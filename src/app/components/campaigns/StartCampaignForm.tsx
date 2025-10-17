@@ -1,6 +1,6 @@
 import React, { FC, useState, useMemo } from "react";
 import GenericPopup from "../popups/GenericPopup";
-import NewsletterManager from "../newsletters/page";
+import NewsletterManager from "../newsletters/newsletterManager";
 
 // --- TYPE DEFINITIONS ---
 type StartCampaignFormProps = {
