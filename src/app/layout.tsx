@@ -29,7 +29,7 @@ const getAuthStatus = async () => {
       // Return true only if the cookie exists AND the payload says authenticated
       return userData;
     } catch (e) {
-      console.error("Failed to parse auth cookie in layout:", e);
+      // console.error("Failed to parse auth cookie in layout:", e);
     }
   }
   return false; // Not authenticated or cookie invalid

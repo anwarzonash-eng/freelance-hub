@@ -29,7 +29,7 @@ export default function LogoutButton() {
       // will be unmounted when the user is redirected to the login page.
     } catch (error) {
       // 4. Stop loading on error
-      console.error("Logout failed:", error);
+      // console.error("Logout failed:", error);
       setLoading(false);
       // Optionally, show an error message to the user here
     }

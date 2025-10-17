@@ -17,7 +17,9 @@ export enum NewsLettersAPIRoutes {
 }
 
 export enum UpworkJobsAPIRoutes {
-    GET_LATEST = 'upwork-job/latest'
+    GET_LATEST = 'upwork-job/latest',
+    GET_SUBMITTED = 'upwork-job/add-submitted-upwork-jobs',
+    ADD_SUBMITTED_JOB = 'upwork-job/add-submitted-upwork-jobs'
 }
 
 export enum LeadsAPIRoutes {

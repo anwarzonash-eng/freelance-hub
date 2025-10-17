@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from "react";
 function ExpandCollapse({
   title,
   children,
-  defaultOpen = false,
+  defaultOpen = true,
   open: controlledOpen,
   onOpenChange,
   className = "",

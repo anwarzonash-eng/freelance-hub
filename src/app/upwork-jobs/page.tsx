@@ -3,9 +3,20 @@
 
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
-import { getALLUPworkJobs } from "../api_handlers/api/upwork.api";
+import {
+  addSubmittedUPworkJobs,
+  getALLUPworkJobs,
+  getSubmittedUPworkJobs,
+} from "../api_handlers/api/upwork.api";
+import { useSearchParams } from "next/navigation";
 
 const JobCard = () => {
+  const searchParam = useSearchParams();
+  const type = searchParam.get("type");
+  // useEffect(() => {
+  //   alert(type);
+  // }, []);
+
   const [upworkJobs, setUpworkJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -141,7 +152,10 @@ const JobCard = () => {
 
     setError(null);
     try {
-      const res = await getALLUPworkJobs();
+      const res =
+        type == "all"
+          ? await getALLUPworkJobs()
+          : await getSubmittedUPworkJobs();
       // const res = await fetch(
       //   `${process.env.NEXT_PUBLIC_API_PATH}upwork-job/latest`
       // );
@@ -152,6 +166,7 @@ const JobCard = () => {
       }
       // const fetchedCacheFile = await res.json();
       const newlyFetchedJobs = res.data;
+      // type == "all" ? res.data : [{ ...res.data.data }];
 
       setUpworkJobs((prevUpworkJobs) => {
         const prevJobIds = new Set(prevUpworkJobs.map((job) => job.id));
@@ -178,25 +193,30 @@ const JobCard = () => {
       window.open("/best-match", "_blank");
     }
   };
+  const handleMarkSubmitted = async (jobData) => {
+    await addSubmittedUPworkJobs(jobData);
+  };
 
   // --- Effects ---
 
   useEffect(() => {
     onLoad();
 
-    const refreshInterval = setInterval(() => {
-      onLoad();
-    }, 60000);
+    if (type == "all") {
+      const refreshInterval = setInterval(() => {
+        onLoad();
+      }, 60000);
 
-    const timerInterval = setInterval(() => {
-      setTimer((prevTimer) => (prevTimer <= 1 ? 60 : prevTimer - 1));
-    }, 1000);
+      const timerInterval = setInterval(() => {
+        setTimer((prevTimer) => (prevTimer <= 1 ? 60 : prevTimer - 1));
+      }, 1000);
 
-    return () => {
-      clearInterval(refreshInterval);
-      clearInterval(timerInterval);
-    };
-  }, []);
+      return () => {
+        clearInterval(refreshInterval);
+        clearInterval(timerInterval);
+      };
+    }
+  }, [type]);
 
   // --- Render ---
 
@@ -207,6 +227,47 @@ const JobCard = () => {
   //     </div>
   //   );
   // }
+  const formatPostgresDate = (
+    dateInput: string | Date | null | undefined
+  ): string => {
+    // 1. Handle null or undefined input
+    if (!dateInput) {
+      return "N/A";
+    }
+
+    try {
+      // 2. Convert input to a Date object.
+      // new Date() handles both string and Date object input.
+      const date = new Date(dateInput);
+
+      // Check for an invalid date (e.g., if the string was malformed)
+      if (isNaN(date.getTime())) {
+        return "Invalid Date";
+      }
+
+      // 3. Define options for the date part (e.g., "14 Oct")
+      const dateOptions: Intl.DateTimeFormatOptions = {
+        day: "numeric",
+        month: "short",
+      };
+
+      // 4. Define options for the time part (e.g., "17:54")
+      const timeOptions: Intl.DateTimeFormatOptions = {
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23", // Forces 24-hour format
+      };
+
+      // 5. Format and combine
+      const formattedDate = date.toLocaleDateString("en-US", dateOptions);
+      const formattedTime = date.toLocaleTimeString("en-US", timeOptions);
+
+      return `${formattedDate}, ${formattedTime}`;
+    } catch (e) {
+      console.error("Error formatting date:", e);
+      return "Invalid Date";
+    }
+  };
 
   if (error) {
     return (
@@ -219,20 +280,23 @@ const JobCard = () => {
   return (
     <div className="container mx-auto px-4">
       {/* Timer and Refresh Button */}
-      <div className="flex justify-between items-center my-4 p-4 bg-gray-100 rounded-lg shadow-inner">
-        <div className="flex items-center space-x-2">
-          <p className="font-semibold text-gray-700">Next Refresh:</p>
-          <span className="text-lg font-bold text-indigo-600">{timer}s</span>
+      {type == "all" && (
+        <div className="flex justify-between items-center my-4 p-4 bg-gray-100 rounded-lg shadow-inner">
+          <div className="flex items-center space-x-2">
+            <p className="font-semibold text-gray-700">Next Refresh:</p>
+            <span className="text-lg font-bold text-indigo-600">{timer}s</span>
+          </div>
+          <button
+            onClick={onLoad}
+            className="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+          >
+            Refresh Now
+          </button>
         </div>
-        <button
-          onClick={onLoad}
-          className="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-        >
-          Refresh Now
-        </button>
-      </div>
+      )}
+
       <h1 className="text-3xl font-bold text-center my-8">
-        Upwork Job Postings
+        {type == "all" ? "Upwork Job Postings" : "Submitted Proposals"}
       </h1>
 
       {upworkJobs.map((job) => {
@@ -270,7 +334,16 @@ const JobCard = () => {
             <div className="flex justify-between items-start">
               <div className="flex-grow">
                 <p className="text-gray-500 text-sm mb-1">
-                  {timeAgo(job.publishedDateTime)}
+                  {type == "all" ? (
+                    timeAgo(job.publishedDateTime)
+                  ) : (
+                    <div>
+                      <span className="text-green-800 font-extrabold">
+                        Submitted At:
+                      </span>{" "}
+                      {formatPostgresDate(job.job_submitted_date)}
+                    </div>
+                  )}
                 </p>
                 <h2 className="text-xl font-semibold text-gray-800">
                   {job.title}
@@ -283,6 +356,16 @@ const JobCard = () => {
                 >
                   Match
                 </button>
+                {type == "all" ? (
+                  <button
+                    onClick={() => handleMarkSubmitted(job)}
+                    className="px-3 py-1 bg-green-600 text-white font-semibold text-sm rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                  >
+                    Mark Submitted
+                  </button>
+                ) : (
+                  ""
+                )}
                 {job.ciphertext && (
                   <Link
                     href={jobUrl}

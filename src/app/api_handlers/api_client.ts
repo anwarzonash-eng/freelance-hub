@@ -12,7 +12,7 @@ const BASE_API_URL = process.env.NEXT_PUBLIC_API_PATH;
 const callPopup = (message: string, isError: boolean) => {
     const icon = isError ? 'error_outline' : 'check_circle_outline';
     const type = isError ? 'Error' : 'Success';
-    console.log(`[${type} Popup | Icon: ${icon}] Message: ${message}`);
+    // console.log(`[${type} Popup | Icon: ${icon}] Message: ${message}`);
 };
 
 const buildUrl = (baseUrl: string, route: string, params?: IApiParams): string => {
@@ -69,7 +69,7 @@ export const apiClient = async <T = any, P = any>(
         headers: defaultHeaders,
         body: payload && method !== 'GET' ? JSON.stringify(payload) : undefined,
     };
-    console.log(url, config)
+    // console.log(url, config)
 
     try {
         const response = await fetch(url, config);

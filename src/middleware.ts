@@ -22,9 +22,9 @@ export async function middleware(request: NextRequest) {
         try {
             userData = JSON.parse(sessionCookie.value);
             isAuthenticated = userData.authenticated === true;
-            console.log({ userData: userData, current_url: request.url });
+            // console.log({ userData: userData, current_url: request.url });
         } catch (e) {
-            console.log("Failed to parse authSession cookie. Error:", e);
+            // console.log("Failed to parse authSession cookie. Error:", e);
         }
     }
 
@@ -50,12 +50,11 @@ export async function middleware(request: NextRequest) {
 
     // Check for access:
     // This grants access if the roles array contains "*" OR if the specific path is included.
-    console.log(allowedRoutes)
     const hasAccess = allowedRoutes.includes('*') || allowedRoutes.includes(currentPath);
 
     // 3. Handle authenticated users trying to access unauthorized paths
     if (isAuthenticated && !isPublicPath && !hasAccess) {
-        console.log(`Access denied for ${currentPath}. User roles: ${allowedRoutes.join(', ')}`);
+        // console.log(`Access denied for ${currentPath}. User roles: ${allowedRoutes.join(', ')}`);
         return NextResponse.redirect(new URL('/404', request.url));
     }
 

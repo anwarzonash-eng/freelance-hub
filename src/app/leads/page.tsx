@@ -9,13 +9,9 @@ import React, {
   useMemo,
 } from "react";
 import Papa from "papaparse";
-import { Dropdown } from "../components/form-components/dropdown";
 import { LeadFormModal } from "../components/leads/LeadFormModal";
 import { LeadDetailsModal } from "../components/leads/LeadDetailsModal";
-import { IconAdd } from "../components/ui/icon-components";
-import { STATUS_ENUM, SOURCE_ENUM } from "../shared/enums/select";
 import { LeadRow } from "../components/leads/leadsRow";
-import { HandCoins } from "lucide-react";
 import GenericPopup from "../components/popups/GenericPopup";
 import StartCampaignForm from "../components/campaigns/StartCampaignForm"; // Use the new component name
 import {
@@ -23,8 +19,8 @@ import {
   deleteBulkLead,
   getALLLeads,
 } from "../api_handlers/api/leads.api ";
-
-const BULK_UPLOAD_API = `${process.env.NEXT_PUBLIC_API_PATH}remote-jobs/bulk-upload`;
+import { LeadsFilter } from "../components/leads/LeadFilter";
+import { IApiParams } from "../api_handlers/api.interface";
 
 const EXPECTED_HEADERS = [
   "title",
@@ -68,158 +64,13 @@ const valueOrNull = (value) => {
     : value;
 };
 
-const getDropdownOptions = (enumObj) => {
-  return Object.entries(enumObj).map(([key, label]) => ({
-    value: key.toLowerCase().replace(/_/g, "-"),
-    label: label,
-  }));
-};
-
-const SOURCE_OPTIONS = getDropdownOptions(SOURCE_ENUM);
-const STATUS_OPTIONS = getDropdownOptions(STATUS_ENUM);
-
-// --- MOCK DATA REMAINS UNCHANGED ---
-const mockLeadsData = {
-  data: [
-    {
-      id: "cd6068d7-3f5e-4966-8860-a1a58ddef0d6",
-      title: "Senior Full-Stack JavaScript Developer (Remote)",
-      description:
-        "Looking for a highly skilled developer to work on our core application platform using NestJS, React, and PostgreSQL. The work environment is fast-paced, and we value collaborative problem-solving. This is a long description to test the read more/less functionality and ensure the expanded view handles text overflow gracefully.",
-      link: "https://careers.examplecorp.com/senior-developer-remote-123453",
-      skills: [
-        "TypeScript",
-        "Node.js",
-        "NestJS",
-        "React",
-        "PostgreSQL",
-        "TailwindCSS",
-      ],
-      type: "Full-Time",
-      pubDate: "2025-10-01T10:00:00.000Z",
-      company_details: {
-        name: "ExampleCorp Global",
-        website: "https://www.examplecorp.com",
-      },
-      contact_details: [
-        {
-          name: "Jane Doe",
-          email: "hiring@examplecorp.com",
-          contact: "+1-555-1234",
-          designation: "Hiring Manager",
-        },
-      ],
-      status: "pending",
-      createdAt: "2025-10-02T00:57:21.813Z",
-    },
-    {
-      id: "e4b2a8f9-7d1c-4e6a-b0d3-c9e8f7g6h5i4",
-      title: "Remote React Developer needed for marketing platform",
-      description:
-        "Seeking an experienced developer to join our remote team. Requires strong knowledge of React, Redux, and modern CSS. Competitive salary and fully remote working conditions. This description is short.",
-      link: "https://jobs.weworkremotely.com/react-developer-2025",
-      skills: ["React", "Redux", "CSS3", "JavaScript"],
-      type: "Contract",
-      pubDate: "2025-09-28T14:30:00.000Z",
-      company_details: {
-        name: "Remote Solutions Inc.",
-        website: "https://remotesolutions.com",
-      },
-      contact_details: [],
-      status: "short-listed",
-      createdAt: "2025-09-29T10:15:45.000Z",
-    },
-    {
-      id: "f5c3b9e0-8e2d-4f7b-9c1a-d0f9e8g7h6i5",
-      title: "Backend Engineer (Node.js/GraphQL)",
-      description:
-        "Join our innovative team building scalable backend services. Experience with Node.js, GraphQL, and AWS is a plus. Remote friendly, great benefits.",
-      link: "https://careers.techcorp.com/backend-engineer",
-      skills: ["Node.js", "GraphQL", "AWS", "PostgreSQL", "Docker"],
-      type: "Full-Time",
-      pubDate: "2025-09-25T08:00:00.000Z",
-      company_details: {
-        name: "TechCorp Innovations",
-        website: "https://techcorp.com",
-      },
-      contact_details: [
-        {
-          name: "John Smith",
-          email: "john.smith@techcorp.com",
-          contact: "+1-555-9876",
-          designation: "Recruiting Specialist",
-        },
-      ],
-      status: "email-sent",
-      createdAt: "2025-09-26T11:00:00.000Z",
-    },
-  ],
-};
-
-// --- FETCH LEADS FUNCTION REMAINS UNCHANGED ---
-const fetchLeads = async (filters) => {
-  const response = await getALLLeads();
-  let leadsData = [];
-
-  if (response) {
-    leadsData = response.data || [];
-  } else {
-    // Fallback if API fails
-
-    leadsData = mockLeadsData.data;
-  }
-
-  const { searchText, status } = filters;
-  let filteredData = leadsData;
-
-  // Client-side Filtering by Status
-  if (status && status !== "any") {
-    filteredData = filteredData.filter((lead) => lead.status === status);
-  }
-
-  // Client-side Filtering by Search Text
-  if (searchText) {
-    const lowerCaseSearch = searchText.toLowerCase();
-
-    filteredData = filteredData.filter((lead) => {
-      const titleMatch = lead.title?.toLowerCase().includes(lowerCaseSearch);
-      const companyMatch = lead.company_details?.name
-        ?.toLowerCase()
-        .includes(lowerCaseSearch);
-      const skillMatch =
-        Array.isArray(lead.skills) &&
-        lead.skills.some((skill) =>
-          skill?.toLowerCase().includes(lowerCaseSearch)
-        );
-
-      return titleMatch || companyMatch || skillMatch;
-    });
-  }
-
-  // Sorting by pubDate (Descending: Newest first)
-  const sortedData = [...filteredData].sort((a, b) => {
-    // Handle cases where pubDate might be missing or invalid
-    const dateA = a.pubDate ? new Date(a.pubDate).getTime() : 0;
-    const dateB = b.pubDate ? new Date(b.pubDate).getTime() : 0;
-
-    // dateB - dateA sorts in descending order (newest first)
-    return dateB - dateA;
-  });
-
-  return sortedData;
-};
-
 // --- LEADS COMPONENT START ---
 const LeadsComponent = () => {
   const [leads, setLeads] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [filters, setFilters] = useState({
-    searchText: "",
-    source: SOURCE_OPTIONS[0].value,
-    status: STATUS_OPTIONS[0].value,
-  });
   const [expandedIds, setExpandedIds] = useState({});
   const [selectedIds, setSelectedIds] = useState(new Set());
+
   const isAnySelected = selectedIds.size > 0;
   const selectedIdsArray = useMemo(
     () => Array.from(selectedIds),
@@ -231,6 +82,7 @@ const LeadsComponent = () => {
   const [leadToEdit, setLeadToEdit] = useState(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [leadToView, setLeadToView] = useState(null);
+  const [filterParam, setFilterParam] = useState({});
 
   // CSV Upload State
   const [uploadLoading, setUploadLoading] = useState(false);
@@ -240,37 +92,28 @@ const LeadsComponent = () => {
   const [uploadStatus, setUploadStatus] = useState(null);
   const fileInputRef = useRef(null);
 
-  const loadLeads = useCallback(async (currentFilters) => {
+  const loadLeads = async (currentFilters: IApiParams | null) => {
+    console.log(currentFilters);
+
     setIsLoading(true);
-    try {
-      const data = await fetchLeads(currentFilters);
-      setLeads(data);
-    } catch (error) {
-      console.error("Failed to load leads:", error);
-    } finally {
-      setIsLoading(false);
+
+    const response = await getALLLeads(currentFilters);
+    let leadsData = [];
+
+    if (response) {
+      leadsData = response.data || [];
     }
-  }, []);
+    setIsLoading(false);
+    setLeads(leadsData);
+  };
 
   const handleDelete = async () => {
     console.log(selectedIds);
     setIsDeleting(true);
-    // const response = await fetch(
-    //   "http://localhost:3001/remote-jobs/bulk-delete",
-    //   {
-    //     method: "POST",
-    //     headers: {
-    //       "Content-Type": "application/json",
-    //       // Include authorization headers if your API requires them (e.g., JWT)
-    //       // 'Authorization': `Bearer ${yourAuthToken}`,
-    //     },
-    //     // The request body must match the BulkDeleteDto: { ids: string[] }
-    //     body: JSON.stringify(),
-    //   }
-    // );
+
     const response = await deleteBulkLead(selectedIdsArray);
     if (!response) {
-    } else loadLeads(filters);
+    } else loadLeads(null);
     setIsDeleting(false);
   };
 
@@ -288,10 +131,6 @@ const LeadsComponent = () => {
     selectedIdsArray;
     setPpenStartCampaignPopup(!openStartCampaignPopup);
   };
-
-  useEffect(() => {
-    loadLeads(filters);
-  }, [loadLeads]);
 
   const handleCheckboxChange = (id, isChecked) => {
     const newSelectedIds = new Set(selectedIds);
@@ -415,27 +254,6 @@ const LeadsComponent = () => {
             `Submitting ${remoteJobsPayload.length} leads to API...`
           );
 
-          // const apiRes = await fetch(BULK_UPLOAD_API, {
-          //   method: "POST",
-          //   headers: {
-          //     "Content-Type": "application/json",
-          //   },
-          //   body: JSON.stringify(remoteJobsPayload),
-          // });
-
-          // if (!apiRes.ok) {
-          //   const errorBody = await apiRes.json();
-          //   const errorMessage =
-          //     errorBody.message ||
-          //     `API Upload Failed with status ${apiRes.status}. Check server logs.`;
-          //   throw new Error(errorMessage);
-          // }
-
-          // // --- Success and Refresh ---
-          // setUploadStatus(
-          //   `✅ Upload successful! ${remoteJobsPayload.length} leads created. Refreshing list...`
-          // );
-
           const apiRes = await addBulkNewLead(remoteJobsPayload);
 
           if (apiRes) {
@@ -443,10 +261,10 @@ const LeadsComponent = () => {
               `✅ Upload successful! ${remoteJobsPayload.length} leads created. Refreshing list...`
             );
 
-            await loadLeads(filters);
+            await loadLeads(null);
             setUploadLoading(false);
           }
-          await loadLeads(filters);
+          await loadLeads(null);
         } catch (err) {
           setUploadStatus(`❌ Error during upload: ${err.message}`);
         } finally {
@@ -461,9 +279,7 @@ const LeadsComponent = () => {
       },
     });
   };
-  // --- END CSV UPLOAD HANDLERS ---
 
-  // --- Modal & Filter Handlers (Unchanged) ---
   const handleCreateLead = () => {
     setLeadToEdit(null);
     setIsEditModalOpen(true);
@@ -480,7 +296,7 @@ const LeadsComponent = () => {
   };
 
   const handleLeadSaved = () => {
-    loadLeads(filters);
+    loadLeads(null);
   };
 
   const handleViewLead = (lead) => {
@@ -491,27 +307,6 @@ const LeadsComponent = () => {
   const handleCloseViewModal = () => {
     setIsDetailsModalOpen(false);
     setLeadToView(null);
-  };
-
-  const handleSearch = () => {
-    loadLeads(filters);
-  };
-  const handleRefresh = () => {
-    loadLeads(filters);
-  };
-
-  const handleFilterChange = (field) => (e) => {
-    setFilters((prev) => ({ ...prev, [field]: e.target.value }));
-  };
-
-  const handleTextSearchChange = (e) => {
-    setFilters((prev) => ({ ...prev, searchText: e.target.value }));
-  };
-
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter") {
-      handleSearch();
-    }
   };
 
   const toggleExpand = (id) => {
@@ -531,41 +326,10 @@ const LeadsComponent = () => {
       {/* --- Search Panel with NEW Upload Button --- */}
       <div className="flex space-x-3 p-3 bg-white border border-gray-200 rounded-lg shadow-sm mb-4 items-center">
         {/* Text Search Field */}
-        <input
-          type="text"
-          placeholder="Search titles, skills, or companies..."
-          value={filters.searchText}
-          onChange={handleTextSearchChange}
-          onKeyDown={handleKeyDown}
-          className="flex-grow p-2 border border-gray-300 rounded text-sm h-8 focus:ring-indigo-500 focus:border-indigo-500"
-        />
-
-        {/* Dropdown Filters */}
-        <Dropdown
-          options={SOURCE_OPTIONS}
-          value={filters.source}
-          onChange={handleFilterChange("source")}
-        />
-        <Dropdown
-          options={STATUS_OPTIONS}
-          value={filters.status}
-          onChange={handleFilterChange("status")}
-        />
 
         {/* Buttons */}
-        <button
-          onClick={handleSearch}
-          className="px-4 py-1 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 transition-colors h-8 shadow flex-shrink-0"
-        >
-          Search
-        </button>
-        <button
-          onClick={handleRefresh}
-          className="px-4 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-100 transition-colors h-8 flex-shrink-0"
-          disabled={isLoading || uploadLoading}
-        >
-          {isLoading ? "Refreshing..." : "Refresh"}
-        </button>
+
+        <LeadsFilter onFilter={loadLeads} />
 
         {/* --- NEW CSV UPLOAD BUTTON --- */}
         <input
@@ -586,7 +350,7 @@ const LeadsComponent = () => {
 
         <button
           onClick={handleCreateLead}
-          disabled={!isAnySelected}
+          // disabled={!isAnySelected}
           className="px-4 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-100 transition-colors h-8 flex-shrink-0 "
         >
           Create Lead

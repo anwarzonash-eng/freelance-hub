@@ -7,9 +7,9 @@ const COLLAPSED_WIDTH = "w-14"; // Matches w-14 in Header.jsx
 const EXPANDED_WIDTH = "w-56"; // Matches w-56 in Header.jsx
 
 const LayoutWrapper = ({ children, useData }) => {
-  useEffect(() => {
-    console.log(useData);
-  }, []);
+  // useEffect(() => {
+  //   console.log(useData);
+  // }, []);
   // Use state to track the sidebar's collapsed status
   const [isCollapsed, setIsCollapsed] = useState(true);
 

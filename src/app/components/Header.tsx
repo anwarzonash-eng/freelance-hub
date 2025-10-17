@@ -14,7 +14,18 @@ import {
   Settings,
   Globe,
   Tag,
-  LucideIcon, // Type for the icons
+  LucideIcon,
+  Contact,
+  Proportions,
+  Mail,
+  Mails,
+  UserPen,
+  Aperture,
+  Binoculars,
+  CalendarCheck,
+  CircleDashed,
+  File,
+  KeyboardMusic,
 } from "lucide-react";
 import LogoutButton from "./auth/LogoutButton";
 
@@ -49,11 +60,23 @@ const iconMap: { [key: string]: LucideIcon } = {
   Dashboard: LayoutDashboard,
   Leads: Users,
   UpworkJobs: Briefcase,
+
   Analytics: Globe,
   Reporting: FileText,
   TimeTracking: Clock,
   Configuration: Settings,
   Tags: Tag,
+  Contact: Contact,
+  SubmittedProposals: Proportions,
+  Campaigns: Mail,
+  NewsLetters: Mails,
+  CreateProfile: UserPen,
+  Icon1: Aperture,
+  Icon2: Binoculars,
+  Icon3: CalendarCheck,
+  Icon4: CircleDashed,
+  Icon5: File,
+  Icon6: KeyboardMusic,
 };
 
 // --- 2. Flat Menu Data Structure ---
@@ -66,22 +89,57 @@ const navItems: NavItem[] = [
   {
     title: "All Leads",
     href: "/leads",
-    icon: "Leads",
+    icon: "UpworkJobs",
   },
   {
     title: "Upwork Leads",
-    href: "/upwork-jobs",
-    icon: "UpworkJobs",
+    href: "/upwork-jobs?type=all",
+    icon: "Contact",
+  },
+  {
+    title: "Submitted Proposals",
+    href: "/upwork-jobs?type=submitted",
+    icon: "SubmittedProposals",
   },
   {
     title: "All Campaigns",
     href: "/campaigns",
-    icon: "Leads",
+    icon: "Campaigns",
   },
   {
     title: "News Letters",
     href: "/newsletters",
-    icon: "UpworkJobs",
+    icon: "NewsLetters",
+  },
+  {
+    title: "News Letters",
+    href: "/create-personal-profile",
+    icon: "CreateProfile",
+  },
+  {
+    title: "Menu 1",
+    href: "/#",
+    icon: "Icon1",
+  },
+  {
+    title: "Menu 2",
+    href: "/#",
+    icon: "Icon2",
+  },
+  {
+    title: "Menu 3",
+    href: "/#",
+    icon: "Icon3",
+  },
+  {
+    title: "Menu 4",
+    href: "/#",
+    icon: "Icon4",
+  },
+  {
+    title: "Menu 5",
+    href: "/#",
+    icon: "Icon5",
   },
 ];
 // ------------------------------------------
@@ -179,7 +237,7 @@ const PopoverMenuContent: React.FC<{
                   nestedOpen === child.title ? activeStyle : hoverStyle
                 }`}
               >
-                <IconComponent size={16} className="flex-shrink-0" />
+                {/* <IconComponent size={16} className="flex-shrink-0" /> */}
                 <span className="ml-2 flex-grow">{child.title}</span>
                 <ChevronDown
                   size={14}

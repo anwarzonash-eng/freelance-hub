@@ -1,5 +1,3 @@
-// components/leads/leadsRow.jsx
-
 import { STATUS_ENUM } from "@/app/shared/enums/select";
 import { useState } from "react";
 import { SkillCard } from "../form-components/skillCards";
@@ -11,14 +9,6 @@ import {
   IconExpand,
 } from "../ui/icon-components";
 
-/**
- * Renders a single row in the leads table with expandable details.
- * @param {object} lead - The lead data object.
- * @param {boolean} isExpanded - Whether the details panel is open.
- * @param {function} toggleExpand - Function to toggle the details panel.
- * @param {function} onEdit - Function to open the edit modal.
- * @param {function} onView - Function to open the view modal.
- */
 export const LeadRow = ({
   lead,
   isExpanded,
@@ -29,35 +19,68 @@ export const LeadRow = ({
   onCheckboxChange,
 }) => {
   const MAX_DESC_LENGTH = 150;
-
   const [showFullDescription, setShowFullDescription] = useState(false);
+
   const {
+    id,
     title,
-    type,
-    pubDate,
-    company_details,
-    status, // This is the filter value (e.g., 'short-listed')
+    job_link,
     description,
+    postedDate,
+    jobLocations,
+    allowedCandidateLocation,
+    remoteOptions,
+    jobTypes,
+    slug,
+    salary,
+    jobBenefits,
+    educationLevels,
+    applyURL,
+    careerLevel,
+    salaryMin,
+    salaryMax,
+    salaryUnit,
+    salaryCurrency,
+    company_career_Page_Url,
     skills,
-    contact_details,
-    link,
+    categories,
+    expires_at,
+    contact,
+    lead_source,
     createdAt,
+    lead_fetch_date,
+    status,
+    company_website,
+    company_name,
+    company_city,
+    company_state,
+    company_country,
+    company_summary,
+    company_facebook,
+    company_linkedin,
+    company_twitter,
+    company_youtube,
+    company_logo,
+    company_size,
+    company_industry,
+    company_established,
   } = lead;
 
-  // --- SAFE DATA HANDLING ---
-  const handleChange = (e) => {
-    // Pass the item's unique ID and the new checked state up to the parent
-    onCheckboxChange(lead.id, e.target.checked);
-  };
-  // 1. Safe access and fallback for title, description, and dates
-  const safeDescription = description || ""; // Use empty string fallback for string manipulation
+  // --- Safe Defaults ---
   const safeSkills = Array.isArray(skills) ? skills : [];
-  const safeContactDetails = Array.isArray(contact_details)
-    ? contact_details
+  const safeContacts = Array.isArray(contact) ? contact : [];
+  const safeJobTypes = Array.isArray(jobTypes) ? jobTypes : [];
+  const safeCategories = Array.isArray(categories) ? categories : [];
+  const safeLocations = Array.isArray(jobLocations) ? jobLocations : [];
+  const safeAllowedLocations = Array.isArray(allowedCandidateLocation)
+    ? allowedCandidateLocation
     : [];
-  const safeStatus = status || "unknown"; // Use 'unknown' as a safe default
+  const safeRemoteOptions = Array.isArray(remoteOptions) ? remoteOptions : [];
+  const safeBenefits = Array.isArray(jobBenefits) ? jobBenefits : [];
+  const safeEducation = Array.isArray(educationLevels) ? educationLevels : [];
+  const safeCareerLevel = Array.isArray(careerLevel) ? careerLevel : [];
 
-  // Description logic using safeDescription
+  const safeDescription = description || "";
   const shortDescription =
     safeDescription.length > MAX_DESC_LENGTH
       ? safeDescription.substring(0, MAX_DESC_LENGTH) + "..."
@@ -67,36 +90,30 @@ export const LeadRow = ({
     : shortDescription;
   const canToggleDescription = safeDescription.length > MAX_DESC_LENGTH;
 
-  // Date formatting with null/undefined check
-  const formattedPubDate = pubDate
-    ? new Date(pubDate).toLocaleDateString()
+  const formattedPostedDate = postedDate
+    ? new Date(postedDate).toLocaleDateString()
     : "N/A";
   const formattedCreatedAt = createdAt
     ? new Date(createdAt).toLocaleString()
     : "N/A";
+  const formattedExpiresAt = expires_at
+    ? new Date(expires_at).toLocaleDateString()
+    : "N/A";
+  const formattedLeadFetchDate = lead_fetch_date
+    ? new Date(lead_fetch_date).toLocaleString()
+    : "N/A";
 
-  // Link validity check for action button
-  const isLinkValid = !!link;
-  // Company details check
-  const companyName = company_details?.name || "N/A";
-  const companyWebsite = company_details?.website;
-
-  // Determine the display label for the status from the ENUM for styling
+  // --- STATUS ---
+  const safeStatus = status || "unknown";
   const getStatusLabel = (statusValue) => {
-    // If statusValue is null, undefined, or empty string, fallback to "Unknown"
     if (!statusValue) return "Unknown";
-
-    // Find the key in the enum that matches the filtered value
     const key = Object.keys(STATUS_ENUM).find(
       (k) => k.toLowerCase().replace(/_/g, "-") === statusValue
     );
-    // Return the human-readable label or fallback to the status value
     return key ? STATUS_ENUM[key] : statusValue.replace(/-/g, " ");
   };
-
   const statusLabel = getStatusLabel(safeStatus);
 
-  // Determine Tailwind CSS classes based on the status value
   const getStatusClasses = (statusValue) => {
     switch (statusValue) {
       case "pending":
@@ -115,71 +132,88 @@ export const LeadRow = ({
         return "bg-gray-100 text-gray-800";
     }
   };
-
   const statusClasses = getStatusClasses(safeStatus);
 
-  // Action handlers
-  const handleVisit = () => {
-    if (isLinkValid) {
-      window.open(link, "_blank");
-    } else {
-      console.warn("Cannot visit link, link is missing.");
-    }
-  };
-  const handleChangeStatus = () => console.log("Change Status Clicked");
+  const handleChange = (e) => onCheckboxChange(id, e.target.checked);
+  const handleVisit = () => job_link && window.open(job_link, "_blank");
   const handleView = () => onView(lead);
-  // --- END SAFE DATA HANDLING ---
+  const handleChangeStatus = () => console.log("Change Status Clicked");
+
+  // Helper: short link
+  const renderLink = (url, label = "Visit") =>
+    url ? (
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-indigo-600 hover:underline"
+      >
+        {label}
+      </a>
+    ) : (
+      <span className="text-gray-500">N/A</span>
+    );
+
+  // Helper: render list as chips
+  const renderChips = (arr) =>
+    arr && arr.length > 0 ? (
+      <div className="flex flex-wrap gap-1 mt-1">
+        {arr.map((item, idx) => (
+          <SkillCard key={idx} skill={item} />
+        ))}
+      </div>
+    ) : (
+      <span className="text-gray-500">N/A</span>
+    );
 
   return (
     <>
-      {/* Collapsed View (Compact Row - Single Line) */}
+      {/* COLLAPSED ROW */}
       <div
-        className={`grid grid-cols-[2fr_0.8fr_1fr_1fr_150px] items-center text-sm border-b border-gray-100 transition-colors ${
+        className={`grid grid-cols-[2fr_1fr_1fr_1fr_150px] items-center text-sm border-b border-gray-100 transition-colors ${
           isExpanded ? "bg-indigo-50 hover:bg-indigo-100" : "hover:bg-gray-50"
         } ${isChecked ? "bg-green-200" : ""}`}
-        style={{ minHeight: "32px" }} // Compact height
+        style={{ minHeight: "32px" }}
       >
-        {/* 1. Title & Type */}
         <div className="py-1 px-3 flex items-center space-x-2 overflow-hidden whitespace-nowrap">
-          <input
-            type="checkbox"
-            checked={isChecked} // Controlled component: state comes from parent
-            onChange={handleChange} // Handler updates the parent state
-          />
+          <input type="checkbox" checked={isChecked} onChange={handleChange} />
+          {company_logo && (
+            <img
+              src={company_logo}
+              alt={company_name || "Logo"}
+              className="w-5 h-5 rounded-full object-cover"
+            />
+          )}
           <span
-            className="font-medium text-gray-900 truncate"
+            className="font-medium text-gray-900 truncate max-w-[200px]"
             title={title || "No Title"}
           >
             {title || "No Title"}
           </span>
-          {/* We'll skip displaying 'type' here as it's not a column, but ensure it's handled in the expanded view */}
         </div>
 
-        {/* 2. Pub Date */}
         <span className="py-1 px-3 text-xs text-gray-600 truncate">
-          {formattedPubDate}
+          {formattedPostedDate}
         </span>
 
-        {/* 3. Company Name (with link) */}
         <div className="py-1 px-3">
-          {companyWebsite ? (
+          {company_website ? (
             <a
-              href={companyWebsite}
+              href={company_website}
               target="_blank"
               rel="noopener noreferrer"
               className="text-xs font-medium text-indigo-600 hover:text-indigo-800 truncate"
-              title={companyName}
+              title={company_name}
             >
-              {companyName}
+              {company_name}
             </a>
           ) : (
-            <span className="text-xs text-gray-500" title={companyName}>
-              {companyName}
+            <span className="text-xs text-gray-500" title={company_name}>
+              {company_name}
             </span>
           )}
         </div>
 
-        {/* 4. Status (Uses calculated label and classes) */}
         <span className="py-1 px-3">
           <span
             className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusClasses}`}
@@ -188,49 +222,43 @@ export const LeadRow = ({
           </span>
         </span>
 
-        {/* 5. Actions (Inline Buttons + Expand/Collapse) */}
         <div className="py-1 px-3 flex justify-end items-center space-x-2">
-          {/* Change Status */}
           <button onClick={handleChangeStatus} title="Change Status">
             <IconStatus />
           </button>
-
-          {/* Visit Job Link - Disabled if link is missing */}
           <button
             onClick={handleVisit}
             title="Visit Job Link"
-            disabled={!isLinkValid}
-            className={!isLinkValid ? "opacity-50 cursor-not-allowed" : ""}
+            disabled={!job_link}
+            className={!job_link ? "opacity-50 cursor-not-allowed" : ""}
           >
             <IconVisit />
           </button>
-
-          {/* View Details */}
           <button onClick={handleView} title="View Details">
             <IconView />
           </button>
-
-          {/* Edit Lead */}
           <button onClick={onEdit} title="Edit Lead">
             <IconEdit />
           </button>
-
-          {/* Toggle Details */}
           <button onClick={toggleExpand} title="Toggle Details">
             <IconExpand isExpanded={isExpanded} />
           </button>
         </div>
       </div>
 
-      {/* Expanded View */}
+      {/* EXPANDED VIEW */}
       {isExpanded && (
         <div className="p-4 bg-gray-50 border-b border-gray-200 rounded-md mb-2 shadow-inner mx-1">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Column 1: Description & Skills */}
-            <div>
-              <h4 className="text-xs font-semibold uppercase text-gray-500 mb-1">
-                Description
+            {/* JOB DETAILS */}
+            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+              <h4 className="text-sm font-semibold uppercase text-indigo-700 mb-3">
+                Job Details
               </h4>
+              <p className="text-base font-bold text-gray-900 mb-2">
+                {title || "Untitled Job"}
+              </p>
+
               <p className="text-sm text-gray-700 mb-3 whitespace-pre-wrap">
                 {displayedDescription || "No description provided."}
                 {canToggleDescription && (
@@ -243,87 +271,228 @@ export const LeadRow = ({
                 )}
               </p>
 
-              <h4 className="text-xs font-semibold uppercase text-gray-500 mb-2 mt-3">
-                Skills
+              <div className="space-y-2 text-sm">
+                <p>
+                  <span className="font-semibold text-gray-800">Posted:</span>{" "}
+                  {formattedPostedDate}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-800">Expires:</span>{" "}
+                  {formattedExpiresAt}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-800">Source:</span>{" "}
+                  {lead_source || "N/A"}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-800">
+                    Fetch Date:
+                  </span>{" "}
+                  {formattedLeadFetchDate}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-800">
+                    Job Types:
+                  </span>{" "}
+                  {renderChips(safeJobTypes)}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-800">
+                    Categories:
+                  </span>{" "}
+                  {renderChips(safeCategories)}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-800">
+                    Locations:
+                  </span>{" "}
+                  {renderChips(safeLocations)}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-800">
+                    Allowed Locations:
+                  </span>{" "}
+                  {renderChips(safeAllowedLocations)}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-800">
+                    Remote Options:
+                  </span>{" "}
+                  {renderChips(safeRemoteOptions)}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-800">
+                    Education:
+                  </span>{" "}
+                  {renderChips(safeEducation)}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-800">
+                    Career Level:
+                  </span>{" "}
+                  {renderChips(safeCareerLevel)}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-800">Skills:</span>{" "}
+                  {renderChips(safeSkills)}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-800">Benefits:</span>{" "}
+                  {renderChips(safeBenefits)}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-800">Salary:</span>{" "}
+                  {salaryMin
+                    ? `${salaryCurrency || ""} ${salaryMin} - ${
+                        salaryMax || "?"
+                      } ${salaryUnit || ""}`
+                    : salary || "N/A"}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-800">Job Link:</span>{" "}
+                  {renderLink(job_link, "Open Job")}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-800">
+                    Apply URL:
+                  </span>{" "}
+                  {renderLink(applyURL, "Apply")}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-800">
+                    Career Page:
+                  </span>{" "}
+                  {renderLink(company_career_Page_Url, "Company Career Page")}
+                </p>
+              </div>
+            </div>
+
+            {/* COMPANY DETAILS */}
+            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+              <h4 className="text-sm font-semibold uppercase text-indigo-700 mb-3">
+                Company Details
               </h4>
-              <div className="flex flex-wrap">
-                {safeSkills.length > 0 ? (
-                  safeSkills.map(
-                    (skill) =>
-                      // Only render if skill string is not null/empty
-                      skill && <SkillCard key={skill} skill={skill} />
-                  )
-                ) : (
-                  <span className="text-sm text-gray-500">None listed</span>
+              <div className="flex items-center space-x-3 mb-3">
+                {company_logo && (
+                  <img
+                    src={company_logo}
+                    alt={company_name}
+                    className="w-12 h-12 rounded-md object-contain border"
+                  />
                 )}
+                <p className="text-base font-semibold text-gray-900">
+                  {company_name || "N/A"}
+                </p>
               </div>
 
-              <h4 className="text-xs font-semibold uppercase text-gray-500 mb-2 mt-3">
-                Type
-              </h4>
-              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 whitespace-nowrap flex-shrink-0">
-                {type || "N/A"}
-              </span>
+              <div className="space-y-1 text-sm">
+                <p>
+                  <span className="font-semibold text-gray-800">Website:</span>{" "}
+                  {renderLink(company_website, "Visit")}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-800">Summary:</span>{" "}
+                  {company_summary || "N/A"}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-800">Industry:</span>{" "}
+                  {company_industry || "N/A"}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-800">Size:</span>{" "}
+                  {company_size || "N/A"}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-800">
+                    Established:
+                  </span>{" "}
+                  {company_established || "N/A"}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-800">City:</span>{" "}
+                  {company_city || "N/A"}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-800">State:</span>{" "}
+                  {company_state || "N/A"}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-800">Country:</span>{" "}
+                  {company_country || "N/A"}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-800">Facebook:</span>{" "}
+                  {renderLink(company_facebook, "Page")}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-800">LinkedIn:</span>{" "}
+                  {renderLink(company_linkedin, "Profile")}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-800">Twitter:</span>{" "}
+                  {renderLink(company_twitter, "Profile")}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-800">YouTube:</span>{" "}
+                  {renderLink(company_youtube, "Channel")}
+                </p>
+              </div>
             </div>
 
-            {/* Column 2: Additional Details */}
-            <div>
-              <h4 className="text-xs font-semibold uppercase text-gray-500 mb-1">
-                Details
+            {/* CONTACT DETAILS */}
+            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+              <h4 className="text-sm font-semibold uppercase text-indigo-700 mb-3">
+                Contact Details ({safeContacts.length})
               </h4>
-              <p className="text-sm text-gray-700">
-                <span className="font-medium">Created At:</span>{" "}
-                {formattedCreatedAt}
-              </p>
-              <p className="text-sm text-gray-700">
-                <span className="font-medium">Job Link:</span>{" "}
-                {link ? (
-                  <a
-                    href={link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-indigo-600 hover:underline truncate inline-block max-w-full"
-                    title={link}
-                  >
-                    {link}
-                  </a>
-                ) : (
-                  <span className="text-gray-500">N/A</span>
-                )}
-              </p>
-            </div>
-
-            {/* Column 3: Contact Details */}
-            <div>
-              <h4 className="text-xs font-semibold uppercase text-gray-500 mb-2">
-                Contact Details ({safeContactDetails.length})
-              </h4>
-              {safeContactDetails.length > 0 ? (
-                safeContactDetails.map((contact, index) => (
+              {safeContacts.length > 0 ? (
+                safeContacts.map((c, idx) => (
                   <div
-                    key={index}
-                    className="mb-3 p-2 border border-gray-100 rounded bg-white"
+                    key={idx}
+                    className="mb-3 p-2 border border-gray-100 rounded bg-gray-50"
                   >
-                    <p className="text-sm font-medium text-gray-900">
-                      {contact.name || "Unknown Name"} (
-                      {contact.designation || "N/A"})
+                    <p className="text-sm font-semibold text-gray-900">
+                      {c.name || "Unknown"}{" "}
+                      <span className="text-gray-500 text-xs">
+                        ({c.designation || "N/A"})
+                      </span>
                     </p>
                     <p className="text-xs text-gray-600">
-                      Email:{" "}
-                      {contact.email ? (
-                        <a
-                          href={`mailto:${contact.email}`}
-                          className="text-indigo-600 hover:underline"
-                        >
-                          {contact.email}
-                        </a>
-                      ) : (
-                        "N/A"
+                      <span className="font-medium text-gray-800">Email:</span>{" "}
+                      {renderLink(
+                        c.email ? `mailto:${c.email}` : null,
+                        c.email || "N/A"
                       )}
                     </p>
                     <p className="text-xs text-gray-600">
-                      Contact: {contact.contact || "N/A"}
+                      <span className="font-medium text-gray-800">
+                        Contact:
+                      </span>{" "}
+                      {c.contact || "N/A"}
                     </p>
+                    {c.website && (
+                      <p className="text-xs text-gray-600">
+                        <span className="font-medium text-gray-800">
+                          Website:
+                        </span>{" "}
+                        {renderLink(c.website, "Visit")}
+                      </p>
+                    )}
+                    {c.linkedIn && (
+                      <p className="text-xs text-gray-600">
+                        <span className="font-medium text-gray-800">
+                          LinkedIn:
+                        </span>{" "}
+                        {renderLink(c.linkedIn, "Profile")}
+                      </p>
+                    )}
+                    {c.source && (
+                      <p className="text-xs text-gray-600">
+                        <span className="font-medium text-gray-800">
+                          Source:
+                        </span>{" "}
+                        {c.source}
+                      </p>
+                    )}
                   </div>
                 ))
               ) : (

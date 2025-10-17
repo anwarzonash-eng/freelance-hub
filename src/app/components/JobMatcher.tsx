@@ -186,7 +186,7 @@ export default function JobMatcher() {
           // to prevent the data from persisting across refreshes.
           // sessionStorage.removeItem("currentJob");
         } catch (e) {
-          console.error("Failed to parse stored job data:", e);
+          // console.error("Failed to parse stored job data:", e);
         }
       }
     }

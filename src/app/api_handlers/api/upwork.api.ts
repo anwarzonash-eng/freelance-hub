@@ -9,3 +9,14 @@ export async function getALLUPworkJobs() {
     return await apiClient(UpworkJobsAPIRoutes.GET_LATEST, ApiMethod.GET, undefined, undefined, undefined, true, false)
 }
 
+export async function getSubmittedUPworkJobs() {
+    return await apiClient(UpworkJobsAPIRoutes.GET_SUBMITTED, ApiMethod.GET, undefined, undefined, undefined, true, false)
+}
+
+export async function addSubmittedUPworkJobs(payload: any) {
+    return await apiClient(UpworkJobsAPIRoutes.ADD_SUBMITTED_JOB, ApiMethod.POST, payload, undefined, undefined, true, true)
+}
+
+
+
+

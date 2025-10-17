@@ -2,58 +2,8 @@
 
 import React, { useState } from "react";
 import { IconClose, IconEdit } from "../ui/icon-components";
-// Assuming the rest of your imports are correct
 
-// --- Helper Components for LeadDetailsModal (moved up for clarity) ---
-
-// The Multi-Select Component:
-const CustomMultiSelect = ({ label, values, onChange, options }) => (
-  <div>
-    <label className="block text-sm font-medium text-gray-700 mb-1">
-      {label}
-    </label>
-    <select
-      // CRITICAL: The 'multiple' attribute enables multi-selection
-      multiple
-      value={values}
-      onChange={(e) =>
-        // CRITICAL: Collect all selected options into an array
-        onChange(Array.from(e.target.selectedOptions, (option) => option.value))
-      }
-      className="w-full p-2 border border-gray-300 rounded-md text-sm h-32 focus:ring-indigo-500 focus:border-indigo-500"
-    >
-      {options.map((opt) => (
-        <option key={opt.id} value={opt.id}>
-          {opt.name}
-        </option>
-      ))}
-    </select>
-    <p className="text-xs text-gray-500 mt-1">
-      Hold **Ctrl** (Windows) or **Cmd** (Mac) to select multiple categories.
-    </p>
-  </div>
-);
-
-const CustomSelect = ({ label, value, onChange, options }) => (
-  <div>
-    <label className="block text-sm font-medium text-gray-700 mb-1">
-      {label}
-    </label>
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="w-full p-2 border border-gray-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500"
-    >
-      <option value="">-- Select --</option>
-      {options.map((opt) => (
-        <option key={opt.id} value={opt.id}>
-          {opt.name}
-        </option>
-      ))}
-    </select>
-  </div>
-);
-
+// Helper: Expandable Section (Collapsible)
 const ExpandableSection = ({ title, children, defaultExpanded = true }) => {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   return (
@@ -63,7 +13,11 @@ const ExpandableSection = ({ title, children, defaultExpanded = true }) => {
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <span className="font-semibold text-sm text-gray-700">{title}</span>
-        <span className="text-gray-500 transform transition-transform duration-200">
+        <span
+          className={`text-gray-500 transform transition-transform duration-200 ${
+            isExpanded ? "" : "rotate-180"
+          }`}
+        >
           {isExpanded ? "−" : "+"}
         </span>
       </button>
@@ -72,102 +26,32 @@ const ExpandableSection = ({ title, children, defaultExpanded = true }) => {
   );
 };
 
-// Reuses the display logic from LeadRow expanded view for consistency
-const LeadDetailsContent = ({ lead }) => {
-  // ... (This content remains unchanged)
-  const formattedCreatedAt = new Date(lead.createdAt).toLocaleString();
-
+// Helper: render array fields as small tags
+const TagsArray = ({ items }) => {
+  if (!items || items.length === 0)
+    return <span className="text-gray-500">N/A</span>;
   return (
-    <div className="space-y-4">
-      <div>
-        <h4 className="text-xs font-semibold uppercase text-gray-500 mb-1">
-          Description
-        </h4>
-        <p className="text-sm text-gray-700 whitespace-pre-wrap">
-          {lead.description}
-        </p>
-      </div>
-
-      <div>
-        <h4 className="text-xs font-semibold uppercase text-gray-500 mb-2">
-          Skills ({lead.skills.length})
-        </h4>
-        <div className="flex flex-wrap gap-1">
-          {lead.skills.map((skill) => (
-            <span
-              key={skill}
-              className="px-2 py-0.5 text-xs font-medium bg-gray-200 text-gray-800 rounded-full"
-            >
-              {skill}
-            </span>
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <h4 className="text-xs font-semibold uppercase text-gray-500 mb-1">
-          Details
-        </h4>
-        <p className="text-sm text-gray-700">
-          <span className="font-medium">Company:</span>{" "}
-          {lead.company_details?.name}
-        </p>
-        <p className="text-sm text-gray-700">
-          <span className="font-medium">Type:</span> {lead.type}
-        </p>
-        <p className="text-sm text-gray-700">
-          <span className="font-medium">Link:</span>{" "}
-          <a
-            href={lead.link}
-            target="_blank"
-            className="text-indigo-600 hover:underline truncate inline-block max-w-full"
-          >
-            {lead.link}
-          </a>
-        </p>
-        <p className="text-sm text-gray-700">
-          <span className="font-medium">Created:</span> {formattedCreatedAt}
-        </p>
-      </div>
-
-      <div>
-        <h4 className="text-xs font-semibold uppercase text-gray-500 mb-2">
-          Contacts ({lead.contact_details.length})
-        </h4>
-        {lead.contact_details.map((contact, index) => (
-          <div
-            key={index}
-            className="mb-2 p-2 border border-gray-100 rounded bg-white"
-          >
-            <p className="text-sm font-medium text-gray-900">
-              {contact.name} ({contact.designation})
-            </p>
-            <p className="text-xs text-gray-600">
-              Email:{" "}
-              <a
-                href={`mailto:${contact.email}`}
-                className="text-indigo-600 hover:underline"
-              >
-                {contact.email}
-              </a>
-            </p>
-          </div>
-        ))}
-      </div>
+    <div className="flex flex-wrap gap-1">
+      {items.map((item, idx) => (
+        <span
+          key={idx}
+          className="px-2 py-0.5 text-xs font-medium bg-gray-200 text-gray-800 rounded-full"
+        >
+          {item}
+        </span>
+      ))}
     </div>
   );
 };
 
-// Renders a full-screen modal for viewing all lead details and performing actions
 export const LeadDetailsModal = ({ lead, onClose, onEdit }) => {
-  // --- State Variables (No Change) ---
   const [selectedMainCategory, setSelectedMainCategory] = useState(null);
-  const [selectedChildCategories, setSelectedChildCategories] = useState([]); // This holds an array of selected IDs/values
+  const [selectedChildCategories, setSelectedChildCategories] = useState([]);
   const [selectedSkills, setSelectedSkills] = useState([]);
   const [coverLetterPrompt, setCoverLetterPrompt] = useState("");
   const [selectedPortfolios, setSelectedPortfolios] = useState([]);
 
-  // --- Mock Data (No Change) ---
+  // Mock categories
   const MOCK_MAIN_CATEGORIES = [
     { id: "web", name: "Web Development" },
     { id: "cloud", name: "Cloud Engineering" },
@@ -177,28 +61,40 @@ export const LeadDetailsModal = ({ lead, onClose, onEdit }) => {
     { id: "back", name: "Backend" },
     { id: "devops", name: "DevOps" },
   ];
-  // ... (MOCK_SKILLS_DATA, MOCK_PORTFOLIO_DATA remain unchanged)
 
-  // --- Action Handlers (No Change) ---
-  const handleMatchSkills = () =>
-    console.log("Action: Match Skills", selectedSkills);
+  // Action handlers
+  const handleMatchSkills = () => console.log("Match Skills", selectedSkills);
   const handleMatchCategories = () =>
-    console.log("Action: Match Categories", selectedChildCategories);
+    console.log("Match Categories", selectedChildCategories);
   const handleGetCoverLetterPrompt = () =>
-    console.log("Action: Get Cover Letter Prompt", coverLetterPrompt);
-  const handleSendEmail = () => console.log("Action: Send Email");
+    console.log("Get Cover Letter Prompt", coverLetterPrompt);
+  const handleSendEmail = () => console.log("Send Email");
+
+  // Safe values
+  const safeSkills = Array.isArray(lead.skills) ? lead.skills : [];
+  const safeJobTypes = Array.isArray(lead.jobTypes) ? lead.jobTypes : [];
+  const safeCategories = Array.isArray(lead.categories) ? lead.categories : [];
+  const safeEducationLevels = Array.isArray(lead.educationLevels)
+    ? lead.educationLevels
+    : [];
+  const safeCareerLevel = Array.isArray(lead.careerLevel)
+    ? lead.careerLevel
+    : [];
+  const safeContacts = Array.isArray(lead.contact) ? lead.contact : [];
+  const formattedCreatedAt = lead.createdAt
+    ? new Date(lead.createdAt).toLocaleString()
+    : "N/A";
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-gray-900 bg-opacity-75 flex justify-center items-center">
-      {/* Full screen container */}
-      <div className="bg-white shadow-2xl relative w-full h-full overflow-y-auto">
-        {/* Header (No Change) */}
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-gray-900 bg-opacity-75 flex justify-center items-start pt-4">
+      <div className="bg-white shadow-2xl relative w-full max-w-7xl h-[95vh] overflow-y-auto rounded-lg">
+        {/* Header */}
         <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center z-10">
           <h2
             className="text-xl font-bold text-gray-800 truncate pr-12"
             title={lead.title}
           >
-            Lead Details: {lead.title}
+            Lead Details: {lead.title || "N/A"}
           </h2>
           <div className="flex space-x-2">
             <button
@@ -219,109 +115,187 @@ export const LeadDetailsModal = ({ lead, onClose, onEdit }) => {
           </div>
         </div>
 
-        {/* Body Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 p-6">
-          {/* Column 1: Lead Details (No Change) */}
-          <div className="lg:col-span-1 border-r border-gray-200 pr-6 space-y-6">
-            <h3 className="text-lg font-semibold text-gray-700 pb-1 border-b">
-              Job & Company Info
-            </h3>
-            <LeadDetailsContent lead={lead} />
-          </div>
+        {/* Top Action Buttons */}
+        <div className="flex flex-wrap gap-3 p-4 border-b sticky top-16 bg-white z-10">
+          <button
+            onClick={handleMatchSkills}
+            className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 transition-colors"
+          >
+            Match Skills
+          </button>
+          <button
+            onClick={handleMatchCategories}
+            className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 transition-colors"
+          >
+            Match Categories
+          </button>
+          <button
+            onClick={handleGetCoverLetterPrompt}
+            className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 transition-colors"
+          >
+            Get Cover Letter Prompt
+          </button>
+          <button
+            onClick={handleSendEmail}
+            className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors"
+          >
+            Send Email
+          </button>
+        </div>
 
-          {/* Column 2: Matching & Customization */}
-          <div className="lg:col-span-2 space-y-6">
-            <h3 className="text-lg font-semibold text-gray-700 pb-1 border-b">
-              Matching & Customization
-            </h3>
-
-            {/* 1. Main Category Select (No Change) */}
-            <CustomSelect
-              label="Select Main Category"
-              value={selectedMainCategory}
-              onChange={setSelectedMainCategory}
-              options={MOCK_MAIN_CATEGORIES}
-            />
-
-            {/* 2. Child Categories Multi-Select (Uses UPDATED Component) */}
-            <CustomMultiSelect
-              label="Select Child Categories"
-              values={selectedChildCategories}
-              onChange={setSelectedChildCategories}
-              options={MOCK_CHILD_CATEGORIES}
-            />
-
-            {/* 3. Skills Selection Area (No Change) */}
-            <ExpandableSection
-              title="Select Skills for Match"
-              defaultExpanded={false}
-            >
-              <div className="bg-white p-4 border rounded-md">
-                <p className="text-sm text-gray-500">
-                  *Complex Skill Selection Component Placeholder*
+        {/* Lead Details Card */}
+        <div className="p-6">
+          <div className="border rounded-lg bg-white p-4 shadow-sm space-y-4">
+            {/* Job Details */}
+            <ExpandableSection title="Job Details">
+              <div className="space-y-2 text-sm text-gray-700">
+                <p>
+                  <span className="font-semibold text-gray-900">Title:</span>{" "}
+                  {lead.title || "N/A"}
                 </p>
-                <p className="text-sm">
-                  Current Skills: {lead.skills.join(", ")}
+                <p>
+                  <span className="font-semibold text-gray-900">
+                    Description:
+                  </span>{" "}
+                  {lead.description || "N/A"}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-900">
+                    Posted Date:
+                  </span>{" "}
+                  {lead.postedDate || "N/A"}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-900">
+                    Job Types:
+                  </span>{" "}
+                  <TagsArray items={safeJobTypes} />
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-900">
+                    Categories:
+                  </span>{" "}
+                  <TagsArray items={safeCategories} />
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-900">
+                    Education Levels:
+                  </span>{" "}
+                  <TagsArray items={safeEducationLevels} />
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-900">
+                    Career Level:
+                  </span>{" "}
+                  <TagsArray items={safeCareerLevel} />
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-900">Skills:</span>{" "}
+                  <TagsArray items={safeSkills} />
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-900">
+                    Created At:
+                  </span>{" "}
+                  {formattedCreatedAt}
                 </p>
               </div>
             </ExpandableSection>
 
-            {/* 4. Portfolios Selection Area (No Change) */}
-            <ExpandableSection
-              title="Select Portfolios"
-              defaultExpanded={false}
-            >
-              <div className="bg-white p-4 border rounded-md">
-                <p className="text-sm text-gray-500">
-                  *Complex Portfolio Selection Component Placeholder*
+            {/* Company Details */}
+            <ExpandableSection title="Company Details">
+              <div className="space-y-2 text-sm text-gray-700">
+                <p>
+                  <span className="font-semibold text-gray-900">Name:</span>{" "}
+                  {lead.company_name || "N/A"}
                 </p>
-                <p className="text-sm">
-                  Current Portfolios: {selectedPortfolios.join(", ")}
+                <p>
+                  <span className="font-semibold text-gray-900">Website:</span>{" "}
+                  {lead.company_website || "N/A"}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-900">City:</span>{" "}
+                  {lead.company_city || "N/A"}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-900">State:</span>{" "}
+                  {lead.company_state || "N/A"}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-900">Country:</span>{" "}
+                  {lead.company_country || "N/A"}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-900">Size:</span>{" "}
+                  {lead.company_size || "N/A"}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-900">Industry:</span>{" "}
+                  {lead.company_industry || "N/A"}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-900">
+                    Established:
+                  </span>{" "}
+                  {lead.company_established || "N/A"}
                 </p>
               </div>
             </ExpandableSection>
 
-            {/* 5. Cover Letter Prompt (No Change) */}
+            {/* Contact Details */}
             <ExpandableSection
-              title="Select Prompt for Cover Letter (Rich Text)"
-              defaultExpanded={false}
+              title={`Contact Details (${safeContacts.length})`}
             >
-              <textarea
-                className="w-full p-2 border border-gray-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500"
-                rows="3"
-                placeholder="Enter or select a prompt..."
-                value={coverLetterPrompt}
-                onChange={(e) => setCoverLetterPrompt(e.target.value)}
-              />
+              <div className="space-y-2 text-sm text-gray-700">
+                {safeContacts.length > 0 ? (
+                  safeContacts.map((contact, idx) => (
+                    <div
+                      key={idx}
+                      className="p-2 border border-gray-100 rounded bg-gray-50"
+                    >
+                      <p>
+                        <span className="font-semibold text-gray-900">
+                          Name:
+                        </span>{" "}
+                        {contact.name || "N/A"}
+                      </p>
+                      <p>
+                        <span className="font-semibold text-gray-900">
+                          Designation:
+                        </span>{" "}
+                        {contact.designation || "N/A"}
+                      </p>
+                      <p>
+                        <span className="font-semibold text-gray-900">
+                          Email:
+                        </span>{" "}
+                        {contact.email || "N/A"}
+                      </p>
+                      <p>
+                        <span className="font-semibold text-gray-900">
+                          Phone:
+                        </span>{" "}
+                        {contact.contact || "N/A"}
+                      </p>
+                      <p>
+                        <span className="font-semibold text-gray-900">
+                          LinkedIn:
+                        </span>{" "}
+                        {contact.linkedIn || "N/A"}
+                      </p>
+                      <p>
+                        <span className="font-semibold text-gray-900">
+                          Website:
+                        </span>{" "}
+                        {contact.website || "N/A"}
+                      </p>
+                    </div>
+                  ))
+                ) : (
+                  <span className="text-gray-500">No contacts available.</span>
+                )}
+              </div>
             </ExpandableSection>
-
-            {/* 6. Actions (No Change) */}
-            <div className="pt-4 border-t flex flex-wrap gap-3">
-              <button
-                onClick={handleMatchSkills}
-                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 transition-colors"
-              >
-                Match Skills
-              </button>
-              <button
-                onClick={handleMatchCategories}
-                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 transition-colors"
-              >
-                Match Categories
-              </button>
-              <button
-                onClick={handleGetCoverLetterPrompt}
-                className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 transition-colors"
-              >
-                Get Cover Letter Prompt
-              </button>
-              <button
-                onClick={handleSendEmail}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors"
-              >
-                Send Email
-              </button>
-            </div>
           </div>
         </div>
       </div>
