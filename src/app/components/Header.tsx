@@ -112,7 +112,7 @@ const navItems: NavItem[] = [
     icon: "NewsLetters",
   },
   {
-    title: "News Letters",
+    title: "Personal Profiles",
     href: "/create-personal-profile",
     icon: "CreateProfile",
   },

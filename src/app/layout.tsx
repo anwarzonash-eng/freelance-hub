@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
 import LayoutWrapper from "./components/LayoutWrapper"; // ✅ IMPORTED
 import { Toaster } from "react-hot-toast";
+import { RouteProvider } from "./components/routeProvider";
+import "@/styles/globals.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -53,7 +54,9 @@ export default async function RootLayout({
         suppressHydrationWarning={true}
       >
         <Toaster position="top-right" reverseOrder={false} />
-        <LayoutWrapper useData={useData}>{children}</LayoutWrapper>
+        <RouteProvider>
+          <LayoutWrapper useData={useData}>{children}</LayoutWrapper>
+        </RouteProvider>
       </body>
     </html>
   );

@@ -88,7 +88,8 @@ const LeadsComponent = () => {
   const [uploadLoading, setUploadLoading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [openStartCampaignPopup, setPpenStartCampaignPopup] = useState(false);
-
+  const [openCreatePersonalWebsitePopup, setOpenCreatePersonalWebsitePopup] =
+    useState(false);
   const [uploadStatus, setUploadStatus] = useState(null);
   const fileInputRef = useRef(null);
 
@@ -323,6 +324,7 @@ const LeadsComponent = () => {
           />
         </GenericPopup>
       )}
+      
       {/* --- Search Panel with NEW Upload Button --- */}
       <div className="flex space-x-3 p-3 bg-white border border-gray-200 rounded-lg shadow-sm mb-4 items-center">
         {/* Text Search Field */}

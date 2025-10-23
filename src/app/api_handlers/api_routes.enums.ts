@@ -29,6 +29,11 @@ export enum LeadsAPIRoutes {
     DELETE_BULK = 'leads/bulk-delete',
 
 }
+export enum MainProfilesAPIRoutes {
+    GET_ALL = 'main-profiles',
+
+
+}
 
 export enum ShowErrorMessageOptionsRoutes {
     INCLUDE,

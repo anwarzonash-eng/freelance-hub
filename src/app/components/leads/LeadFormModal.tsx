@@ -70,6 +70,7 @@ const emptyLead = {
   company_size: null,
   company_industry: "",
   company_established: "",
+  personal_website_id: "",
 
   is_approved_for_email: false,
   is_approved_SMS_Whatsapp_approval: false,
@@ -94,6 +95,8 @@ export const LeadFormModal = ({ leadData, onClose, onSave }) => {
   const [formData, setFormData] = useState(leadData || emptyLead);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [openPersonalWebsitePopup, setopenPersonalWebsitePopup] =
+    useState(false);
 
   useEffect(() => {
     if (leadData) {
@@ -256,6 +259,22 @@ export const LeadFormModal = ({ leadData, onClose, onSave }) => {
                       .join(" "),
                   }))}
                 />
+                <div className="flex flex-row gap-1">
+                  <FormInput
+                    label="Personal Website Link"
+                    name="personal_website_id"
+                    value={formData.personal_website_id || ""}
+                    onChange={handleChange}
+                    disabled={true}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setopenPersonalWebsitePopup(true)}
+                    className="px-3 py-1 bg-indigo-600  text-white rounded-md hover:bg-indigo-700 transition-colors"
+                  >
+                    Select
+                  </button>
+                </div>
               </div>
               <div className="w-1/2 m-4 flex-col gap-4">
                 <FormCheckbox
@@ -708,6 +727,7 @@ const FormInput = ({
   onChange,
   type = "text",
   required = false,
+  disabled = false,
 }) => (
   <div className="flex flex-col">
     <label className="text-xs font-medium text-gray-600 mb-1">
@@ -721,6 +741,7 @@ const FormInput = ({
       onChange={onChange}
       required={required}
       className="p-2 border border-gray-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500"
+      disabled={disabled}
     />
   </div>
 );

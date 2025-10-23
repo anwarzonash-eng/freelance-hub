@@ -157,7 +157,13 @@ export const LeadDetailsModal = ({ lead, onClose, onEdit }) => {
                   <span className="font-semibold text-gray-900">
                     Description:
                   </span>{" "}
-                  {lead.description || "N/A"}
+                  {lead.description ? (
+                    <span
+                      dangerouslySetInnerHTML={{ __html: lead.description }}
+                    />
+                  ) : (
+                    <span>N/A</span>
+                  )}
                 </p>
                 <p>
                   <span className="font-semibold text-gray-900">

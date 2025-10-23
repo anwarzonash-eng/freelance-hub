@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { cookies } from 'next/headers';
 
-const publicPaths = ['/login', '/404'];
+const publicPaths = ['/login', '/404', '/leads', '/tmp'];
 
 export const config = {
     // Exclude static files, API routes, and the like
@@ -34,7 +34,8 @@ export async function middleware(request: NextRequest) {
     // 1. Handle unauthenticated users trying to access protected paths
     if (!isAuthenticated && !isPublicPath) {
         const url = new URL('/login', request.url);
-        url.searchParams.set('from', pathname);
+        // url.searchParams.set('from', pathname);
+        // console.log(pathname)
         return NextResponse.redirect(url);
     }
 
