@@ -3,6 +3,10 @@
 import { Job, queryJob } from "@/lib/job_matcher";
 import { useEffect, useState } from "react";
 import ExpandCollapse from "./ExpandCollapse";
+import GenericPopup from "../components/popups/GenericPopup";
+import CreateDynamicPersonalWebsite from "./create_personal_websites/createDynamicPersonalWebsite";
+import WebsiteURLs from "./create_personal_websites/websiteUrls";
+import PromptGenerator from "./upwork-jobs/PromptGenerator";
 
 type MatchResult = {
   id: string;
@@ -163,6 +167,11 @@ export default function JobMatcher() {
   const [selectedJob, setSelectedJob] = useState(null);
   const [results, setResults] = useState<MatchResult[]>([]);
   const [loading, setLoading] = useState(false);
+  const [selectedWebsite, setSelectedWebsite] = useState(null);
+  const [openCloseWebsiteCreatePopUP, setOpenCloseWebsiteCreatePopUP] =
+    useState(false);
+  const [openCloseGeneratePromptPopUP, setOpenCloseGeneratePromptPopUP] =
+    useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -217,11 +226,47 @@ export default function JobMatcher() {
     setSkills("");
     setDescription("");
     setResults([]);
+    setSelectedWebsite(null);
   };
 
   return (
     <>
       {/* Modal */}
+      {openCloseWebsiteCreatePopUP && (
+        <GenericPopup
+          title="Create Website"
+          onClose={() => setOpenCloseWebsiteCreatePopUP(false)}
+        >
+          <CreateDynamicPersonalWebsite
+            isCloseOnSelect={true}
+            setOpenCloseWebsiteCreatePopUP={setOpenCloseWebsiteCreatePopUP}
+            setSelectWebsite={setSelectedWebsite}
+            selectedWebsite={selectedWebsite}
+            description={
+              "Title:" +
+              title +
+              "\r\n \r\n \r\n" +
+              description +
+              "\r\n  \r\n \r\n" +
+              skills
+            }
+          />
+        </GenericPopup>
+      )}
+      {openCloseGeneratePromptPopUP && (
+        <GenericPopup
+          title="Generate Prompt"
+          onClose={() => setOpenCloseGeneratePromptPopUP(false)}
+        >
+          <PromptGenerator
+            title={title}
+            description={description}
+            skills={skills}
+            selectedWebsite={selectedWebsite}
+          />
+        </GenericPopup>
+      )}
+
       {selectedJob && (
         <DetailsModal
           item={selectedJob}
@@ -278,7 +323,29 @@ export default function JobMatcher() {
           >
             Clear
           </button>
+
+          <button
+            className="bg-gray-500 text-white px-6 py-3 rounded hover:bg-gray-600"
+            onClick={() => {
+              setSelectedWebsite(null);
+              setOpenCloseWebsiteCreatePopUP(true);
+            }}
+          >
+            Create Website
+          </button>
+
+          {selectedWebsite !== null && (
+            <button
+              className="bg-gray-500 text-white px-6 py-3 rounded hover:bg-gray-600"
+              onClick={() => {
+                setOpenCloseGeneratePromptPopUP(true);
+              }}
+            >
+              Generate Prompt
+            </button>
+          )}
         </div>
+        <WebsiteURLs newlyCreatedProfileLinks={selectedWebsite} />
         <MatchedSkills str1={skills} str2={myListedSkills} />
 
         {/* <ExpandCollapse
