@@ -71,11 +71,11 @@ const fetcher = async (url: string, data?: any) => {
 // --- Next.js Client Component ---
 
 export default function CreateDynamicPersonalWebsite({
-  setSelectWebsite,
-  selectedWebsite,
-  description,
-  isCloseOnSelect,
-  setOpenCloseWebsiteCreatePopUP,
+  setSelectWebsite = null,
+  selectedWebsite = null,
+  description = null,
+  isCloseOnSelect = false,
+  setOpenCloseWebsiteCreatePopUP = null,
 }) {
   // --- State Initialization (Angular Properties -> React State) ---
   const [jobDescription, setJobDescription] = useState<string>(
@@ -581,7 +581,7 @@ export default function CreateDynamicPersonalWebsite({
   };
 
   const selectWebsite = () => {
-    setOpenCloseWebsiteCreatePopUP(false);
+    isCloseOnSelect && setOpenCloseWebsiteCreatePopUP(false);
   };
 
   // --- Rendering (Angular Template -> React JSX) ---
