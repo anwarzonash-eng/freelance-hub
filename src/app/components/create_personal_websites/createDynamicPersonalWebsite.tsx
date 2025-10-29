@@ -9,6 +9,10 @@ import ChecklistSelector from "../ui/ChecklistSelector";
 import Loading from "../ui/Loading";
 import DropdownTableSearch from "../ui/DropdownTableSearch";
 import WebsiteURLs from "./websiteUrls";
+import GenericPopup from "../popups/GenericPopup";
+import CreateDynamicProfilePage from "@/app/create-personal-profile/page";
+import CreateSkill from "./CreateSkill";
+import CreateSkillGroup from "./CreateSkillGroup";
 
 const environment = {
   apiDomain:
@@ -120,6 +124,14 @@ export default function CreateDynamicPersonalWebsite({
     useState(null);
   const [isLoading, setIsLoading] = useState(null);
   const [isCreateShortURLs, setIsCreateShortURLs] = useState(false);
+  const [openAddSkillPopup, setOpenAddSkillPopup] = useState(false);
+  const [openAddSkillGroupPopup, setOpenAddSkillGroupPopup] = useState(false);
+  const [selectedSkillToCreateSkillGroup, setSelectedSkillToCreateSkillGroup] =
+    useState<string | null>(null);
+  const [
+    selectedSkillToCreateSkillGroupName,
+    setSelectedSkillToCreateSkillGroupName,
+  ] = useState<string | null>(null);
 
   const deleteSkill = (skillId) => {
     // Filter out the skill that matches the given ID
@@ -589,6 +601,26 @@ export default function CreateDynamicPersonalWebsite({
   return (
     // Main container: Clean background, padding, and min-height
     <div className="min-h-screen bg-gray-50 p-6 sm:p-8 lg:p-10">
+      {openAddSkillPopup && (
+        <GenericPopup
+          title="Create Website"
+          onClose={() => setOpenAddSkillPopup(false)}
+        >
+          <CreateSkill />
+        </GenericPopup>
+      )}
+      {openAddSkillGroupPopup && (
+        <GenericPopup
+          title="Create Website"
+          onClose={() => setOpenAddSkillGroupPopup(false)}
+        >
+          <CreateSkillGroup
+            skill_id={selectedSkillToCreateSkillGroup}
+            skill_name={selectedSkillToCreateSkillGroupName}
+            main_profile_id={selectedMainProfile}
+          />
+        </GenericPopup>
+      )}
       {isLoading && <Loading isLoading={isLoading} />}
       <div className="flex flex-row justify-between">
         <h1 className="text-3xl font-extrabold text-gray-900 mb-8  ">
@@ -724,6 +756,16 @@ export default function CreateDynamicPersonalWebsite({
             title={`Selected Skills (${formatedSelectedSkills.length})`}
           >
             <div className="lg:col-span-1  bg-white p-5 rounded-xl shadow-lg border border-gray-200">
+              <button
+                className={`
+                            w-full px-4 py-2 text-white font-bold rounded-lg shadow-xl transition duration-200 bg-gray-400 
+                            bg-green-600 hover:bg-green-700"
+                            
+                        `}
+                onClick={() => setOpenAddSkillPopup(true)}
+              >
+                Create Skill
+              </button>
               <div className="max-h-96 overflow-y-auto">
                 {formatedSelectedSkills.length === 0 ? (
                   <p className="p-4 text-center text-gray-500 italic">
@@ -749,7 +791,22 @@ export default function CreateDynamicPersonalWebsite({
                             ""
                           )}
                           {!skillItem.isMatchedSkillGroup ? (
-                            <span className="text-red-500">No Skill Group</span>
+                            <button
+                              className={
+                                "px-4 py-2 text-white font-bold rounded-lg shadow-xl transition duration-200 bg-gray-400  bg-green-600 hover:bg-green-700"
+                              }
+                              onClick={() => {
+                                setOpenAddSkillGroupPopup(true);
+                                setSelectedSkillToCreateSkillGroup(
+                                  skillItem.id
+                                );
+                                setSelectedSkillToCreateSkillGroupName(
+                                  skillItem.title
+                                );
+                              }}
+                            >
+                              Create Skill Group
+                            </button>
                           ) : (
                             ""
                           )}

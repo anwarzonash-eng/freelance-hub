@@ -28,6 +28,7 @@ import {
   KeyboardMusic,
 } from "lucide-react";
 import LogoutButton from "./auth/LogoutButton";
+import { GlobalConstants } from "@/utils/global";
 
 // --- 1. Typescript Interfaces & Definitions ---
 
@@ -438,7 +439,7 @@ const Header: React.FC<HeaderProps> = ({
   // --- EFFECT TO UPDATE DOCUMENT TITLE ---
   useEffect(() => {
     const currentTitle = findCurrentMenuItem(navItems, pathname);
-    const baseTitle = "Tool";
+    const baseTitle = GlobalConstants.APP_BASE_TITLE;
 
     if (currentTitle) {
       document.title = `${currentTitle} | ${baseTitle}`;
