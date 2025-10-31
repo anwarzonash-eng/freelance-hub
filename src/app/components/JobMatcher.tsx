@@ -345,7 +345,7 @@ export default function JobMatcher() {
             </button>
           )}
         </div>
-        <WebsiteURLs newlyCreatedProfileLinks={selectedWebsite} />
+        <WebsiteURLs data={selectedWebsite} setData={setSelectedWebsite} />
         <MatchedSkills str1={skills} str2={myListedSkills} />
 
         {/* <ExpandCollapse

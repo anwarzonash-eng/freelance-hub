@@ -282,7 +282,7 @@ const DropdownTableSearch = <T, V extends string | number>({
       {/* -------------------- Dropdown Panel -------------------- */}
       {isOpen && (
         <div
-          className={`absolute z-50 mt-2 bg-white border border-gray-200 rounded-lg shadow-2xl max-h-96 overflow-y-auto w-[40rem] ${alignmentClass}`}
+          className={`absolute z-[99999] mt-2 bg-white border border-gray-200 rounded-lg shadow-2xl max-h-96 overflow-y-auto w-[40rem] ${alignmentClass}`}
         >
           {/* Search Input */}
           <div className="p-4 border-b border-gray-200 sticky top-0 bg-white z-10">

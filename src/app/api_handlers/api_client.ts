@@ -5,6 +5,8 @@ import { ApiMethod } from './api_methods.enum';
 import { showAppNotification } from '@/utils/notificationService';
 
 const BASE_API_URL = process.env.NEXT_PUBLIC_API_PATH;
+const BASE_API_URL_PERSONAL_SITES = process.env.NEXT_PUBLIC_PERSONAL_SITES_API_DOMAIN;
+
 
 
 
@@ -52,6 +54,7 @@ export const apiClient = async <T = any, P = any>(
     headers: HeadersInit = {},
     showErrorMessage: boolean = false,
     showSuccessMessage: boolean = false,
+
 
 ): Promise<IApiResponse> => {
 

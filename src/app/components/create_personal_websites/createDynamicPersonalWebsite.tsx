@@ -91,6 +91,7 @@ export default function CreateDynamicPersonalWebsite({
   const [tagline, setTagline] = useState<string>("");
   const [designation, setDesignation] = useState<string>("");
   const [privateTitle, setPrivateTitle] = useState<string>("");
+  const [hourlyRate, sethourlyRate] = useState(16);
 
   const [experience, setExperience] = useState<string>("");
   const [isCreatingProfile, setIsCreatingProfile] = useState<boolean>(false);
@@ -110,7 +111,7 @@ export default function CreateDynamicPersonalWebsite({
     []
   );
   const [allSelectedSkills, setAllSelectedSkills] = useState([]);
-  const [allSkills, setAllSkills] = useState<Skill[]>([]);
+  const [allSkills, setAllSkills] = useState([]);
   const [allSkillsForSearch, setAllSkillsForSearch] = useState<Skill[]>([]);
   const [allCategories, setAllCategories] = useState<Category[]>([]);
   const [allCategoriesMultiSelect, setAllCategoriesMultiSelect] = useState([]);
@@ -365,6 +366,24 @@ export default function CreateDynamicPersonalWebsite({
     }
   };
 
+  const addNewSkill = () => {
+    const skill = allSkills.find((skill) => skill.id === selectedSkill);
+    const isSkillExistInAllSelectedSkills = allSelectedSkills.find(
+      (skill) => skill.id === selectedSkill
+    );
+    if (!isSkillExistInAllSelectedSkills) {
+      const updateAllSelectedSkills = [
+        ...allSelectedSkills,
+        {
+          id: selectedSkill,
+          title: skill.title,
+        },
+      ];
+
+      setAllSelectedSkills(updateAllSelectedSkills);
+    }
+  };
+
   const changeMaincategory = (categoryid) => {
     const category = allCategories.find(
       (category) => category.id === categoryid
@@ -418,6 +437,7 @@ export default function CreateDynamicPersonalWebsite({
       !designation ||
       !tagline ||
       !privateTitle ||
+      !(hourlyRate && hourlyRate > 0) ||
       mainCategoryId == "select" ||
       selectedMainProfile == "select"
     ) {
@@ -457,6 +477,7 @@ export default function CreateDynamicPersonalWebsite({
       domain: selectedDomain,
       private_title: privateTitle,
       is_create_tiny_url: isCreateShortURLs,
+      hourly_rate: hourlyRate,
     };
 
     try {
@@ -484,6 +505,7 @@ export default function CreateDynamicPersonalWebsite({
       setIsCreatingProfile(false);
       setIsLoading(false);
     } catch (error: any) {
+      setIsLoading(false);
       console.error(error);
       setIsError(true);
       setIsCreatingProfile(false);
@@ -747,7 +769,37 @@ export default function CreateDynamicPersonalWebsite({
           </div>
         </div>
       </div>
-
+      <div className="flex gap-2">
+        <DropdownTableSearch
+          data={allSkills}
+          valueKey="id"
+          displayKeys={["title"]} // Columns to show in the dropdown
+          imageKeys={[]} // No images in this case
+          isMultiSelect={false}
+          mainDisplayKey="title" // Text to show in the button after selection
+          initialSelectValue={selectedSkill}
+          setInitialSelectValue={setSelectSkill}
+        />
+        {/* <select
+                value={selectedSkill}
+                onChange={(e) => setSelectSkill(e.target.value)}
+                className="p-2 border border-gray-300 rounded-lg text-sm flex-1 min-w-[150px] focus:ring-indigo-500 focus:border-indigo-500"
+              >
+                <option value="select">-- Select Skill --</option>
+                {allSkills.map((skill) => (
+                  <option key={skill.id} value={skill.id}>
+                    {skill.title}
+                  </option>
+                ))}
+              </select> */}
+        <button
+          onClick={addNewSkill}
+          className="px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg shadow hover:bg-green-700 transition disabled:opacity-50"
+          disabled={!selectedSkill}
+        >
+          + Add Skill
+        </button>
+      </div>
       {/* Main Content Area: Divided into 3 Columns on large screens */}
       <div className="flex flex-col w-full">
         <div>
@@ -766,6 +818,7 @@ export default function CreateDynamicPersonalWebsite({
               >
                 Create Skill
               </button>
+
               <div className="max-h-96 overflow-y-auto">
                 {formatedSelectedSkills.length === 0 ? (
                   <p className="p-4 text-center text-gray-500 italic">
@@ -995,6 +1048,29 @@ export default function CreateDynamicPersonalWebsite({
               ))}
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-1 ">
+                  Hourly Rate
+                </label>
+                <input
+                  value={hourlyRate}
+                  onChange={(e) => {
+                    const rawValue = e.target.value;
+
+                    if (rawValue === "") {
+                      sethourlyRate(0);
+                    } else {
+                      const numericValue = parseFloat(rawValue);
+
+                      if (!isNaN(numericValue)) {
+                        sethourlyRate(numericValue);
+                      }
+                    }
+                  }}
+                  type="number"
+                  className="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm"
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1 ">
                   <input
                     checked={isCreateShortURLs}
                     onChange={(e) => setIsCreateShortURLs(e.target.checked)}
@@ -1055,7 +1131,8 @@ export default function CreateDynamicPersonalWebsite({
               </button> */}
               {/* Newly Created Links Output */}
               <WebsiteURLs
-                newlyCreatedProfileLinks={newlyCreatedProfileLinks}
+                data={newlyCreatedProfileLinks}
+                setData={setNewlyCreatedProfileLinks}
               />
             </div>
           </ExpandCollapse>

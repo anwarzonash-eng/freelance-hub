@@ -31,6 +31,10 @@ export enum LeadsAPIRoutes {
 }
 export enum MainProfilesAPIRoutes {
     GET_ALL = 'main-profiles',
+}
+
+export enum DetailProfilesAPIRoutes {
+    GENERATE_PDF = 'detail-profiles/generatePRT',
 
 
 }
