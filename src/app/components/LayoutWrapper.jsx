@@ -11,7 +11,7 @@ const LayoutWrapper = ({ children, useData }) => {
   //   console.log(useData);
   // }, []);
   // Use state to track the sidebar's collapsed status
-  const [isCollapsed, setIsCollapsed] = useState(true);
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   // Toggle function passed to the Header
   const toggleSidebar = () => {

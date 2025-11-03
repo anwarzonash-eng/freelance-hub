@@ -1,9 +1,9 @@
 export const enum GlobalConstants {
-    APP_BASE_TITLE = "Marketing Freelancer Tool",
+  APP_BASE_TITLE = "Marketing Freelancer Tool",
 }
 
 export const enum Prompts {
-    GENERATE_SKILLS = `You are to generate a JSON object for a tech stack skill to be used as an API body for my SkillModel in Sequelize.
+  GENERATE_SKILLS = `You are to generate a JSON object for a tech stack skill to be used as an API body for my SkillModel in Sequelize.
 
 Follow these exact rules:
 
@@ -35,7 +35,7 @@ Example Output:
 Now generate this JSON for the following tech stack:
 {skill_name}`,
 
-    SKILL_GROUP = `You are an assistant helping me generate JSON data for my CV API. I am a web developer and I want to create content for the tech stack Angular. 
+  SKILL_GROUP = `You are an assistant helping me generate JSON data for my CV API. I am a web developer and I want to create content for the tech stack Angular. 
 
 Generate the JSON object following these rules:
 
@@ -74,4 +74,45 @@ Generate the JSON object following these rules:
 Now generate this JSON for the following tech stack:
 {skill_name}
 `,
+  CATEGORY = `You are to generate a JSON object for a an IT service like node.js Developer, web developer.. it could be anything.. this is for my website. I am generating services pages for my full stack app developer website to showcase skills, portfolios, skills, cv etc.. Service Object that you will create to be used as an API body for my ServiceModel in Sequelize.
+
+Follow these exact rules:
+
+Add the following fields:
+   - 'title': The name of the service that I provided in the end of this prompt (e.g., "Node.js Developer", "React Developer", etc.)
+   - 'designation': add designation like Node.js Developer it would be quite similar to service name I provided.
+   - 'label': it would be a private label to give to mark the purpose of the service
+   - 'tagline': it would be 1 line of tag line about that service explain what I can do for this service. it would be short, precise and just 1 line.
+   - 'skills_ids': it would be harded coded JSON as {"skills_ids": []}
+   - 'main_profile_id': it would be hardcoded as {main_profile_id}
+   - 'variation': An array of all possible name variations or aliases used on job sites. Example for React: '["React", "React.js", "ReactJS", "React JS"]'.
+   - 'thumbnail': SVG icons URL of that service from 'https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/' (for example: 'https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/[iconname].svg').
+   
+
+
+Return **only** a single clean JSON object, properly formatted (no markdown or explanations).
+
+Notes: 
+- Only return JSON, nothing else. 
+- I want to post it directly to my API as the request body.
+
+Example Input:
+React
+
+{
+   
+    "label": "abc label",
+    "title": "abc title",
+    "designation": "abc tagline",
+    "tagline": "abc tagline",
+    "thumbnail": "https://personalimagelist.s3.eu-north-1.amazonaws.com/1727340171535_guwdrxwrm87pngfind.com-website-development-png-248816.png",
+    "skills_ids": {
+        "skills_ids": []
+    },
+    "main_profile_id": "4e567ac2-48d9-447f-a48e-635269db7802"
+}
+
+Now generate this JSON for the following service:
+{service_name}
+`
 }

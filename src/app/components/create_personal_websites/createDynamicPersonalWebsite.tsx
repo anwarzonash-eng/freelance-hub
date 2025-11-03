@@ -13,6 +13,7 @@ import GenericPopup from "../popups/GenericPopup";
 import CreateDynamicProfilePage from "@/app/create-personal-profile/page";
 import CreateSkill from "./CreateSkill";
 import CreateSkillGroup from "./CreateSkillGroup";
+import CreateCategory from "./CreateCategory";
 
 const environment = {
   apiDomain:
@@ -82,11 +83,9 @@ export default function CreateDynamicPersonalWebsite({
   setOpenCloseWebsiteCreatePopUP = null,
 }) {
   // --- State Initialization (Angular Properties -> React State) ---
-  const [jobDescription, setJobDescription] = useState<string>(
-    description || "vue, javascript, typescript express"
-  );
+  const [jobDescription, setJobDescription] = useState<string>(description);
   const [matchedCategories, setMatchedCategories] = useState([]);
-  const [mainCategoryId, setMainCategoryId] = useState<string>("frontend");
+  const [mainCategoryId, setMainCategoryId] = useState(null);
   const [mainDomain, setMainDomain] = useState<any>({}); // Using 'any' as its shape is complex
   const [tagline, setTagline] = useState<string>("");
   const [designation, setDesignation] = useState<string>("");
@@ -127,6 +126,8 @@ export default function CreateDynamicPersonalWebsite({
   const [isCreateShortURLs, setIsCreateShortURLs] = useState(false);
   const [openAddSkillPopup, setOpenAddSkillPopup] = useState(false);
   const [openAddSkillGroupPopup, setOpenAddSkillGroupPopup] = useState(false);
+  const [openAddCategoryPopup, setOpenAddCategoryPopup] = useState(false);
+
   const [selectedSkillToCreateSkillGroup, setSelectedSkillToCreateSkillGroup] =
     useState<string | null>(null);
   const [
@@ -164,7 +165,8 @@ export default function CreateDynamicPersonalWebsite({
     setTagline("");
     setExperience("");
     setSelectedMainProfile("8bc33b51-204f-4a85-9242-4a38c73e35aa");
-    setMainCategoryId("select");
+    setMainCategoryId(null);
+    setJobDescription("");
   };
 
   const handleOnLoad = async () => {
@@ -249,6 +251,10 @@ export default function CreateDynamicPersonalWebsite({
   };
 
   const fetchSkills = async () => {
+    // if (!description || description === "") {
+    //   alert("provide some description!");
+    //   return;
+    // }
     setIsLoading(true);
     try {
       if (!selectedMainProfile || selectedMainProfile == "All") {
@@ -622,10 +628,10 @@ export default function CreateDynamicPersonalWebsite({
 
   return (
     // Main container: Clean background, padding, and min-height
-    <div className="min-h-screen bg-gray-50 p-6 sm:p-8 lg:p-10">
+    <div className="min-h-screen bg-gray-50  p-2">
       {openAddSkillPopup && (
         <GenericPopup
-          title="Create Website"
+          title="Create Skills"
           onClose={() => setOpenAddSkillPopup(false)}
         >
           <CreateSkill />
@@ -633,7 +639,7 @@ export default function CreateDynamicPersonalWebsite({
       )}
       {openAddSkillGroupPopup && (
         <GenericPopup
-          title="Create Website"
+          title="Create Skill Group"
           onClose={() => setOpenAddSkillGroupPopup(false)}
         >
           <CreateSkillGroup
@@ -643,25 +649,21 @@ export default function CreateDynamicPersonalWebsite({
           />
         </GenericPopup>
       )}
+      {openAddCategoryPopup && (
+        <GenericPopup
+          title="Create Category"
+          onClose={() => setOpenAddCategoryPopup(false)}
+        >
+          <CreateCategory main_profile_id={selectedMainProfile} />
+        </GenericPopup>
+      )}
       {isLoading && <Loading isLoading={isLoading} />}
-      <div className="flex flex-row justify-between">
-        <h1 className="text-3xl font-extrabold text-gray-900 mb-8  ">
-          Dynamic Profile Creator 🚀
-        </h1>
+      <div className="flex flex-row justify-between  items-center mb-2">
+        <h3 className="text-3xl font-extrabold text-gray-900  text-center">
+          Create Website
+        </h3>
 
-        <div className="flex gap-2 mb-2  items-center">
-          {/* <select
-            value={selectedMainProfile}
-            className="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm"
-            onChange={(e) => setSelectedMainProfile(e.target.value)}
-          >
-            <option value="select">-- Select Domain --</option>
-            {mainProfiles.map((mainProfile, index) => (
-              <option key={index} value={mainProfile.id}>
-                {mainProfile.name} ({mainProfile.domain})
-              </option>
-            ))}
-          </select> */}
+        <div className="flex gap-2   items-center">
           <DropdownTableSearch
             data={mainProfiles}
             valueKey="id"
@@ -693,7 +695,7 @@ export default function CreateDynamicPersonalWebsite({
           )}
         </div>
       </div>
-      <div className="border-b"></div>
+      <div className="border-b mb-2"></div>
       {/* Error Area */}
       {isError && (
         <div className="p-4 mb-4 bg-red-100 border-l-4 border-red-500 text-red-700 rounded shadow-md">
@@ -704,16 +706,10 @@ export default function CreateDynamicPersonalWebsite({
 
       {/* Top Section: Description Input & Fetch Button */}
       <div className="bg-white p-6 rounded-xl shadow-lg mb-8 border border-gray-200">
-        <label
-          htmlFor="jobDescription"
-          className="block text-sm font-medium text-gray-700 mb-2"
-        >
-          Job Description / Skill Inputs
-        </label>
         <div className="flex flex-col md:flex-row gap-4">
           <textarea
             id="jobDescription"
-            rows={6}
+            rows={20}
             className="w-full border border-gray-300 rounded-lg p-3 text-gray-800 focus:ring-indigo-500 focus:border-indigo-500 transition shadow-inner flex-1"
             placeholder="Paste the job description or a list of required skills here..."
             value={jobDescription}
@@ -799,208 +795,215 @@ export default function CreateDynamicPersonalWebsite({
         >
           + Add Skill
         </button>
+        <button
+          className="px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg shadow hover:bg-green-700 transition disabled:opacity-50"
+          onClick={() => setOpenAddSkillPopup(true)}
+        >
+          Create Skill
+        </button>
+        <button
+          className="px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg shadow hover:bg-green-700 transition disabled:opacity-50"
+          onClick={() => setOpenAddCategoryPopup(true)}
+        >
+          Create Category
+        </button>
       </div>
       {/* Main Content Area: Divided into 3 Columns on large screens */}
       <div className="flex flex-col w-full">
         <div>
           {/* --- COLUMN 1: Selected Skills (Left) --- */}
-          <ExpandCollapse
-            title={`Selected Skills (${formatedSelectedSkills.length})`}
-          >
-            <div className="lg:col-span-1  bg-white p-5 rounded-xl shadow-lg border border-gray-200">
-              <button
-                className={`
-                            w-full px-4 py-2 text-white font-bold rounded-lg shadow-xl transition duration-200 bg-gray-400 
-                            bg-green-600 hover:bg-green-700"
-                            
-                        `}
-                onClick={() => setOpenAddSkillPopup(true)}
-              >
-                Create Skill
-              </button>
 
-              <div className="max-h-96 overflow-y-auto">
-                {formatedSelectedSkills.length === 0 ? (
-                  <p className="p-4 text-center text-gray-500 italic">
-                    Run analysis to see selected skills.
-                  </p>
-                ) : (
-                  <ul className="divide-y divide-gray-100">
-                    {formatedSelectedSkills.map((skillItem: any) => (
-                      <li
-                        key={skillItem.id}
-                        className="flex items-center justify-between py-2 group hover:bg-indigo-50 rounded-md pr-2 transition-colors"
-                      >
-                        {/* Skill Title */}
-                        <span className="ml-2 text-sm font-medium text-gray-700 truncate">
-                          {skillItem.title}
-                        </span>
-                        <div>
-                          {!skillItem.isMatchedSkillCategory ? (
-                            <span className="text-red-500 mr-4">
-                              No Skill Category
-                            </span>
-                          ) : (
-                            ""
-                          )}
-                          {!skillItem.isMatchedSkillGroup ? (
-                            <button
-                              className={
-                                "px-4 py-2 text-white font-bold rounded-lg shadow-xl transition duration-200 bg-gray-400  bg-green-600 hover:bg-green-700"
-                              }
-                              onClick={() => {
-                                setOpenAddSkillGroupPopup(true);
-                                setSelectedSkillToCreateSkillGroup(
-                                  skillItem.id
-                                );
-                                setSelectedSkillToCreateSkillGroupName(
-                                  skillItem.title
-                                );
-                              }}
-                            >
-                              Create Skill Group
-                            </button>
-                          ) : (
-                            ""
-                          )}
-                          {/* Delete Button */}
-                          <button
-                            onClick={() => deleteSkill(skillItem.id)}
-                            className="p-1 rounded-full text-red-500 opacity-0 group-hover:opacity-100 hover:bg-red-100 transition-opacity"
-                            title={`Remove ${skillItem.title}`}
-                          >
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              className="h-4 w-4"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                d="M6 18L18 6M6 6l12 12"
-                              />
-                            </svg>
-                          </button>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
-          </ExpandCollapse>
-
-          <ExpandCollapse
-            title={`Matched Profiles (${matchedProfiles.length})`}
-          >
-            <div className="lg:col-span-1  bg-white p-5 rounded-xl shadow-lg border border-gray-200">
-              <div className="max-h-96 overflow-y-auto">
-                {matchedProfiles.length === 0 ? (
-                  <p className="p-4 text-center text-gray-500 italic">
-                    Run analysis to see Matched Profiles.
-                  </p>
-                ) : (
-                  <ul className="divide-y divide-gray-100">
-                    {matchedProfiles
-                      .sort(
-                        (a, b) => b.matched_percentage - a.matched_percentage
-                      )
-                      .map((profile) => (
+          {formatedSelectedSkills.length > 0 && (
+            <ExpandCollapse
+              title={`Selected Skills (${formatedSelectedSkills.length})`}
+            >
+              <div className="lg:col-span-1  bg-white p-5 rounded-xl shadow-lg border border-gray-200">
+                <div className="max-h-96 overflow-y-auto">
+                  {formatedSelectedSkills.length === 0 ? (
+                    <p className="p-4 text-center text-gray-500 italic">
+                      Run analysis to see selected skills.
+                    </p>
+                  ) : (
+                    <ul className="divide-y divide-gray-100">
+                      {formatedSelectedSkills.map((skillItem: any) => (
                         <li
-                          key={profile.id}
-                          className="flex flex-col sm:flex-row sm:items-center justify-between py-3 px-3 group hover:bg-indigo-50 rounded-lg transition-colors border-b last:border-b-0 border-gray-100"
+                          key={skillItem.id}
+                          className="flex items-center justify-between py-2 group hover:bg-indigo-50 rounded-md pr-2 transition-colors"
                         >
-                          <div className="flex-shrink-0 mb-2 sm:mb-0 sm:mr-4 min-w-0">
-                            <span className="text-sm font-semibold text-gray-800 truncate">
-                              <span className="text-indigo-600 font-extrabold mr-1">
-                                {profile.private_title}
+                          {/* Skill Title */}
+                          <span className="ml-2 text-sm font-medium text-gray-700 truncate">
+                            {skillItem.title}
+                          </span>
+                          <div>
+                            {!skillItem.isMatchedSkillCategory ? (
+                              <span className="text-red-500 mr-4">
+                                No Skill Category
                               </span>
-                              <span className="text-gray-500 font-normal">
-                                ({profile.matched_percentage}%)
-                              </span>
-                              <span className="text-blue-600 font-normal">
-                                ({profile.uniqe_id})
-                              </span>
-                            </span>
-                          </div>
-
-                          <div className="flex-grow flex flex-wrap gap-2 items-center min-w-0 mb-2 sm:mb-0">
-                            {profile.skills_ids?.length > 0 ? (
-                              [
-                                // 1. Render Matched Skills First (Green pills)
-                                ...profile.skills_ids
-                                  .filter((skillId) =>
-                                    allSelectedSkills.find(
-                                      (s) => s.id === skillId
-                                    )
-                                  )
-                                  .map((skillId) => {
-                                    const skillTitle =
-                                      allSkills.find((s) => s.id === skillId)
-                                        ?.title || "...";
-                                    return (
-                                      <span
-                                        key={skillId}
-                                        className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap bg-green-100 text-green-600"
-                                      >
-                                        {skillTitle}
-                                      </span>
-                                    );
-                                  }),
-
-                                // 2. Render Unmatched Skills Next (Gray pills)
-                                ...profile.skills_ids
-                                  .filter(
-                                    (skillId) =>
-                                      !allSelectedSkills.find(
-                                        (s) => s.id === skillId
-                                      )
-                                  )
-                                  .map((skillId) => {
-                                    const skillTitle =
-                                      allSkills.find((s) => s.id === skillId)
-                                        ?.title || "...";
-                                    return (
-                                      <span
-                                        key={skillId}
-                                        className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap bg-gray-200 text-gray-700"
-                                      >
-                                        {skillTitle}
-                                      </span>
-                                    );
-                                  }),
-                              ]
                             ) : (
-                              <span className="text-xs text-gray-400 italic">
-                                No skills listed
-                              </span>
+                              ""
                             )}
-                          </div>
-
-                          <div className="flex-shrink-0 self-end sm:self-center">
+                            {!skillItem.isMatchedSkillGroup ? (
+                              <button
+                                className={
+                                  "px-4 py-2 text-white font-bold rounded-lg shadow-xl transition duration-200 bg-gray-400  bg-green-600 hover:bg-green-700"
+                                }
+                                onClick={() => {
+                                  setOpenAddSkillGroupPopup(true);
+                                  setSelectedSkillToCreateSkillGroup(
+                                    skillItem.id
+                                  );
+                                  setSelectedSkillToCreateSkillGroupName(
+                                    skillItem.title
+                                  );
+                                }}
+                              >
+                                Create Skill Group
+                              </button>
+                            ) : (
+                              ""
+                            )}
+                            {/* Delete Button */}
                             <button
-                              onClick={() => {
-                                setSelectWebsite(profile);
-                                setNewlyCreatedProfileLinks(profile);
-                              }}
-                              className="p-1.5 px-3 text-sm rounded-lg text-red-600 border border-red-200 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity transition-colors duration-200"
-                              aria-label={`Select profile ${profile.private_title}`}
+                              onClick={() => deleteSkill(skillItem.id)}
+                              className="p-1 rounded-full text-red-500 opacity-0 group-hover:opacity-100 hover:bg-red-100 transition-opacity"
+                              title={`Remove ${skillItem.title}`}
                             >
-                              Select
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                className="h-4 w-4"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  d="M6 18L18 6M6 6l12 12"
+                                />
+                              </svg>
                             </button>
                           </div>
                         </li>
                       ))}
-                  </ul>
-                )}
+                    </ul>
+                  )}
+                </div>
               </div>
-            </div>
-          </ExpandCollapse>
-          <ExpandCollapse title={"Profile Data"}>
-            {/* <DropdownTableSearch
+            </ExpandCollapse>
+          )}
+
+          {matchedProfiles.length > 0 && (
+            <ExpandCollapse
+              title={`Matched Profiles (${matchedProfiles.length})`}
+            >
+              <div className="lg:col-span-1  bg-white p-5 rounded-xl shadow-lg border border-gray-200">
+                <div className="max-h-96 overflow-y-auto">
+                  {matchedProfiles.length === 0 ? (
+                    <p className="p-4 text-center text-gray-500 italic">
+                      Run analysis to see Matched Profiles.
+                    </p>
+                  ) : (
+                    <ul className="divide-y divide-gray-100">
+                      {matchedProfiles
+                        .sort(
+                          (a, b) => b.matched_percentage - a.matched_percentage
+                        )
+                        .map((profile) => (
+                          <li
+                            key={profile.id}
+                            className="flex flex-col sm:flex-row sm:items-center justify-between py-3 px-3 group hover:bg-indigo-50 rounded-lg transition-colors border-b last:border-b-0 border-gray-100"
+                          >
+                            <div className="flex-shrink-0 mb-2 sm:mb-0 sm:mr-4 min-w-0">
+                              <span className="text-sm font-semibold text-gray-800 truncate">
+                                <span className="text-indigo-600 font-extrabold mr-1">
+                                  {profile.private_title}
+                                </span>
+                                <span className="text-gray-500 font-normal">
+                                  ({profile.matched_percentage}%)
+                                </span>
+                                <span className="text-blue-600 font-normal">
+                                  ({profile.uniqe_id})
+                                </span>
+                              </span>
+                            </div>
+
+                            <div className="flex-grow flex flex-wrap gap-2 items-center min-w-0 mb-2 sm:mb-0">
+                              {profile.skills_ids?.length > 0 ? (
+                                [
+                                  // 1. Render Matched Skills First (Green pills)
+                                  ...profile.skills_ids
+                                    .filter((skillId) =>
+                                      allSelectedSkills.find(
+                                        (s) => s.id === skillId
+                                      )
+                                    )
+                                    .map((skillId) => {
+                                      const skillTitle =
+                                        allSkills.find((s) => s.id === skillId)
+                                          ?.title || "...";
+                                      return (
+                                        <span
+                                          key={skillId}
+                                          className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap bg-green-100 text-green-600"
+                                        >
+                                          {skillTitle}
+                                        </span>
+                                      );
+                                    }),
+
+                                  // 2. Render Unmatched Skills Next (Gray pills)
+                                  ...profile.skills_ids
+                                    .filter(
+                                      (skillId) =>
+                                        !allSelectedSkills.find(
+                                          (s) => s.id === skillId
+                                        )
+                                    )
+                                    .map((skillId) => {
+                                      const skillTitle =
+                                        allSkills.find((s) => s.id === skillId)
+                                          ?.title || "...";
+                                      return (
+                                        <span
+                                          key={skillId}
+                                          className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap bg-gray-200 text-gray-700"
+                                        >
+                                          {skillTitle}
+                                        </span>
+                                      );
+                                    }),
+                                ]
+                              ) : (
+                                <span className="text-xs text-gray-400 italic">
+                                  No skills listed
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex-shrink-0 self-end sm:self-center">
+                              <button
+                                onClick={() => {
+                                  setSelectWebsite(profile);
+                                  setNewlyCreatedProfileLinks(profile);
+                                }}
+                                className="p-1.5 px-3 text-sm rounded-lg text-red-600 border border-red-200 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity transition-colors duration-200"
+                                aria-label={`Select profile ${profile.private_title}`}
+                              >
+                                Select
+                              </button>
+                            </div>
+                          </li>
+                        ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            </ExpandCollapse>
+          )}
+          {mainCategoryId && (
+            <ExpandCollapse title={"Profile Data"}>
+              {/* <DropdownTableSearch
               data={allCategories}
               valueKey="id"
               displayKeys={["name"]} // Columns to show in the dropdown
@@ -1010,83 +1013,83 @@ export default function CreateDynamicPersonalWebsite({
               initialSelectValue={mainCategoryId}
               setInitialSelectValue={changeMaincategory}
             /> */}
-            {/* --- COLUMN 3: Profile Details & Output (Right) --- */}
-            <div className="lg:col-span-1 bg-white p-6 rounded-xl shadow-lg border border-gray-200">
-              {/* Input Fields (Styled with better spacing and labels) */}
-              {[
-                {
-                  label: "Designation",
-                  state: designation,
-                  setter: setDesignation,
-                  type: "text",
-                },
+              {/* --- COLUMN 3: Profile Details & Output (Right) --- */}
+              <div className="lg:col-span-1 bg-white p-6 rounded-xl shadow-lg border border-gray-200">
+                {/* Input Fields (Styled with better spacing and labels) */}
+                {[
+                  {
+                    label: "Designation",
+                    state: designation,
+                    setter: setDesignation,
+                    type: "text",
+                  },
 
-                {
-                  label: "Tag Line",
-                  state: tagline,
-                  setter: setTagline,
-                  type: "text",
-                },
-                {
-                  label: "Private Title",
-                  state: privateTitle,
-                  setter: setPrivateTitle,
-                  type: "text",
-                },
-              ].map((field, index) => (
-                <div key={index} className="mb-4">
+                  {
+                    label: "Tag Line",
+                    state: tagline,
+                    setter: setTagline,
+                    type: "text",
+                  },
+                  {
+                    label: "Private Title",
+                    state: privateTitle,
+                    setter: setPrivateTitle,
+                    type: "text",
+                  },
+                ].map((field, index) => (
+                  <div key={index} className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1 ">
+                      {field.label}
+                    </label>
+                    <input
+                      value={field.state}
+                      onChange={(e) => field.setter(e.target.value)}
+                      type={field.type}
+                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm"
+                    />
+                  </div>
+                ))}
+                <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-1 ">
-                    {field.label}
+                    Hourly Rate
                   </label>
                   <input
-                    value={field.state}
-                    onChange={(e) => field.setter(e.target.value)}
-                    type={field.type}
+                    value={hourlyRate}
+                    onChange={(e) => {
+                      const rawValue = e.target.value;
+
+                      if (rawValue === "") {
+                        sethourlyRate(0);
+                      } else {
+                        const numericValue = parseFloat(rawValue);
+
+                        if (!isNaN(numericValue)) {
+                          sethourlyRate(numericValue);
+                        }
+                      }
+                    }}
+                    type="number"
                     className="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm"
                   />
                 </div>
-              ))}
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1 ">
-                  Hourly Rate
-                </label>
-                <input
-                  value={hourlyRate}
-                  onChange={(e) => {
-                    const rawValue = e.target.value;
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1 ">
+                    <input
+                      checked={isCreateShortURLs}
+                      onChange={(e) => setIsCreateShortURLs(e.target.checked)}
+                      type="checkbox"
+                      className="mr-2"
+                    />
+                    Create Short URLs
+                  </label>
+                </div>
 
-                    if (rawValue === "") {
-                      sethourlyRate(0);
-                    } else {
-                      const numericValue = parseFloat(rawValue);
-
-                      if (!isNaN(numericValue)) {
-                        sethourlyRate(numericValue);
-                      }
-                    }
-                  }}
-                  type="number"
-                  className="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm"
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1 ">
-                  <input
-                    checked={isCreateShortURLs}
-                    onChange={(e) => setIsCreateShortURLs(e.target.checked)}
-                    type="checkbox"
-                    className="mr-2"
-                  />
-                  Create Short URLs
-                </label>
-              </div>
-
-              {/* Select Fields */}
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Main Service Category
-                </label>
-                {/* <select
+                {/* Select Fields */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Main Service Category
+                  </label>
+                  {/* <select
                   value={mainCategoryId}
                   className="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm"
                   onChange={(e) => changeMaincategory(e.target.value)}
@@ -1098,10 +1101,10 @@ export default function CreateDynamicPersonalWebsite({
                     </option>
                   ))}
                 </select> */}
-              </div>
+                </div>
 
-              {/* Create Profile Button */}
-              {/* <button
+                {/* Create Profile Button */}
+                {/* <button
                 className={`
                             w-full px-4 py-3 text-white font-bold rounded-lg shadow-xl transition duration-200 
                             ${
@@ -1129,24 +1132,27 @@ export default function CreateDynamicPersonalWebsite({
               >
                 Clear
               </button> */}
-              {/* Newly Created Links Output */}
-              <WebsiteURLs
-                data={newlyCreatedProfileLinks}
-                setData={setNewlyCreatedProfileLinks}
+                {/* Newly Created Links Output */}
+                <WebsiteURLs
+                  data={newlyCreatedProfileLinks}
+                  setData={setNewlyCreatedProfileLinks}
+                />
+              </div>
+            </ExpandCollapse>
+          )}
+          {allCategoriesMultiSelect.length > 0 && (
+            <ExpandCollapse
+              title={`Select Caegories (${allCategoriesMultiSelect.length})`}
+            >
+              <br />
+              <ChecklistSelector
+                items={allCategoriesMultiSelect}
+                setItems={setAllCategoriesMultiSelect}
+                displayKey={"name"}
+                valueKey={"id"}
               />
-            </div>
-          </ExpandCollapse>
-
-          <ExpandCollapse
-            title={`Select Caegories (${allCategoriesMultiSelect.length})`}
-          >
-            <ChecklistSelector
-              items={allCategoriesMultiSelect}
-              setItems={setAllCategoriesMultiSelect}
-              displayKey={"name"}
-              valueKey={"id"}
-            />
-          </ExpandCollapse>
+            </ExpandCollapse>
+          )}
           {/* <ExpandCollapse title={"Matched Categories & Add Skill"}>
             <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-lg border border-gray-200 h-full">
               <h2 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">

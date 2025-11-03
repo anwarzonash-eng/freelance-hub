@@ -54,13 +54,15 @@ export const apiClient = async <T = any, P = any>(
     headers: HeadersInit = {},
     showErrorMessage: boolean = false,
     showSuccessMessage: boolean = false,
+    apiBaseURL = BASE_API_URL
 
 
 ): Promise<IApiResponse> => {
 
 
+    console.log(apiBaseURL)
     // Use the new buildUrl function
-    const url = buildUrl(BASE_API_URL, route, params);
+    const url = buildUrl(apiBaseURL, route, params);
 
     const defaultHeaders: HeadersInit = {
         'Content-Type': 'application/json',

@@ -35,8 +35,10 @@ export enum MainProfilesAPIRoutes {
 
 export enum DetailProfilesAPIRoutes {
     GENERATE_PDF = 'detail-profiles/generatePRT',
+}
 
-
+export enum CategoriesAPIRoutes {
+    ADD = 'categories',
 }
 
 export enum ShowErrorMessageOptionsRoutes {

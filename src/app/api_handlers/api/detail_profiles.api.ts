@@ -8,7 +8,7 @@ import { DetailProfilesAPIRoutes } from "../api_routes.enums"
 
 
 export async function generatePDF(payload: any) {
-    return await apiClient(DetailProfilesAPIRoutes.GENERATE_PDF, ApiMethod.POST, payload, undefined, undefined, true, true)
+    return await apiClient(DetailProfilesAPIRoutes.GENERATE_PDF, ApiMethod.POST, payload, undefined, undefined, true, true, process.env.NEXT_PUBLIC_API_PATH_SERVER_2)
 }
 
 
