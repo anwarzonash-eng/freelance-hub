@@ -343,26 +343,27 @@ const JobCard = () => {
   };
 
   // --- Effects ---
-  if (type == "all") {
-    useInterval(() => {
-      onLoad();
-    }, 60000);
-    // const refreshInterval = setInterval(() => {
-    //   onLoad();
-    // }, 10000);
 
-    // useInterval(() => {
-    //   setTimer((prevTimer) => (prevTimer <= 1 ? 10 : prevTimer - 1));
-    // }, 1000);
-    // const timerInterval = setInterval(() => {
-    //   setTimer((prevTimer) => (prevTimer <= 1 ? 10 : prevTimer - 1));
-    // }, 1000);
+  useInterval(() => {
+    if (type == "all") onLoad();
+  }, 60000);
 
-    // return () => {
-    //   // clearInterval(refreshInterval);
-    //   clearInterval(timerInterval);
-    // };
-  }
+  // const refreshInterval = setInterval(() => {
+  //   onLoad();
+  // }, 10000);
+
+  // useInterval(() => {
+  //   setTimer((prevTimer) => (prevTimer <= 1 ? 10 : prevTimer - 1));
+  // }, 1000);
+  // const timerInterval = setInterval(() => {
+  //   setTimer((prevTimer) => (prevTimer <= 1 ? 10 : prevTimer - 1));
+  // }, 1000);
+
+  // return () => {
+  //   // clearInterval(refreshInterval);
+  //   clearInterval(timerInterval);
+  // };
+  // }
   useEffect(() => {
     onLoad();
   }, [type]);
