@@ -8,6 +8,9 @@ import { UpworkJobsAPIRoutes } from "../api_routes.enums"
 export async function getALLUPworkJobs() {
     return await apiClient(UpworkJobsAPIRoutes.GET_LATEST, ApiMethod.GET, undefined, undefined, undefined, true, false)
 }
+export async function getALLUPworkJobsStats() {
+    return await apiClient(UpworkJobsAPIRoutes.GET_STATS, ApiMethod.GET, undefined, undefined, undefined, true, false)
+}
 
 export async function getSubmittedUPworkJobs() {
     return await apiClient(UpworkJobsAPIRoutes.GET_SUBMITTED, ApiMethod.GET, undefined, undefined, undefined, true, false)

@@ -9,6 +9,8 @@ import {
   getSubmittedUPworkJobs,
 } from "../api_handlers/api/upwork.api";
 import { useSearchParams } from "next/navigation";
+import FilterForLatestUpworkJobs from "../components/upwork-jobs/FilterForLatestUpworkJobs";
+import { useInterval } from "react-use";
 
 const JobCard = () => {
   const searchParam = useSearchParams();
@@ -17,9 +19,13 @@ const JobCard = () => {
   //   alert(type);
   // }, []);
 
-  const [upworkJobs, setUpworkJobs] = useState([]);
+  const [allUpworkJobs, setallUpworkJobs] = useState([]);
+  const [newUpworkJobs, setNewUpworkJobs] = useState([]);
+  const [filteredUpworkJobs, setfilteredUpworkJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [filterObject, setFilterObject] = useState(null);
+
   const [timer, setTimer] = useState(60);
 
   // NEW STATE: Tracks which job descriptions are expanded
@@ -29,6 +35,152 @@ const JobCard = () => {
   const audioRef = useRef(null);
 
   // --- Utility Functions (TimeAgo, FormatAmount, isSkillMatch) ---
+
+  async function showNotification(length, newJobs: any) {
+    const randomSuffix = Math.floor(Math.random() * 1000);
+    const uniqueTag = `event_${Date.now()}_${randomSuffix}`;
+    const notificationOptions: NotificationOptions = {
+      body: newJobs?.length > 0 ? newJobs[0].title : "",
+      // icon: "/icon-192x192.png", // Optional: Path to an icon in your public folder
+      tag: uniqueTag, // Optional: Allows you to replace an existing notification
+      requireInteraction: false,
+      // You can add an image, vibrate pattern, etc. here
+    };
+
+    new Notification(length + " New found", notificationOptions);
+  }
+
+  function filterJobs(jobs) {
+    let tmpFIlteredJobs = JSON.parse(JSON.stringify(jobs));
+    if (filterObject?.reviews) {
+      tmpFIlteredJobs = tmpFIlteredJobs.filter((job) => {
+        if (job.client?.totalFeedback >= filterObject.reviews) return true;
+        else return false;
+      });
+    }
+    if (filterObject?.selectedCategories.length > 0) {
+      tmpFIlteredJobs = tmpFIlteredJobs.filter((job) => {
+        if (filterObject.selectedCategories.includes(job.subcategory))
+          return true;
+        else return false;
+      });
+    }
+    if (filterObject?.spent > 0) {
+      tmpFIlteredJobs = tmpFIlteredJobs.filter((job) => {
+        const value = Number(job.client?.totalSpent?.rawValue ?? 0);
+        if (value >= filterObject.spent) return true;
+        else return false;
+      });
+    }
+    if (filterObject?.matchedSkills > 0) {
+      tmpFIlteredJobs = tmpFIlteredJobs.filter((job) => {
+        const value = Number(job.matchedSkillsPercentage ?? 0);
+        if (value >= filterObject.matchedSkills) return true;
+        else return false;
+      });
+    }
+    if (filterObject?.budgetType != "all") {
+      tmpFIlteredJobs = tmpFIlteredJobs.filter((job) => {
+        if (filterObject?.budgetType === "fixed") {
+          if (!job.hourlyBudgetType) return true;
+        } else if (filterObject?.budgetType === "hourly") {
+          if (job.hourlyBudgetType) return true;
+        } else return false;
+      });
+    }
+
+    if (filterObject?.rate > 0 && filterObject?.budgetType === "hourly") {
+      tmpFIlteredJobs = tmpFIlteredJobs.filter((job) => {
+        if (filterObject?.budgetType === "hourly") {
+          if (job.hourlyBudgetType && !job.hourlyBudgetMin) return true;
+          else if (
+            job.hourlyBudgetType &&
+            job.hourlyBudgetMin &&
+            job.hourlyBudgetMin.rawValue >= filterObject?.rate
+          )
+            return true;
+        } else if (filterObject?.budgetType === "fixed") return true;
+        else return false;
+      });
+    }
+
+    if (filterObject?.hiringRatio > 0) {
+      tmpFIlteredJobs = tmpFIlteredJobs.filter((job) => {
+        const value = Number(job.hiringRatio ?? 0);
+        if (value >= filterObject.hiringRatio) return true;
+        else return false;
+      });
+    }
+    console.log({ tmpFIlteredJobs });
+
+    return tmpFIlteredJobs;
+  }
+  useEffect(() => {
+    setfilteredUpworkJobs(filterJobs(allUpworkJobs));
+  }, [filterObject, allUpworkJobs]);
+
+  async function onLoad() {
+    setLoading(true);
+
+    setError(null);
+    try {
+      const res =
+        type == "all"
+          ? await getALLUPworkJobs()
+          : await getSubmittedUPworkJobs();
+
+      if (!res) {
+        setLoading(false);
+        return;
+      }
+
+      let newlyFetchedJobs = res.data;
+      const updatedData = newlyFetchedJobs.map((job) => {
+        const totalHires = job.client?.totalHires;
+        const totalPostedJobs = job.client?.totalPostedJobs;
+
+        const hiringRatio =
+          totalHires !== undefined && totalPostedJobs > 0
+            ? `${Math.round((totalHires / totalPostedJobs) * 100)}`
+            : null;
+
+        return {
+          ...job,
+          matchedSkillsPercentage: calculateMatchPercentage(job.skills),
+          hiringRatio: hiringRatio,
+        };
+      });
+      newlyFetchedJobs = updatedData;
+      console.log({ allUpworkJobs });
+      if (allUpworkJobs.length === 0) {
+        setallUpworkJobs(newlyFetchedJobs);
+        setLoading(false);
+        return;
+      }
+
+      const newlyFoundJobs = [];
+      console.log({ allUpworkJobs });
+      const prevJobIds = new Set(allUpworkJobs.map((job) => job.id));
+
+      for (const job of newlyFetchedJobs) {
+        if (!prevJobIds.has(job.id)) {
+          newlyFoundJobs.push(job);
+        }
+      }
+      // newlyFoundJobs.push({ go: "asdf" });
+      const filteredNewJobs = filterJobs(newlyFoundJobs);
+      if (filteredNewJobs.length > 0)
+        showNotification(filteredNewJobs.length, filteredNewJobs);
+      console.log({ newlyFoundJobs, filteredNewJobs, prevJobIds });
+      setNewUpworkJobs(newlyFoundJobs);
+      setallUpworkJobs(newlyFetchedJobs);
+      setLoading(false);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const timeAgo = (dateString) => {
     if (!dateString) return "Date unavailable";
@@ -50,31 +202,42 @@ const JobCard = () => {
 
   const formatAmount = (amountString) => {
     if (!amountString) return null;
-    const numericValue = parseFloat(amountString.replace(/[^0-9.]/g, ""));
 
-    if (numericValue >= 1000) {
-      const formatted = (numericValue / 1000).toFixed(0);
-      return `$${formatted}k`;
+    // Convert to number (handles "1.212905597E7" automatically)
+    const numericValue = Number(amountString);
+    if (isNaN(numericValue)) return null;
+
+    if (numericValue >= 1_000_000_000) {
+      return `$${(numericValue / 1_000_000_000)
+        .toFixed(1)
+        .replace(/\.0$/, "")}B`;
     }
+    if (numericValue >= 1_000_000) {
+      return `$${(numericValue / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+    }
+    if (numericValue >= 1_000) {
+      return `$${(numericValue / 1_000).toFixed(1).replace(/\.0$/, "")}k`;
+    }
+
     return `$${numericValue}`;
   };
 
   const myListedSkills = [
     "React",
-    "AngularJS",
     "Next.js",
     "JavaScript",
     "Node.js",
     "TypeScript",
-    "Front-End Development",
-    "Back-End Development",
     "API",
     "Web Development",
-    "PostgreSQL",
-    "MongoDB",
     "WordPress",
-    "Shopify",
-    "Tailwind CSS",
+    "PHP",
+    "CSS",
+    "HTML5",
+    "HTML",
+    "Python",
+    "Web Design",
+    "API Integration",
   ];
 
   const isSkillMatch = (skillName) => {
@@ -84,6 +247,29 @@ const JobCard = () => {
     );
   };
 
+  const calculateMatchPercentage = (jobSkills) => {
+    if (!jobSkills || jobSkills.length === 0) return 0;
+
+    // Normalize the user's list for efficient lookup
+    const normalizedListedSkills = myListedSkills.map((s) => s.toLowerCase());
+
+    // Count how many of the job's skills match the user's listed skills
+    const matchedCount = jobSkills.reduce((count, skill) => {
+      const normalizedJobSkill = skill.prettyName.toLowerCase();
+
+      // Check if the job skill exists in the user's normalized list
+      if (normalizedListedSkills.includes(normalizedJobSkill)) {
+        return count + 1;
+      }
+      return count;
+    }, 0);
+
+    // Calculate the percentage based on the job's total required skills
+    const percentage = (matchedCount / jobSkills.length) * 100;
+
+    // Return the percentage, rounded to the nearest whole number
+    return Math.round(percentage);
+  };
   // Helper component for Star Rating (using totalFeedback)
   const StarRating = ({ rating }) => {
     if (rating === undefined || rating === null) return null;
@@ -146,47 +332,6 @@ const JobCard = () => {
       [jobId]: !prev[jobId],
     }));
   };
-
-  async function onLoad() {
-    setLoading(true);
-
-    setError(null);
-    try {
-      const res =
-        type == "all"
-          ? await getALLUPworkJobs()
-          : await getSubmittedUPworkJobs();
-      // const res = await fetch(
-      //   `${process.env.NEXT_PUBLIC_API_PATH}upwork-job/latest`
-      // );
-
-      if (!res) {
-        setLoading(false);
-        return;
-      }
-      // const fetchedCacheFile = await res.json();
-      const newlyFetchedJobs = res.data;
-      // type == "all" ? res.data : [{ ...res.data.data }];
-
-      setUpworkJobs((prevUpworkJobs) => {
-        const prevJobIds = new Set(prevUpworkJobs.map((job) => job.id));
-        const newlyFoundJobs = [];
-
-        for (const job of newlyFetchedJobs) {
-          if (!prevJobIds.has(job.id)) {
-            newlyFoundJobs.push(job);
-          }
-        }
-
-        return newlyFetchedJobs;
-      });
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
   const handleOpenBestMatch = (jobData) => {
     if (typeof window !== "undefined") {
       sessionStorage.setItem("currentJob", JSON.stringify(jobData));
@@ -198,24 +343,28 @@ const JobCard = () => {
   };
 
   // --- Effects ---
+  if (type == "all") {
+    useInterval(() => {
+      onLoad();
+    }, 60000);
+    // const refreshInterval = setInterval(() => {
+    //   onLoad();
+    // }, 10000);
 
+    // useInterval(() => {
+    //   setTimer((prevTimer) => (prevTimer <= 1 ? 10 : prevTimer - 1));
+    // }, 1000);
+    // const timerInterval = setInterval(() => {
+    //   setTimer((prevTimer) => (prevTimer <= 1 ? 10 : prevTimer - 1));
+    // }, 1000);
+
+    // return () => {
+    //   // clearInterval(refreshInterval);
+    //   clearInterval(timerInterval);
+    // };
+  }
   useEffect(() => {
     onLoad();
-
-    if (type == "all") {
-      const refreshInterval = setInterval(() => {
-        onLoad();
-      }, 60000);
-
-      const timerInterval = setInterval(() => {
-        setTimer((prevTimer) => (prevTimer <= 1 ? 60 : prevTimer - 1));
-      }, 1000);
-
-      return () => {
-        clearInterval(refreshInterval);
-        clearInterval(timerInterval);
-      };
-    }
   }, [type]);
 
   // --- Render ---
@@ -281,25 +430,24 @@ const JobCard = () => {
     <div className="container mx-auto px-4">
       {/* Timer and Refresh Button */}
       {type == "all" && (
-        <div className="flex justify-between items-center my-4 p-4 bg-gray-100 rounded-lg shadow-inner">
-          <div className="flex items-center space-x-2">
-            <p className="font-semibold text-gray-700">Next Refresh:</p>
-            <span className="text-lg font-bold text-indigo-600">{timer}s</span>
-          </div>
+        <div className="flex justify-between items-center  bg-gray-100 rounded-lg shadow-inner">
+          <FilterForLatestUpworkJobs setFilterObject={setFilterObject} />
           <button
             onClick={onLoad}
-            className="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+            className="px-4 py-2 mx-1 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
           >
-            Refresh Now
+            Refresh
+            {/* {timer}s */}
           </button>
         </div>
       )}
 
       <h1 className="text-3xl font-bold text-center my-8">
-        {type == "all" ? "Upwork Job Postings" : "Submitted Proposals"}
+        {type == "all" ? "Upwork Job Postings" : "Submitted Proposals"}(
+        {filteredUpworkJobs.length})
       </h1>
 
-      {upworkJobs.map((job) => {
+      {filteredUpworkJobs.map((job) => {
         if (!job.id) return null;
 
         const jobUrl = `https://www.upwork.com/jobs/${job.ciphertext}`;
@@ -388,6 +536,11 @@ const JobCard = () => {
                 </span>
               )}
 
+              {job.subcategory && (
+                <span className="inline-flex items-center text-gray-700 font-semibold bg-blue-100 px-2 py-0.5 rounded-md">
+                  {job.subcategory}
+                </span>
+              )}
               {/* Client Verification Status */}
               {job.client?.verificationStatus === "VERIFIED" && (
                 <span className="inline-flex items-center bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
@@ -395,42 +548,41 @@ const JobCard = () => {
                   Payment verified
                 </span>
               )}
-
               {/* Total Feedback/Rating */}
               <StarRating rating={clientFeedback} />
-
               {/* Total Reviews */}
               {job.client?.totalReviews !== undefined && (
                 <span className="text-gray-500 font-medium">
                   {job.client.totalReviews} Reviews
                 </span>
               )}
-
               {/* Total Spent */}
               {job.client?.totalSpent?.displayValue && (
                 <span className="text-gray-500 font-medium">
-                  {formatAmount(job.client.totalSpent.rawValue)} Spent
+                  {formatAmount(job.client.totalSpent.rawValue)} Spent{" "}
                 </span>
               )}
-
               {/* Total Posted Jobs */}
               {totalPostedJobs !== undefined && (
                 <span className="text-gray-500 font-medium">
                   {totalPostedJobs} Jobs Posted
                 </span>
               )}
-
               {/* Total Hires */}
               {totalHires !== undefined && (
                 <span className="text-gray-500 font-medium">
                   {totalHires} Hires
                 </span>
               )}
-
               {/* Hiring Ratio */}
               {hiringRatio && (
                 <span className="inline-flex items-center bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">
-                  Hiring Ratio: {hiringRatio}
+                  Hiring Ratio: {job.hiringRatio}%
+                </span>
+              )}
+              {job.matchedSkillsPercentage && (
+                <span className="inline-flex items-center bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
+                  Skills Match: {job.matchedSkillsPercentage}%
                 </span>
               )}
 
