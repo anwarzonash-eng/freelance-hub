@@ -1,6 +1,9 @@
 @import "tailwindcss";
 @import "./theme.css";
 
+/* Quill Editor Styles */
+@import "quill/dist/quill.snow.css";
+
 @plugin "tailwindcss-animate";
 @plugin "tailwindcss-react-aria-components";
 

@@ -2,11 +2,19 @@
 import React, { useState } from "react";
 import { Prompts } from "@/utils/global";
 
+type CreateSkillGroupProps = {
+  skill_ids: string[];
+  skill_names: string[];
+  main_profile_id: string;
+  onSuccess?: () => void;
+};
+
 export default function CreateSkillGroup({
-  skill_id,
+  skill_ids,
+  skill_names,
   main_profile_id,
-  skill_name,
-}) {
+  onSuccess,
+}: CreateSkillGroupProps) {
   const [pasted, setPasted] = useState("");
   const [verified, setVerified] = useState(false);
   const [description, setDescription] = useState("");
@@ -17,10 +25,12 @@ export default function CreateSkillGroup({
   const [label, setLabel] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [isMultiple, setIsMultiple] = useState(false);
+  const [groups, setGroups] = useState<any[]>([]);
 
   const sampleJSON = `{
   "description": "...",
-  "skills_ids": { "skills_ids": ["fba4d8fa-5af3-4291-840d-92823568ca08"] },
+  "skills_ids": { "skills_ids": ["<MATCHING_SKILL_ID>"] },
   "experience_variation1": "...",
   "experience_variation2": "...",
   "experience_variation3": "...",
@@ -59,20 +69,30 @@ export default function CreateSkillGroup({
       <div className="flex flex-col gap-1">
         <span className="text-sm font-medium text-gray-700">Props:</span>
         <div className="text-xs bg-gray-100 p-2 rounded font-mono text-gray-600">
-          skill_id: {skill_id} <br />
+          skill_ids: {JSON.stringify(skill_ids)} <br />
           main_profile_id: {main_profile_id} <br />
-          skill_name: {skill_name}
+          skill_names: {JSON.stringify(skill_names)}
         </div>
       </div>
 
       <button
         className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition"
         onClick={async () => {
-          const replaced = (Prompts.SKILL_GROUP || "")
-            .replaceAll("{skill_id}", skill_id)
-            .replaceAll("{main_profile_id}", main_profile_id)
-            .replaceAll("{skill_name}", skill_name);
+          // Build prompt for single or multiple skill names.
+          const names = skill_names.join(", ");
+          let prompt = (Prompts.SKILL_GROUP || "").replaceAll(
+            "{main_profile_id}",
+            main_profile_id
+          );
+          // Provide skill_name(s)
+          prompt = prompt.replaceAll("{skill_name}", names);
+          // Provide a mapping hint line at the end to correlate ids in order
+          const mapping = skill_names
+            .map((n, i) => `${n} => ${skill_ids[i] || "MISSING_ID"}`)
+            .join("; ");
+          const replaced = `${prompt}\n\nId Mapping (in order): ${mapping}`;
           await navigator.clipboard.writeText(replaced);
+          setMessage("📋 Prompt copied to clipboard");
         }}
       >
         Copy Prompt
@@ -98,26 +118,48 @@ export default function CreateSkillGroup({
         onClick={() => {
           setMessage("");
           try {
-            const obj = JSON.parse(pasted);
-            const ok =
-              obj &&
-              typeof obj.description === "string" &&
-              obj.skills_ids?.skills_ids?.includes(skill_id) &&
-              obj.main_profile_id === main_profile_id &&
-              typeof obj.label === "string";
+            const parsed = JSON.parse(
+              pasted.replace(/"([^"\\]*(\\.[^"\\]*)*)"/g, (match) =>
+                match.replace(/\r?\n/g, "\\n")
+              )
+            );
+            const arrayInput = Array.isArray(parsed) ? parsed : [parsed];
+            setIsMultiple(Array.isArray(parsed));
 
-            if (!ok) {
-              setVerified(false);
-              setMessage("Pasted object structure or IDs are incorrect");
-              return;
+            // basic validation for each
+            for (const obj of arrayInput) {
+              // For skill_id validation: the object's skill_id should be one of the selected skill_ids
+              const hasValidSkillId = 
+                Array.isArray(obj.skills_ids?.skills_ids) &&
+                obj.skills_ids.skills_ids.length >= 1 &&
+                obj.skills_ids.skills_ids.some((id: string) => skill_ids.includes(id));
+              
+              const ok =
+                obj &&
+                typeof obj.description === "string" &&
+                hasValidSkillId &&
+                obj.main_profile_id === main_profile_id &&
+                typeof obj.label === "string";
+              if (!ok) {
+                setVerified(false);
+                setMessage("Pasted object structure or IDs are incorrect. Make sure each skill group has a valid skill_id from your selection.");
+                return;
+              }
             }
 
-            setDescription(obj.description);
-            setExperienceVariations(parseExperience(obj));
-            setPortfolioVariations(parsePortfolio(obj));
-            setLabel(obj.label);
-            setVerified(true);
-            setMessage("Verified ✅");
+            if (Array.isArray(parsed)) {
+              setGroups(parsed);
+              setVerified(true);
+              setMessage(`Verified ✅ (${parsed.length} groups)`);
+            } else {
+              const obj = parsed;
+              setDescription(obj.description);
+              setExperienceVariations(parseExperience(obj));
+              setPortfolioVariations(parsePortfolio(obj));
+              setLabel(obj.label);
+              setVerified(true);
+              setMessage("Verified ✅");
+            }
           } catch {
             setVerified(false);
             setMessage("Invalid JSON");
@@ -127,7 +169,7 @@ export default function CreateSkillGroup({
         Verify
       </button>
 
-      {verified && (
+      {verified && !isMultiple && (
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium text-gray-700">
@@ -192,7 +234,7 @@ export default function CreateSkillGroup({
               try {
                 const body = {
                   description,
-                  skills_ids: { skills_ids: [skill_id] },
+                  skills_ids: { skills_ids: [skill_ids[0]] },
                   experience_variation1: experienceVariations[0] || "",
                   experience_variation2: experienceVariations[1] || "",
                   experience_variation3: experienceVariations[2] || "",
@@ -213,17 +255,15 @@ export default function CreateSkillGroup({
                   main_profile_id,
                   label,
                 };
-                const res = await fetch(
-                  `${process.env.NEXT_PUBLIC_PERSONAL_SITES_API_DOMAIN}dynamicGeneration/add`,
-                  {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(body),
-                  }
+                // Use API handler (default base URL)
+                const { addSkillGroup } = await import(
+                  "@/app/api_handlers/api/skill_groups.api"
                 );
-                const data = await res.json();
-                if (data.status === "Success") setMessage("✅ Success");
-                else setMessage(JSON.stringify(data.message) || "Error ❌");
+                const data = await addSkillGroup(body);
+                if (data && data.APIStatus === "success") {
+                  setMessage("✅ Success");
+                  onSuccess && onSuccess();
+                } else setMessage(JSON.stringify(data?.message) || "Error ❌");
               } catch {
                 setMessage("Error ❌");
               } finally {
@@ -232,6 +272,133 @@ export default function CreateSkillGroup({
             }}
           >
             {busy ? "Saving..." : "Save"}
+          </button>
+        </div>
+      )}
+
+      {verified && isMultiple && (
+        <div className="flex flex-col gap-4">
+          <h3 className="text-lg font-semibold">
+            {groups.length} Skill Group(s)
+          </h3>
+
+          {groups.map((group, index) => (
+            <div
+              key={index}
+              className="border rounded-lg p-4 flex flex-col gap-3 bg-gray-50"
+            >
+              <h4 className="font-medium text-gray-900">
+                {index + 1}. {group.label}
+              </h4>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-medium text-gray-700">
+                  Label
+                </label>
+                <input
+                  className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  value={group.label}
+                  onChange={(e) => {
+                    const updated = [...groups];
+                    updated[index].label = e.target.value;
+                    setGroups(updated);
+                  }}
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-medium text-gray-700">
+                  Description
+                </label>
+                <textarea
+                  className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white min-h-[80px]"
+                  value={group.description}
+                  onChange={(e) => {
+                    const updated = [...groups];
+                    updated[index].description = e.target.value;
+                    setGroups(updated);
+                  }}
+                />
+              </div>
+
+              {/* Experience Variations */}
+              <div className="border-t pt-3 mt-2">
+                <label className="text-sm font-semibold text-gray-700 block mb-2">
+                  Experience Variations (10)
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                    <div key={num} className="flex flex-col gap-1">
+                      <label className="text-xs font-medium text-gray-600">
+                        Experience {num}
+                      </label>
+                      <textarea
+                        className="border rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm min-h-[60px]"
+                        value={group[`experience_variation${num}`] || ""}
+                        onChange={(e) => {
+                          const updated = [...groups];
+                          updated[index][`experience_variation${num}`] = e.target.value;
+                          setGroups(updated);
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Portfolio Variations */}
+              <div className="border-t pt-3 mt-2">
+                <label className="text-sm font-semibold text-gray-700 block mb-2">
+                  Portfolio Variations (10)
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                    <div key={num} className="flex flex-col gap-1">
+                      <label className="text-xs font-medium text-gray-600">
+                        Portfolio {num}
+                      </label>
+                      <textarea
+                        className="border rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm min-h-[60px]"
+                        value={group.portfolio_variations?.[`portfolio_variation${num}`] || ""}
+                        onChange={(e) => {
+                          const updated = [...groups];
+                          if (!updated[index].portfolio_variations) {
+                            updated[index].portfolio_variations = {};
+                          }
+                          updated[index].portfolio_variations[`portfolio_variation${num}`] = e.target.value;
+                          setGroups(updated);
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
+
+          <button
+            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition disabled:opacity-50 font-medium"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              setMessage("");
+              try {
+                const { addBulkSkillGroups } = await import(
+                  "@/app/api_handlers/api/skill_groups.api"
+                );
+                const data = await addBulkSkillGroups(groups);
+                if (data && data.APIStatus === "success") {
+                  setMessage("✅ Success");
+                  onSuccess && onSuccess();
+                } else setMessage(JSON.stringify(data?.message) || "Error ❌");
+              } catch {
+                setMessage("Error ❌");
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            {busy ? "Saving..." : `Save ${groups.length} Skill Group(s)`}
           </button>
         </div>
       )}

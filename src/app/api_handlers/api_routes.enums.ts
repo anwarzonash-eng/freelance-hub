@@ -41,6 +41,22 @@ export enum DetailProfilesAPIRoutes {
 
 export enum CategoriesAPIRoutes {
     ADD = 'categories',
+    ADD_BULK = 'categories/bulk',
+    GET_ALL = 'categories',
+    GET_BY_ID = 'categories/:id',
+    UPDATE = 'categories/:id',
+    DELETE = 'categories/:id',
+    HARD_DELETE = 'categories/:id/hard',
+}
+
+export enum SkillGroupsAPIRoutes {
+    ADD = 'dynamicGeneration',
+    ADD_BULK = 'dynamicGeneration/bulk',
+    GET_ALL = 'dynamicGeneration',
+    GET_BY_ID = 'dynamicGeneration/:id',
+    UPDATE = 'dynamicGeneration/:id',
+    DELETE = 'dynamicGeneration/:id',
+    HARD_DELETE = 'dynamicGeneration/:id/hard',
 }
 
 export enum FAQAPIRoutes {
@@ -48,6 +64,16 @@ export enum FAQAPIRoutes {
     GET_ALL = 'faq',
     UPDATE = 'faq/:id',
     DELETE = 'faq/:id',
+}
+
+export enum SkillsAPIRoutes {
+    ADD = 'skills',
+    ADD_BULK = 'skills/bulk',
+    GET_ALL = 'skills',
+    GET_BY_ID = 'skills/:id',
+    UPDATE = 'skills/:id',
+    DELETE = 'skills/:id',
+    HARD_DELETE = 'skills/:id/hard',
 }
 
 export enum ShowErrorMessageOptionsRoutes {

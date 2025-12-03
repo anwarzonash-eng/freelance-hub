@@ -3,7 +3,7 @@
 import { generatePDF } from "@/app/api_handlers/api/detail_profiles.api";
 import React, { useState } from "react";
 
-export default function WebsiteURLs({ data, setData }) {
+export default function WebsiteURLs({ data, setData, websitePurpose }) {
   // const [data, setData] = useState(newlyCreatedProfileLinks);
   console.log({ data });
   const [loading, setLoading] = useState(false);
@@ -60,25 +60,26 @@ export default function WebsiteURLs({ data, setData }) {
                   </div>
                   <div>
                     <div className="flex flex-wrap gap-2 justify-start">
-                      {url.tiny_link_without_u && (
-                        <a
-                          href={url.tiny_link_without_u}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="group relative px-3 py-2 text-sm font-medium whitespace-nowrap bg-blue-50 text-blue-800 border border-blue-200 rounded-md shadow-sm hover:bg-blue-100 hover:shadow-md transition duration-200"
-                        >
-                          Short Link{" "}
-                          <span
-                            className="absolute right-0 top-0 bottom-0 px-2 flex items-center text-gray-500 bg-blue-300 hover:bg-blue-500 opacity-0 group-hover:opacity-100 cursor-pointer rounded-r-md transition-opacity duration-200"
-                            onClick={(e) =>
-                              handleCopy(e, url.tiny_link_without_u)
-                            }
-                            title="Copy Link"
+                      {websitePurpose != "personal_website" &&
+                        url.tiny_link_without_u && (
+                          <a
+                            href={url.tiny_link_without_u}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="group relative px-3 py-2 text-sm font-medium whitespace-nowrap bg-blue-50 text-blue-800 border border-blue-200 rounded-md shadow-sm hover:bg-blue-100 hover:shadow-md transition duration-200"
                           >
-                            📋
-                          </span>
-                        </a>
-                      )}
+                            Short Link 1{" "}
+                            <span
+                              className="absolute right-0 top-0 bottom-0 px-2 flex items-center text-gray-500 bg-blue-300 hover:bg-blue-500 opacity-0 group-hover:opacity-100 cursor-pointer rounded-r-md transition-opacity duration-200"
+                              onClick={(e) =>
+                                handleCopy(e, url.tiny_link_without_u)
+                              }
+                              title="Copy Link"
+                            >
+                              📋
+                            </span>
+                          </a>
+                        )}
 
                       {url.tiny_link_with_u && (
                         <a
@@ -97,23 +98,24 @@ export default function WebsiteURLs({ data, setData }) {
                           </span>
                         </a>
                       )}
-
-                      <a
-                        href={url.link_without_u}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="group relative px-3 py-2 text-sm font-medium whitespace-nowrap bg-green-50 text-green-800 border border-green-200 rounded-md shadow-sm hover:bg-green-100 hover:shadow-md transition duration-200"
-                      >
-                        Direct Link
-                        <span
-                          className="absolute right-0 top-0 bottom-0 px-2 flex items-center text-gray-500 bg-green-300 hover:bg-green-500 opacity-0 group-hover:opacity-100 cursor-pointer rounded-r-md transition-opacity duration-200"
-                          onClick={(e) => handleCopy(e, url.link_without_u)}
-                          title="Copy Link"
-                        >
-                          📋
-                        </span>
-                      </a>
-
+                      {websitePurpose != "personal_website" &&
+                        url.link_without_u && (
+                          <a
+                            href={url.link_without_u}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="group relative px-3 py-2 text-sm font-medium whitespace-nowrap bg-green-50 text-green-800 border border-green-200 rounded-md shadow-sm hover:bg-green-100 hover:shadow-md transition duration-200"
+                          >
+                            Direct Link
+                            <span
+                              className="absolute right-0 top-0 bottom-0 px-2 flex items-center text-gray-500 bg-green-300 hover:bg-green-500 opacity-0 group-hover:opacity-100 cursor-pointer rounded-r-md transition-opacity duration-200"
+                              onClick={(e) => handleCopy(e, url.link_without_u)}
+                              title="Copy Link"
+                            >
+                              📋
+                            </span>
+                          </a>
+                        )}
                       <a
                         href={url.link_with_u}
                         target="_blank"
@@ -163,34 +165,40 @@ export default function WebsiteURLs({ data, setData }) {
                 </div>
                 <div className="space-y-2">
                   {data.pdf_urls.map((p, i) => (
-                    <div
-                      key={i}
-                      className="flex justify-between items-center border-b border-red-200 pb-2"
-                    >
-                      <span className="text-red-900">{p.type}</span>
-                      {p.url ? (
-                        <a
-                          href={p.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-3 py-1 bg-green-500 text-white rounded-md hover:bg-green-600"
+                    <>
+                      {(websitePurpose === "personal_website"
+                        ? p.type.endsWith("_with_u")
+                        : true) && (
+                        <div
+                          key={i}
+                          className="flex justify-between items-center border-b border-red-200 pb-2"
                         >
-                          Download
-                        </a>
-                      ) : (
-                        <button
-                          disabled={loading}
-                          onClick={() => fetchPdf(p.type)}
-                          className={`px-3 py-1 rounded-md ${
-                            loading
-                              ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                              : "bg-blue-500 text-white hover:bg-blue-600"
-                          }`}
-                        >
-                          {"Generate"}
-                        </button>
+                          <span className="text-red-900">{p.type}</span>
+                          {p.url ? (
+                            <a
+                              href={p.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-3 py-1 bg-green-500 text-white rounded-md hover:bg-green-600"
+                            >
+                              Download
+                            </a>
+                          ) : (
+                            <button
+                              disabled={loading}
+                              onClick={() => fetchPdf(p.type)}
+                              className={`px-3 py-1 rounded-md ${
+                                loading
+                                  ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                                  : "bg-blue-500 text-white hover:bg-blue-600"
+                              }`}
+                            >
+                              {"Generate"}
+                            </button>
+                          )}
+                        </div>
                       )}
-                    </div>
+                    </>
                   ))}
                 </div>
               </div>

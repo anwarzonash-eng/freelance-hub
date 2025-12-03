@@ -250,6 +250,7 @@ export default function JobMatcher() {
               "\r\n  \r\n \r\n" +
               skills
             }
+            websitePurpose="personal_website"
           />
         </GenericPopup>
       )}
@@ -345,7 +346,11 @@ export default function JobMatcher() {
             </button>
           )}
         </div>
-        <WebsiteURLs data={selectedWebsite} setData={setSelectedWebsite} />
+        <WebsiteURLs
+          data={selectedWebsite}
+          setData={setSelectedWebsite}
+          websitePurpose="personal_website"
+        />
         <MatchedSkills str1={skills} str2={myListedSkills} />
 
         {/* <ExpandCollapse

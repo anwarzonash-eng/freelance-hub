@@ -30,6 +30,12 @@ interface Skill {
   isDeleteButtonVisible?: boolean;
 }
 
+// Extended skill used in UI, includes matching flags
+interface FormattedSkill extends Skill {
+  isMatchedSkillGroup?: boolean;
+  isMatchedSkillCategory?: boolean;
+}
+
 interface Category {
   id: string;
   name: string;
@@ -81,7 +87,9 @@ export default function CreateDynamicPersonalWebsite({
   description = null,
   isCloseOnSelect = false,
   setOpenCloseWebsiteCreatePopUP = null,
+  websitePurpose = "remote_job",
 }) {
+  // alert(websitePurpose);
   // --- State Initialization (Angular Properties -> React State) ---
   const [jobDescription, setJobDescription] = useState<string>(description);
   const [matchedCategories, setMatchedCategories] = useState([]);
@@ -106,7 +114,7 @@ export default function CreateDynamicPersonalWebsite({
     useState<string>("");
   const [profileLinkPortfolio, setProfileLinkPortfolio] = useState<string>("");
 
-  const [formatedSelectedSkills, setFormatedSelectedSkills] = useState<Skill[]>(
+  const [formatedSelectedSkills, setFormatedSelectedSkills] = useState<FormattedSkill[]>(
     []
   );
   const [allSelectedSkills, setAllSelectedSkills] = useState([]);
@@ -123,10 +131,11 @@ export default function CreateDynamicPersonalWebsite({
   const [newlyCreatedProfileLinks, setNewlyCreatedProfileLinks] =
     useState(null);
   const [isLoading, setIsLoading] = useState(null);
-  const [isCreateShortURLs, setIsCreateShortURLs] = useState(false);
+  const [isCreateShortURLs, setIsCreateShortURLs] = useState(true);
   const [openAddSkillPopup, setOpenAddSkillPopup] = useState(false);
   const [openAddSkillGroupPopup, setOpenAddSkillGroupPopup] = useState(false);
   const [openAddCategoryPopup, setOpenAddCategoryPopup] = useState(false);
+  const [openAddBulkSkillGroupPopup, setOpenAddBulkSkillGroupPopup] = useState(false);
 
   const [selectedSkillToCreateSkillGroup, setSelectedSkillToCreateSkillGroup] =
     useState<string | null>(null);
@@ -188,7 +197,7 @@ export default function CreateDynamicPersonalWebsite({
   }, [allCategoriesMultiSelect]);
 
   useEffect(() => {
-    const modifiedSelectedSkills = allSelectedSkills.map((skill) => {
+    const modifiedSelectedSkills: FormattedSkill[] = allSelectedSkills.map((skill) => {
       return {
         ...skill,
         isMatchedSkillGroup: allSKillGroups.some((object) => {
@@ -643,9 +652,33 @@ export default function CreateDynamicPersonalWebsite({
           onClose={() => setOpenAddSkillGroupPopup(false)}
         >
           <CreateSkillGroup
-            skill_id={selectedSkillToCreateSkillGroup}
-            skill_name={selectedSkillToCreateSkillGroupName}
+            skill_ids={[selectedSkillToCreateSkillGroup]}
+            skill_names={[selectedSkillToCreateSkillGroupName]}
             main_profile_id={selectedMainProfile}
+            onSuccess={() => {
+              setOpenAddSkillGroupPopup(false);
+              fetchSkills();
+            }}
+          />
+        </GenericPopup>
+      )}
+      {openAddBulkSkillGroupPopup && (
+        <GenericPopup
+          title="Create Missing Skill Groups"
+          onClose={() => setOpenAddBulkSkillGroupPopup(false)}
+        >
+          <CreateSkillGroup
+            skill_ids={formatedSelectedSkills
+              .filter(skill => !(skill as any).isMatchedSkillGroup)
+              .map(skill => String(skill.id))}
+            skill_names={formatedSelectedSkills
+              .filter(skill => !(skill as any).isMatchedSkillGroup)
+              .map(skill => skill.title)}
+            main_profile_id={selectedMainProfile}
+            onSuccess={() => {
+              setOpenAddBulkSkillGroupPopup(false);
+              fetchSkills();
+            }}
           />
         </GenericPopup>
       )}
@@ -806,6 +839,13 @@ export default function CreateDynamicPersonalWebsite({
           onClick={() => setOpenAddCategoryPopup(true)}
         >
           Create Category
+        </button>
+        <button
+          className="px-4 py-2 bg-purple-600 text-white text-sm font-semibold rounded-lg shadow hover:bg-purple-700 transition disabled:opacity-50"
+          onClick={() => setOpenAddBulkSkillGroupPopup(true)}
+          disabled={!formatedSelectedSkills.some(skill => !skill.isMatchedSkillGroup)}
+        >
+          Create Missing Skill Groups
         </button>
       </div>
       {/* Main Content Area: Divided into 3 Columns on large screens */}
@@ -1136,6 +1176,7 @@ export default function CreateDynamicPersonalWebsite({
                 <WebsiteURLs
                   data={newlyCreatedProfileLinks}
                   setData={setNewlyCreatedProfileLinks}
+                  websitePurpose={websitePurpose}
                 />
               </div>
             </ExpandCollapse>

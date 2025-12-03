@@ -72,6 +72,9 @@ const iconMap: { [key: string]: LucideIcon } = {
   Campaigns: Mail,
   NewsLetters: Mails,
   CreateProfile: UserPen,
+  PersonalWebsites: Globe,
+  Skills: Tag,
+  Categories: Briefcase,
   Icon1: Aperture,
   Icon2: Binoculars,
   Icon3: CalendarCheck,
@@ -113,9 +116,30 @@ const navItems: NavItem[] = [
     icon: "NewsLetters",
   },
   {
-    title: "Personal Profiles",
-    href: "/create-personal-profile",
-    icon: "CreateProfile",
+    title: "Personal Websites",
+    icon: "PersonalWebsites",
+    children: [
+      {
+        title: "Skill Groups",
+        href: "/manage-skill-groups",
+        icon: "Categories",
+      },
+      {
+        title: "Create Website",
+        href: "/create-personal-profile",
+        icon: "CreateProfile",
+      },
+      {
+        title: "Skills",
+        href: "/manage-skills",
+        icon: "Skills",
+      },
+      {
+        title: "Categories",
+        href: "/manage-categories",
+        icon: "Categories",
+      },
+    ],
   },
   {
     title: "Menu 1",
