@@ -129,11 +129,13 @@ export default function CreateSkillGroup({
             // basic validation for each
             for (const obj of arrayInput) {
               // For skill_id validation: the object's skill_id should be one of the selected skill_ids
-              const hasValidSkillId = 
+              const hasValidSkillId =
                 Array.isArray(obj.skills_ids?.skills_ids) &&
                 obj.skills_ids.skills_ids.length >= 1 &&
-                obj.skills_ids.skills_ids.some((id: string) => skill_ids.includes(id));
-              
+                obj.skills_ids.skills_ids.some((id: string) =>
+                  skill_ids.includes(id)
+                );
+
               const ok =
                 obj &&
                 typeof obj.description === "string" &&
@@ -142,7 +144,9 @@ export default function CreateSkillGroup({
                 typeof obj.label === "string";
               if (!ok) {
                 setVerified(false);
-                setMessage("Pasted object structure or IDs are incorrect. Make sure each skill group has a valid skill_id from your selection.");
+                setMessage(
+                  "Pasted object structure or IDs are incorrect. Make sure each skill group has a valid skill_id from your selection."
+                );
                 return;
               }
             }
@@ -337,7 +341,8 @@ export default function CreateSkillGroup({
                         value={group[`experience_variation${num}`] || ""}
                         onChange={(e) => {
                           const updated = [...groups];
-                          updated[index][`experience_variation${num}`] = e.target.value;
+                          updated[index][`experience_variation${num}`] =
+                            e.target.value;
                           setGroups(updated);
                         }}
                       />
@@ -359,13 +364,19 @@ export default function CreateSkillGroup({
                       </label>
                       <textarea
                         className="border rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm min-h-[60px]"
-                        value={group.portfolio_variations?.[`portfolio_variation${num}`] || ""}
+                        value={
+                          group.portfolio_variations?.[
+                            `portfolio_variation${num}`
+                          ] || ""
+                        }
                         onChange={(e) => {
                           const updated = [...groups];
                           if (!updated[index].portfolio_variations) {
                             updated[index].portfolio_variations = {};
                           }
-                          updated[index].portfolio_variations[`portfolio_variation${num}`] = e.target.value;
+                          updated[index].portfolio_variations[
+                            `portfolio_variation${num}`
+                          ] = e.target.value;
                           setGroups(updated);
                         }}
                       />

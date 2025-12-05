@@ -64,15 +64,23 @@ export const apiClient = async <T = any, P = any>(
     // Use the new buildUrl function
     const url = buildUrl(apiBaseURL, route, params);
 
-    const defaultHeaders: HeadersInit = {
-        'Content-Type': 'application/json',
-        ...headers,
-    };
+    const isFormData = payload instanceof FormData;
+
+    const defaultHeaders: HeadersInit = isFormData
+        ? {} // FormData will set Content-Type automatically
+        : {
+            'Content-Type': 'application/json',
+            ...headers,
+        };
 
     const config: RequestInit = {
         method,
         headers: defaultHeaders,
-        body: payload && method !== 'GET' ? JSON.stringify(payload) : undefined,
+        body: payload && method !== 'GET'
+            ? isFormData
+                ? payload
+                : JSON.stringify(payload)
+            : undefined,
     };
     // console.log(url, config)
 

@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import CreateCategory from "./CreateCategory";
 import dynamic from "next/dynamic";
+import { useImageViewer } from "../ImageViewer";
 
 const QuillEditor = dynamic(() => import("../QuillEditor"), {
   ssr: false,
@@ -27,6 +28,10 @@ const QuillEditor = dynamic(() => import("../QuillEditor"), {
       Loading editor...
     </div>
   ),
+});
+
+const ImageViewer = dynamic(() => import("../ImageViewer"), {
+  ssr: false,
 });
 
 interface Category {
@@ -138,6 +143,8 @@ export default function ManageCategories() {
       intro10: "",
     },
   });
+
+  const imageViewer = useImageViewer();
 
   // Fetch data
   const fetchCategories = async () => {
@@ -439,11 +446,16 @@ export default function ManageCategories() {
             className="border rounded-lg p-4 bg-white shadow-sm hover:shadow-md transition"
           >
             <div className="flex items-start gap-4">
-              <img
-                src={category.thumbnail}
-                alt={category.title}
-                className="w-20 h-20 object-cover rounded-lg"
-              />
+              <button
+                onClick={() => imageViewer.openViewer([category.thumbnail])}
+                className="w-20 h-20 rounded-lg overflow-hidden hover:opacity-80 transition cursor-pointer flex-shrink-0"
+              >
+                <img
+                  src={category.thumbnail}
+                  alt={category.title}
+                  className="w-full h-full object-cover"
+                />
+              </button>
               <div className="flex-1">
                 <h3 className="text-xl font-semibold text-gray-900">
                   {category.title}
@@ -1309,6 +1321,8 @@ export default function ManageCategories() {
           </div>
         </div>
       )}
+
+      <ImageViewer />
     </div>
   );
 }

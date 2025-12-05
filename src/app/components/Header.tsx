@@ -91,43 +91,61 @@ const navItems: NavItem[] = [
     icon: "Dashboard",
   },
   {
-    title: "All Leads",
+    title: "Leads",
     href: "/leads",
     icon: "UpworkJobs",
+    children: [
+      {
+        title: "All Leads",
+        href: "/leads",
+        icon: "UpworkJobs",
+      },
+      {
+        title: "Upwork Leads",
+        href: "/upwork-jobs?type=all",
+        icon: "Contact",
+      },
+      {
+        title: "Upwork Submitted Proposals",
+        href: "/upwork-jobs?type=submitted",
+        icon: "SubmittedProposals",
+      },
+    ],
   },
   {
-    title: "Upwork Leads",
-    href: "/upwork-jobs?type=all",
-    icon: "Contact",
-  },
-  {
-    title: "Submitted Proposals",
-    href: "/upwork-jobs?type=submitted",
-    icon: "SubmittedProposals",
-  },
-  {
-    title: "All Campaigns",
-    href: "/campaigns",
+    title: "Campaigns",
     icon: "Campaigns",
-  },
-  {
-    title: "News Letters",
-    href: "/newsletters",
-    icon: "NewsLetters",
+    children: [
+      {
+        title: "Campaigns",
+        href: "/campaigns",
+        icon: "Campaigns",
+      },
+      {
+        title: "News Letters",
+        href: "/newsletters",
+        icon: "NewsLetters",
+      },
+    ],
   },
   {
     title: "Personal Websites",
     icon: "PersonalWebsites",
     children: [
       {
+        title: "Websites",
+        href: "/manage-detail-profiles",
+        icon: "CreateProfile",
+      },
+      {
+        title: "Portfolios",
+        href: "/manage-portfolios",
+        icon: "Briefcase",
+      },
+      {
         title: "Skill Groups",
         href: "/manage-skill-groups",
         icon: "Categories",
-      },
-      {
-        title: "Create Website",
-        href: "/create-personal-profile",
-        icon: "CreateProfile",
       },
       {
         title: "Skills",
@@ -141,32 +159,8 @@ const navItems: NavItem[] = [
       },
     ],
   },
-  {
-    title: "Menu 1",
-    href: "/#",
-    icon: "Icon1",
-  },
-  {
-    title: "Menu 2",
-    href: "/#",
-    icon: "Icon2",
-  },
-  {
-    title: "Menu 3",
-    href: "/#",
-    icon: "Icon3",
-  },
-  {
-    title: "Menu 4",
-    href: "/#",
-    icon: "Icon4",
-  },
-  {
-    title: "Menu 5",
-    href: "/#",
-    icon: "Icon5",
-  },
 ];
+// ...existing code...
 // ------------------------------------------
 
 // --- 3. Helper Functions ---

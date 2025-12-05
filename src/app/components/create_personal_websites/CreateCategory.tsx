@@ -192,12 +192,17 @@ export default function CreateCategory({
                 cat.main_profile_id === main_profile_id &&
                 thumbValid &&
                 // Optional fields
-                (cat.intro_heading === undefined || typeof cat.intro_heading === "string") &&
+                (cat.intro_heading === undefined ||
+                  typeof cat.intro_heading === "string") &&
                 (cat.intro === undefined || typeof cat.intro === "string") &&
-                (cat.mainIntro_heading === undefined || typeof cat.mainIntro_heading === "string") &&
-                (cat.mainIntro === undefined || typeof cat.mainIntro === "string") &&
-                (cat.short_description === undefined || typeof cat.short_description === "string") &&
-                (cat.experience_intro === undefined || typeof cat.experience_intro === "object");
+                (cat.mainIntro_heading === undefined ||
+                  typeof cat.mainIntro_heading === "string") &&
+                (cat.mainIntro === undefined ||
+                  typeof cat.mainIntro === "string") &&
+                (cat.short_description === undefined ||
+                  typeof cat.short_description === "string") &&
+                (cat.experience_intro === undefined ||
+                  typeof cat.experience_intro === "object");
 
               if (!ok) {
                 setVerified(false);
@@ -340,14 +345,23 @@ export default function CreateCategory({
                       </label>
                       <textarea
                         className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm min-h-[60px]"
-                        value={cat.experience_intro?.[`intro${num}` as keyof typeof cat.experience_intro] || ''}
+                        value={
+                          cat.experience_intro?.[
+                            `intro${num}` as keyof typeof cat.experience_intro
+                          ] || ""
+                        }
                         onChange={(e) => {
                           const updated = [...categories];
                           if (!updated[index].experience_intro) {
                             updated[index].experience_intro = {};
                           }
                           const key = `intro${num}`;
-                          (updated[index].experience_intro as Record<string, string>)[key] = e.target.value;
+                          (
+                            updated[index].experience_intro as Record<
+                              string,
+                              string
+                            >
+                          )[key] = e.target.value;
                           setCategories(updated);
                         }}
                         placeholder={`<p>Experience description ${num}...</p>`}

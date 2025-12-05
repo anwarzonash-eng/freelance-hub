@@ -8,6 +8,12 @@ import {
 } from "@/app/api_handlers/api/skills.api";
 import CreateSkill from "./CreateSkill";
 import { X } from "lucide-react";
+import dynamic from "next/dynamic";
+import { useImageViewer } from "../ImageViewer";
+
+const ImageViewer = dynamic(() => import("../ImageViewer"), {
+  ssr: false,
+});
 
 interface SkillData {
   id?: string;
@@ -23,6 +29,7 @@ interface SkillData {
 }
 
 export default function ManageSkills() {
+  const imageViewer = useImageViewer();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [allSkills, setAllSkills] = useState<any[]>([]);
@@ -656,11 +663,16 @@ export default function ManageSkills() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     {skill.icon && (
-                      <img
-                        src={skill.icon}
-                        alt={skill.title}
-                        className="w-10 h-10 object-contain"
-                      />
+                      <button
+                        onClick={() => imageViewer.openViewer([skill.icon])}
+                        className="cursor-pointer hover:opacity-80 transition"
+                      >
+                        <img
+                          src={skill.icon}
+                          alt={skill.title}
+                          className="w-10 h-10 object-contain"
+                        />
+                      </button>
                     )}
                     <div>
                       <h3 className="font-semibold">{skill.title}</h3>
@@ -699,6 +711,9 @@ export default function ManageSkills() {
             ))}
           </div>
         )}
+
+        {/* Image Viewer */}
+        <ImageViewer />
       </div>
     </div>
   );

@@ -13,6 +13,11 @@ import dynamic from "next/dynamic";
 const QuillEditor = dynamic(() => import("../QuillEditor"), { ssr: false });
 import { ChevronDown, ChevronUp, Plus, Sparkles, X } from "lucide-react";
 import CreateSkillGroup from "./CreateSkillGroup";
+import { useImageViewer } from "../ImageViewer";
+
+const ImageViewer = dynamic(() => import("../ImageViewer"), {
+  ssr: false,
+});
 
 interface SkillGroupData {
   id?: string;
@@ -86,6 +91,8 @@ export default function ManageSkillGroups() {
   const [selectedSkillIdsForAI, setSelectedSkillIdsForAI] = useState<string[]>(
     []
   );
+
+  const imageViewer = useImageViewer();
 
   useEffect(() => {
     loadAll();
@@ -908,6 +915,8 @@ export default function ManageSkillGroups() {
           </div>
         </div>
       )}
+
+      <ImageViewer />
     </div>
   );
 }

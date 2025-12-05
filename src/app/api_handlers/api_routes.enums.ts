@@ -36,6 +36,8 @@ export enum MainProfilesAPIRoutes {
 }
 
 export enum DetailProfilesAPIRoutes {
+    GET_ALL = 'detail-profiles',
+    GET_BY_ID = 'detail-profiles/:id',
     GENERATE_PDF = 'detail-profiles/generatePRT',
 }
 
@@ -74,6 +76,16 @@ export enum SkillsAPIRoutes {
     UPDATE = 'skills/:id',
     DELETE = 'skills/:id',
     HARD_DELETE = 'skills/:id/hard',
+}
+
+export enum PortfoliosAPIRoutes {
+    GET_ALL = 'portfolios',
+    GET_BY_ID = 'portfolios/:id',
+    ADD = 'portfolios',
+    UPDATE = 'portfolios/:id',
+    DELETE = 'portfolios/:id',
+    UPLOAD_SINGLE = 'portfolios/upload-single',
+    UPLOAD_MULTIPLE = 'portfolios/upload-multiple',
 }
 
 export enum ShowErrorMessageOptionsRoutes {

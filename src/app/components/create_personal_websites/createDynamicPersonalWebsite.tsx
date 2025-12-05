@@ -114,9 +114,9 @@ export default function CreateDynamicPersonalWebsite({
     useState<string>("");
   const [profileLinkPortfolio, setProfileLinkPortfolio] = useState<string>("");
 
-  const [formatedSelectedSkills, setFormatedSelectedSkills] = useState<FormattedSkill[]>(
-    []
-  );
+  const [formatedSelectedSkills, setFormatedSelectedSkills] = useState<
+    FormattedSkill[]
+  >([]);
   const [allSelectedSkills, setAllSelectedSkills] = useState([]);
   const [allSkills, setAllSkills] = useState([]);
   const [allSkillsForSearch, setAllSkillsForSearch] = useState<Skill[]>([]);
@@ -135,7 +135,8 @@ export default function CreateDynamicPersonalWebsite({
   const [openAddSkillPopup, setOpenAddSkillPopup] = useState(false);
   const [openAddSkillGroupPopup, setOpenAddSkillGroupPopup] = useState(false);
   const [openAddCategoryPopup, setOpenAddCategoryPopup] = useState(false);
-  const [openAddBulkSkillGroupPopup, setOpenAddBulkSkillGroupPopup] = useState(false);
+  const [openAddBulkSkillGroupPopup, setOpenAddBulkSkillGroupPopup] =
+    useState(false);
 
   const [selectedSkillToCreateSkillGroup, setSelectedSkillToCreateSkillGroup] =
     useState<string | null>(null);
@@ -197,29 +198,31 @@ export default function CreateDynamicPersonalWebsite({
   }, [allCategoriesMultiSelect]);
 
   useEffect(() => {
-    const modifiedSelectedSkills: FormattedSkill[] = allSelectedSkills.map((skill) => {
-      return {
-        ...skill,
-        isMatchedSkillGroup: allSKillGroups.some((object) => {
-          if (
-            object.skills_ids &&
-            object.skills_ids.skills_ids &&
-            object.skills_ids.skills_ids.includes(skill.id)
-          )
-            return true;
-          else false;
-        }),
-        isMatchedSkillCategory: allCategories.some((object: any) => {
-          if (
-            object.skills_ids &&
-            object.skills_ids.skills_ids &&
-            object.skills_ids.skills_ids.includes(skill.id)
-          )
-            return true;
-          else false;
-        }),
-      };
-    });
+    const modifiedSelectedSkills: FormattedSkill[] = allSelectedSkills.map(
+      (skill) => {
+        return {
+          ...skill,
+          isMatchedSkillGroup: allSKillGroups.some((object) => {
+            if (
+              object.skills_ids &&
+              object.skills_ids.skills_ids &&
+              object.skills_ids.skills_ids.includes(skill.id)
+            )
+              return true;
+            else false;
+          }),
+          isMatchedSkillCategory: allCategories.some((object: any) => {
+            if (
+              object.skills_ids &&
+              object.skills_ids.skills_ids &&
+              object.skills_ids.skills_ids.includes(skill.id)
+            )
+              return true;
+            else false;
+          }),
+        };
+      }
+    );
     console.log({ modifiedSelectedSkills });
     setFormatedSelectedSkills(modifiedSelectedSkills);
   }, [allSKillGroups, allSelectedSkills]);
@@ -669,11 +672,11 @@ export default function CreateDynamicPersonalWebsite({
         >
           <CreateSkillGroup
             skill_ids={formatedSelectedSkills
-              .filter(skill => !(skill as any).isMatchedSkillGroup)
-              .map(skill => String(skill.id))}
+              .filter((skill) => !(skill as any).isMatchedSkillGroup)
+              .map((skill) => String(skill.id))}
             skill_names={formatedSelectedSkills
-              .filter(skill => !(skill as any).isMatchedSkillGroup)
-              .map(skill => skill.title)}
+              .filter((skill) => !(skill as any).isMatchedSkillGroup)
+              .map((skill) => skill.title)}
             main_profile_id={selectedMainProfile}
             onSuccess={() => {
               setOpenAddBulkSkillGroupPopup(false);
@@ -843,7 +846,9 @@ export default function CreateDynamicPersonalWebsite({
         <button
           className="px-4 py-2 bg-purple-600 text-white text-sm font-semibold rounded-lg shadow hover:bg-purple-700 transition disabled:opacity-50"
           onClick={() => setOpenAddBulkSkillGroupPopup(true)}
-          disabled={!formatedSelectedSkills.some(skill => !skill.isMatchedSkillGroup)}
+          disabled={
+            !formatedSelectedSkills.some((skill) => !skill.isMatchedSkillGroup)
+          }
         >
           Create Missing Skill Groups
         </button>
