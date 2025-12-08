@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
-import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
 import LayoutWrapper from "./components/LayoutWrapper"; // ✅ IMPORTED
+import AnalyticsScripts from "./components/AnalyticsScripts";
 import { Toaster } from "react-hot-toast";
 import { RouteProvider } from "./components/routeProvider";
 import "@/styles/globals.css";
@@ -57,24 +57,7 @@ export default async function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         suppressHydrationWarning={true}
       >
-        {/* Hotjar Script */}
-        <Script
-          src="https://t.contentsquare.net/uxa/bedb577941075.js"
-          strategy="afterInteractive"
-        />
-
-        {/* Smartlook Script */}
-        <Script id="smartlook-init" strategy="afterInteractive">
-          {`
-            window.smartlook||(function(d) {
-              var o=smartlook=function(){ o.api.push(arguments)},h=d.getElementsByTagName('head')[0];
-              var c=d.createElement('script');o.api=new Array();c.async=true;c.type='text/javascript';
-              c.charset='utf-8';c.src='https://web-sdk.smartlook.com/recorder.js';h.appendChild(c);
-            })(document);
-            smartlook('init', '4ad5b6cbf10f919af6767bc19918460094d18594', { region: 'eu' });
-          `}
-        </Script>
-
+        <AnalyticsScripts />
         <Toaster position="top-right" reverseOrder={false} />
         <RouteProvider>
           <LayoutWrapper useData={useData}>{children}</LayoutWrapper>
