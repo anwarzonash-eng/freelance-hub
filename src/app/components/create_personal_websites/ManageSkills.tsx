@@ -24,7 +24,7 @@ interface SkillData {
   catagory?: string;
   order?: string;
   description?: string;
-  is_techstack?: boolean;
+  is_tech_stack?: boolean;
   companytype?: string;
 }
 
@@ -50,7 +50,7 @@ export default function ManageSkills() {
     catagory: "",
     order: "",
     description: "",
-    is_techstack: true,
+    is_tech_stack: true,
     companytype: "cypexsoft",
   });
 
@@ -128,7 +128,7 @@ export default function ManageSkills() {
           catagory: "",
           order: "",
           description: "",
-          is_techstack: true,
+          is_tech_stack: true,
           companytype: "cypexsoft",
         });
         fetchAllSkills();
@@ -174,7 +174,7 @@ export default function ManageSkills() {
       catagory: skill.catagory || "",
       order: skill.order || "",
       description: skill.description || "",
-      is_techstack: skill.is_techstack,
+      is_tech_stack: skill.is_tech_stack ?? skill.is_techstack,
       companytype: skill.companytype || "",
     });
     setShowEditPopup(true);
@@ -375,6 +375,24 @@ export default function ManageSkills() {
                     />
                   </div>
 
+                  <div className="flex items-center gap-3 mt-6">
+                    <input
+                      id="create-is-tech-stack"
+                      type="checkbox"
+                      className="w-5 h-5 rounded border-2 border-gray-300"
+                      checked={createForm.is_tech_stack || false}
+                      onChange={(e) =>
+                        updateCreateFormField("is_tech_stack", e.target.checked)
+                      }
+                    />
+                    <label
+                      htmlFor="create-is-tech-stack"
+                      className="text-sm font-medium text-gray-700"
+                    >
+                      Is Tech Stack
+                    </label>
+                  </div>
+
                   <div className="col-span-2">
                     <label className="text-sm font-medium text-gray-700 block mb-1">
                       Description
@@ -566,6 +584,24 @@ export default function ManageSkills() {
                     />
                   </div>
 
+                  <div className="flex items-center gap-3 mt-6">
+                    <input
+                      id="edit-is-tech-stack"
+                      type="checkbox"
+                      className="w-5 h-5 rounded border-2 border-gray-300"
+                      checked={editFormData.is_tech_stack || false}
+                      onChange={(e) =>
+                        updateEditFormField("is_tech_stack", e.target.checked)
+                      }
+                    />
+                    <label
+                      htmlFor="edit-is-tech-stack"
+                      className="text-sm font-medium text-gray-700"
+                    >
+                      Is Tech Stack
+                    </label>
+                  </div>
+
                   <div className="col-span-2">
                     <label className="text-sm font-medium text-gray-700 block mb-1">
                       Description
@@ -689,6 +725,11 @@ export default function ManageSkills() {
                           {skill.url}
                         </a>
                         <span className="ml-2">Order: {skill.order}</span>
+                        {(skill.is_tech_stack ?? skill.is_techstack) && (
+                          <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+                            Tech Stack
+                          </span>
+                        )}
                       </span>
                     </div>
                   </div>

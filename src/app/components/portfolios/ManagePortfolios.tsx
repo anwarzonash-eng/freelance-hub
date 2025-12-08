@@ -324,6 +324,29 @@ export default function ManagePortfolios() {
                       {p.private_title}
                     </p>
                   )}
+                  {p.display_order && (
+                    <p className="text-sm text-gray-600 mb-2">
+                      <span className="font-semibold">Order:</span>{" "}
+                      {p.display_order}
+                    </p>
+                  )}
+                  {p.is_tech_stack && (
+                    <p className="text-sm text-green-600 mb-2 font-semibold">
+                      ✓ Tech Stack
+                    </p>
+                  )}
+                  {p.starting_date && (
+                    <p className="text-sm text-gray-600 mb-2">
+                      <span className="font-semibold">Start:</span>{" "}
+                      {new Date(p.starting_date).toLocaleDateString()}
+                    </p>
+                  )}
+                  {p.ending_Date && (
+                    <p className="text-sm text-gray-600 mb-2">
+                      <span className="font-semibold">End:</span>{" "}
+                      {new Date(p.ending_Date).toLocaleDateString()}
+                    </p>
+                  )}
                   {p.categorys?.category_ids &&
                     p.categorys.category_ids.length > 0 && (
                       <div className="flex gap-2 flex-wrap mb-2">
@@ -413,6 +436,92 @@ export default function ManagePortfolios() {
                       name="private_title"
                       value={form?.private_title || ""}
                       onChange={handleFormChange}
+                      className="w-full border-2 border-gray-300 px-4 py-2 rounded-lg focus:border-blue-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Display Order, Dates, and Tech Stack */}
+                <div className="grid grid-cols-2 gap-6 mb-6">
+                  <div>
+                    <label className="block font-bold text-gray-700 mb-2">
+                      Display Order
+                    </label>
+                    <input
+                      name="display_order"
+                      type="number"
+                      value={form?.display_order || ""}
+                      onChange={handleFormChange}
+                      className="w-full border-2 border-gray-300 px-4 py-2 rounded-lg focus:border-blue-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="flex items-center gap-3 font-bold text-gray-700 mb-2">
+                      <input
+                        name="is_tech_stack"
+                        type="checkbox"
+                        checked={form?.is_tech_stack || false}
+                        onChange={(e) =>
+                          setForm((prev: any) => ({
+                            ...prev,
+                            is_tech_stack: e.target.checked,
+                          }))
+                        }
+                        className="w-5 h-5 rounded border-2 border-gray-300 cursor-pointer"
+                      />
+                      Is Tech Stack
+                    </label>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-6 mb-6">
+                  <div>
+                    <label className="block font-bold text-gray-700 mb-2">
+                      Starting Date
+                    </label>
+                    <input
+                      name="starting_date"
+                      type="date"
+                      value={
+                        form?.starting_date
+                          ? new Date(form.starting_date)
+                              .toISOString()
+                              .split("T")[0]
+                          : ""
+                      }
+                      onChange={(e) =>
+                        setForm((prev: any) => ({
+                          ...prev,
+                          starting_date: e.target.value
+                            ? new Date(e.target.value).toISOString()
+                            : null,
+                        }))
+                      }
+                      className="w-full border-2 border-gray-300 px-4 py-2 rounded-lg focus:border-blue-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-gray-700 mb-2">
+                      Ending Date
+                    </label>
+                    <input
+                      name="ending_Date"
+                      type="date"
+                      value={
+                        form?.ending_Date
+                          ? new Date(form.ending_Date)
+                              .toISOString()
+                              .split("T")[0]
+                          : ""
+                      }
+                      onChange={(e) =>
+                        setForm((prev: any) => ({
+                          ...prev,
+                          ending_Date: e.target.value
+                            ? new Date(e.target.value).toISOString()
+                            : null,
+                        }))
+                      }
                       className="w-full border-2 border-gray-300 px-4 py-2 rounded-lg focus:border-blue-500 focus:outline-none"
                     />
                   </div>
@@ -655,14 +764,29 @@ export default function ManagePortfolios() {
 
                 <div className="mb-6">
                   <label className="block font-bold text-gray-700 mb-2">
-                    Company Icon (URL)
+                    Company Icon (max 2MB)
                   </label>
                   <input
-                    name="company_icon"
-                    value={form?.company_icon || ""}
-                    onChange={handleFormChange}
-                    className="w-full border-2 border-gray-300 px-4 py-2 rounded-lg focus:border-blue-500 focus:outline-none"
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleFileChange(e, "company_icon")}
+                    className="w-full border-2 border-gray-300 px-4 py-2 rounded-lg"
                   />
+                  {form?.company_icon && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        imageViewer.openViewer([form.company_icon])
+                      }
+                      className="cursor-pointer hover:opacity-80 transition"
+                    >
+                      <img
+                        src={form.company_icon}
+                        alt="company icon"
+                        className="h-32 w-32 object-cover rounded-lg mt-3 shadow-lg"
+                      />
+                    </button>
+                  )}
                 </div>
 
                 <div>
