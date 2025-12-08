@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
+import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
 import LayoutWrapper from "./components/LayoutWrapper"; // ✅ IMPORTED
 import { Toaster } from "react-hot-toast";
@@ -51,12 +52,15 @@ export default async function RootLayout({
           href="https://fonts.googleapis.com/icon?family=Material+Icons"
           rel="stylesheet"
         />
-        <script src="https://t.contentsquare.net/uxa/bedb577941075.js" async />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         suppressHydrationWarning={true}
       >
+        <Script
+          src="https://t.contentsquare.net/uxa/bedb577941075.js"
+          strategy="afterInteractive"
+        />
         <Toaster position="top-right" reverseOrder={false} />
         <RouteProvider>
           <LayoutWrapper useData={useData}>{children}</LayoutWrapper>
