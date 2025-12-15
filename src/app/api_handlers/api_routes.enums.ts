@@ -38,6 +38,8 @@ export enum MainProfilesAPIRoutes {
 export enum DetailProfilesAPIRoutes {
     GET_ALL = 'detail-profiles',
     GET_BY_ID = 'detail-profiles/:id',
+    CREATE = 'detail-profiles',
+    UPDATE = 'detail-profiles/:id',
     GENERATE_PDF = 'detail-profiles/generatePRT',
 }
 
@@ -86,6 +88,15 @@ export enum PortfoliosAPIRoutes {
     DELETE = 'portfolios/:id',
     UPLOAD_SINGLE = 'portfolios/upload-single',
     UPLOAD_MULTIPLE = 'portfolios/upload-multiple',
+}
+
+export enum TestimonialsAPIRoutes {
+    GET_ALL = 'testimonials',
+    GET_BY_ID = 'testimonials/:id',
+    ADD = 'testimonials',
+    UPDATE = 'testimonials/:id',
+    DELETE = 'testimonials/:id',
+    UPLOAD_SINGLE = 'testimonials/upload-single',
 }
 
 export enum ShowErrorMessageOptionsRoutes {

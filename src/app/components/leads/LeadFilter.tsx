@@ -86,9 +86,9 @@ export const LeadsFilter = ({ onFilter }) => {
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
+    <div className="flex flex-wrap gap-3 items-center">
       {/* Lead Source Dropdown */}
-      <div className="flex flex-col">
+      <div className="flex flex-col flex-1 min-w-[150px]">
         <label
           htmlFor="lead_source"
           className="text-sm font-medium text-gray-700 mb-1"
@@ -111,7 +111,7 @@ export const LeadsFilter = ({ onFilter }) => {
       </div>
 
       {/* Email Status Dropdown */}
-      <div className="flex flex-col">
+      <div className="flex flex-col flex-1 min-w-[150px]">
         <label
           htmlFor="email_status"
           className="text-sm font-medium text-gray-700 mb-1"
@@ -133,7 +133,7 @@ export const LeadsFilter = ({ onFilter }) => {
       </div>
 
       {/* SMS/WhatsApp Status Dropdown */}
-      <div className="flex flex-col">
+      <div className="flex flex-col flex-1 min-w-[150px]">
         <label
           htmlFor="sms_status"
           className="text-sm font-medium text-gray-700 mb-1"
@@ -155,7 +155,7 @@ export const LeadsFilter = ({ onFilter }) => {
       </div>
 
       {/* Campaign Type Dropdown */}
-      <div className="flex flex-col">
+      <div className="flex flex-col flex-1 min-w-[150px]">
         <label
           htmlFor="campaign_type"
           className="text-sm font-medium text-gray-700 mb-1"
@@ -177,7 +177,7 @@ export const LeadsFilter = ({ onFilter }) => {
       </div>
 
       {/* Is Deleted Checkbox */}
-      <div className="flex items-center space-x-2 h-full pt-6">
+      <div className="flex items-center space-x-2 pb-1 ">
         <input
           type="checkbox"
           id="is_deleted"
@@ -187,7 +187,7 @@ export const LeadsFilter = ({ onFilter }) => {
         />
         <label
           htmlFor="is_deleted"
-          className="text-sm font-medium text-gray-700 select-none"
+          className="text-sm font-medium text-gray-700 select-none whitespace-nowrap"
         >
           Is Deleted
         </label>
@@ -196,7 +196,7 @@ export const LeadsFilter = ({ onFilter }) => {
       {/* Filter Button */}
       <button
         onClick={handleFilter}
-        className="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 transition duration-150 shadow-sm disabled:opacity-50"
+        className="px-4 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-100 transition-colors h-8 "
       >
         Filter
       </button>

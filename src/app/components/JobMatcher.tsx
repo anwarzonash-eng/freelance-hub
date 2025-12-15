@@ -163,6 +163,8 @@ function DetailsModal({ item, onClose, currentJobSkill }) {
 export default function JobMatcher() {
   const [title, setTitle] = useState("");
   const [skills, setSkills] = useState("");
+  const [jobURl, settJobURL] = useState("");
+
   const [description, setDescription] = useState("");
   const [selectedJob, setSelectedJob] = useState(null);
   const [results, setResults] = useState<MatchResult[]>([]);
@@ -182,6 +184,12 @@ export default function JobMatcher() {
 
           // Populate the input fields with the retrieved data
           setTitle(jobData.title || "");
+          settJobURL(
+            jobData.ciphertext
+              ? "https://www.upwork.com/jobs/" + jobData.ciphertext
+              : "www.upwork.com"
+          );
+
           setDescription(jobData.description || "");
 
           // Format skills from an array to a string with new lines
@@ -251,6 +259,7 @@ export default function JobMatcher() {
               skills
             }
             websitePurpose="personal_website"
+            CreatedFor={jobURl}
           />
         </GenericPopup>
       )}

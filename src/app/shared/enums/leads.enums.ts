@@ -6,7 +6,9 @@ export enum LeadSource {
     STUDENT = 'student',
     BOUGHT_NEW_DOMAINS = "bought_new_domains",
     LINKEDIN = "linkedin",
-    INDEED = 'indeed'
+    INDEED = 'indeed',
+    PERSONAL_WEBSITE = 'personal_website',
+    PERSONAL_WEBSITE_SUBSCRIBE = 'personal_website_subscribe',
 }
 
 export enum EmailStatus {

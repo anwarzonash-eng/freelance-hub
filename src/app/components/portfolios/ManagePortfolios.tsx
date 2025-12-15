@@ -11,6 +11,7 @@ import {
 } from "@/app/api_handlers/api/portfolios.api";
 import { getALLMainProfiles } from "@/app/api_handlers/api/main_profiles.api";
 import { getAllCategories } from "@/app/api_handlers/api/categories.api";
+import { getTestimonialsByMainProfileId } from "@/app/api_handlers/api/testimonials.api";
 import dynamic from "next/dynamic";
 import { useImageViewer } from "../ImageViewer";
 
@@ -27,9 +28,11 @@ export default function ManagePortfolios() {
   const [portfolios, setPortfolios] = useState([]);
   const [mainProfiles, setMainProfiles] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [testimonials, setTestimonials] = useState([]);
   const [search, setSearch] = useState("");
   const [selectedMainProfile, setSelectedMainProfile] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
+  const [filterIsActive, setFilterIsActive] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [form, setForm] = useState<any>(null);
   const [showForm, setShowForm] = useState(false);
@@ -85,7 +88,15 @@ export default function ManagePortfolios() {
     const matchesCategory = selectedCategory
       ? (p.categorys?.category_ids || []).includes(selectedCategory)
       : true;
-    return (matchesId || matchesTitle) && matchesMainProfile && matchesCategory;
+    const matchesIsActive = filterIsActive
+      ? p.is_active?.toString() === filterIsActive
+      : true;
+    return (
+      (matchesId || matchesTitle) &&
+      matchesMainProfile &&
+      matchesCategory &&
+      matchesIsActive
+    );
   });
 
   const filteredCategories = getFilteredCategories();
@@ -94,6 +105,12 @@ export default function ManagePortfolios() {
     setForm({ ...portfolio, pictures: JSON.parse(portfolio.pictures || "[]") });
     setIsEdit(true);
     setShowForm(true);
+    // Fetch testimonials for this portfolio's main profile
+    if (portfolio.main_profile_id) {
+      getTestimonialsByMainProfileId(portfolio.main_profile_id).then((res) => {
+        setTestimonials(res.data || []);
+      });
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -104,12 +121,17 @@ export default function ManagePortfolios() {
   const handleFormChange = (e: any) => {
     const { name, value } = e.target;
     if (name === "main_profile_id") {
-      // Reset categories when main profile changes
+      // Reset categories and testimonials when main profile changes, then fetch testimonials
       setForm((prev: any) => ({
         ...prev,
         [name]: value,
         categorys: { category_ids: [] },
+        testimonial_id: null,
       }));
+      // Fetch testimonials for this main profile
+      getTestimonialsByMainProfileId(value).then((res) => {
+        setTestimonials(res.data || []);
+      });
     } else {
       setForm((prev: any) => ({ ...prev, [name]: value }));
     }
@@ -211,16 +233,25 @@ export default function ManagePortfolios() {
         <h1 className="text-2xl font-bold">
           Portfolios ({filteredPortfolios.length})
         </h1>
-        <button
-          className="bg-green-600 text-white px-4 py-2 rounded"
-          onClick={() => {
-            setShowForm(true);
-            setIsEdit(false);
-            setForm({ pictures: [] });
-          }}
-        >
-          + Create
-        </button>
+        <div className="flex gap-2">
+          <button
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition font-semibold disabled:opacity-50"
+            onClick={fetchData}
+            disabled={isLoading}
+          >
+            {isLoading ? "Refreshing..." : "Refresh"}
+          </button>
+          <button
+            className="bg-green-600 text-white px-4 py-2 rounded"
+            onClick={() => {
+              setShowForm(true);
+              setIsEdit(false);
+              setForm({ pictures: [], is_active: true });
+            }}
+          >
+            + Create
+          </button>
+        </div>
       </div>
       <div className="bg-linear-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-200 p-4 rounded-lg mb-6 flex gap-3 flex-wrap">
         <div className="flex-1 min-w-64">
@@ -262,6 +293,15 @@ export default function ManagePortfolios() {
               {cat.title}
             </option>
           ))}
+        </select>
+        <select
+          value={filterIsActive}
+          onChange={(e) => setFilterIsActive(e.target.value)}
+          className="border-2 border-gray-300 px-4 py-2 rounded-lg font-semibold focus:border-blue-500 focus:outline-none bg-white hover:border-blue-400 transition"
+        >
+          <option value="">All Status</option>
+          <option value="true">Active Only</option>
+          <option value="false">Inactive Only</option>
         </select>
       </div>
 
@@ -317,6 +357,11 @@ export default function ManagePortfolios() {
                 <div>
                   <h3 className="font-bold text-lg text-gray-800 mb-1">
                     {p.title}
+                    {p.is_active === false && (
+                      <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">
+                        Inactive
+                      </span>
+                    )}
                   </h3>
                   {p.private_title && (
                     <p className="text-sm text-gray-500 mb-2">
@@ -528,7 +573,7 @@ export default function ManagePortfolios() {
                 </div>
 
                 {/* Profile & Categories */}
-                <div className="grid grid-cols-2 gap-6 mb-6">
+                <div className="grid grid-cols-3 gap-6 mb-6">
                   <div>
                     <label className="block font-bold text-gray-700 mb-2">
                       Main Profile *
@@ -544,6 +589,31 @@ export default function ManagePortfolios() {
                       {mainProfiles.map((mp: any) => (
                         <option key={mp.id} value={mp.id}>
                           {mp.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-bold text-gray-700 mb-2">
+                      Testimonial
+                    </label>
+                    <select
+                      value={form?.testimonial_id || ""}
+                      onChange={(e) =>
+                        setForm((prev: any) => ({
+                          ...prev,
+                          testimonial_id: e.target.value || null,
+                        }))
+                      }
+                      disabled={
+                        !form?.main_profile_id || testimonials.length === 0
+                      }
+                      className="w-full border-2 border-gray-300 px-4 py-2 rounded-lg focus:border-blue-500 focus:outline-none disabled:bg-gray-100 disabled:text-gray-500"
+                    >
+                      <option value="">Select Testimonial</option>
+                      {testimonials.map((t: any) => (
+                        <option key={t.id} value={t.id}>
+                          {t.client_name} - {t.client_designation}
                         </option>
                       ))}
                     </select>
@@ -787,6 +857,27 @@ export default function ManagePortfolios() {
                       />
                     </button>
                   )}
+                </div>
+
+                <div className="mb-6 flex items-center gap-3">
+                  <input
+                    id="is-active-checkbox"
+                    type="checkbox"
+                    checked={form?.is_active ?? true}
+                    onChange={(e) =>
+                      setForm((prev: any) => ({
+                        ...prev,
+                        is_active: e.target.checked,
+                      }))
+                    }
+                    className="w-5 h-5 rounded border-2 border-gray-300"
+                  />
+                  <label
+                    htmlFor="is-active-checkbox"
+                    className="font-bold text-gray-700 cursor-pointer"
+                  >
+                    Is Active
+                  </label>
                 </div>
 
                 <div>

@@ -379,6 +379,35 @@ export default function ManageDetailProfiles() {
                               </p>
                             </div>
                           )}
+                          {(profile as any).website_purpose && (
+                            <div>
+                              <span className="font-semibold text-gray-600">
+                                Website Purpose:
+                              </span>
+                              <p className="text-gray-700">
+                                {(
+                                  (profile as any).website_purpose || ""
+                                ).replace(/_/g, " ")}
+                              </p>
+                            </div>
+                          )}
+                          {(profile as any).website_created_for && (
+                            <div>
+                              <span className="font-semibold text-gray-600">
+                                Website Created For:
+                              </span>
+                              <p className="text-gray-700 truncate">
+                                <a
+                                  href={(profile as any).website_created_for}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 hover:underline"
+                                >
+                                  {(profile as any).website_created_for}
+                                </a>
+                              </p>
+                            </div>
+                          )}
                         </div>
 
                         <WebsiteURLs

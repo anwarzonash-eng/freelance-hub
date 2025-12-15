@@ -24,6 +24,10 @@ export default function ImageViewer() {
   const [isOpen, setIsOpen] = useState(false);
   const [images, setImages] = useState<string[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [imageDimensions, setImageDimensions] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
 
   useEffect(() => {
     imageViewerCallback = (images: string[], startIndex = 0) => {
@@ -43,6 +47,13 @@ export default function ImageViewer() {
 
   const handleNext = () => {
     setCurrentIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1));
+  };
+
+  const handleImageLoad = (
+    e: React.SyntheticEvent<HTMLImageElement, Event>
+  ) => {
+    const img = e.currentTarget;
+    setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight });
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -80,6 +91,7 @@ export default function ImageViewer() {
           src={currentImage}
           alt={`Image ${currentIndex + 1}`}
           className="max-w-full max-h-full object-contain"
+          onLoad={handleImageLoad}
         />
       </div>
 
@@ -130,6 +142,13 @@ export default function ImageViewer() {
             ))}
           </div>
         </>
+      )}
+
+      {/* Image Properties */}
+      {imageDimensions && (
+        <div className="absolute top-20 left-1/2 transform -translate-x-1/2 bg-gray-800 bg-opacity-85 text-white px-4 py-2 rounded-lg font-semibold text-sm shadow-lg">
+          {imageDimensions.width} × {imageDimensions.height} pixels
+        </div>
       )}
 
       {/* Keyboard Hints */}

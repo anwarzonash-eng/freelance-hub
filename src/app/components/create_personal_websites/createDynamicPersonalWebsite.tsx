@@ -88,6 +88,7 @@ export default function CreateDynamicPersonalWebsite({
   isCloseOnSelect = false,
   setOpenCloseWebsiteCreatePopUP = null,
   websitePurpose = "remote_job",
+  CreatedFor = "",
 }) {
   // alert(websitePurpose);
   // --- State Initialization (Angular Properties -> React State) ---
@@ -99,6 +100,10 @@ export default function CreateDynamicPersonalWebsite({
   const [designation, setDesignation] = useState<string>("");
   const [privateTitle, setPrivateTitle] = useState<string>("");
   const [hourlyRate, sethourlyRate] = useState(16);
+  const [selectedWebsitePurpose, setSelectedWebsitePurpose] =
+    useState<string>("upwork");
+  const [websiteCreatedFor, setWebsiteCreatedFor] =
+    useState<string>(CreatedFor);
 
   const [experience, setExperience] = useState<string>("");
   const [isCreatingProfile, setIsCreatingProfile] = useState<boolean>(false);
@@ -168,7 +173,7 @@ export default function CreateDynamicPersonalWebsite({
     // setMainProfiles([]);
     setAllSkills([]);
     setNewlyCreatedProfileLinks(null);
-    isCloseOnSelect && setSelectWebsite(null);
+    isCloseOnSelect && setSelectWebsite && setSelectWebsite(null);
     setSelectSkill("select");
     setSelectedCategories("select");
     setDesignation("");
@@ -496,6 +501,8 @@ export default function CreateDynamicPersonalWebsite({
       private_title: privateTitle,
       is_create_tiny_url: isCreateShortURLs,
       hourly_rate: hourlyRate,
+      website_purpose: selectedWebsitePurpose,
+      website_created_for: websiteCreatedFor,
     };
 
     try {
@@ -517,7 +524,7 @@ export default function CreateDynamicPersonalWebsite({
         setUniqueID(data.data.unique_id);
 
         setNewlyCreatedProfileLinks(data.data);
-        isCloseOnSelect && setSelectWebsite(data.data);
+        isCloseOnSelect && setSelectWebsite && setSelectWebsite(data.data);
       }
 
       setIsCreatingProfile(false);
@@ -1029,7 +1036,7 @@ export default function CreateDynamicPersonalWebsite({
                             <div className="flex-shrink-0 self-end sm:self-center">
                               <button
                                 onClick={() => {
-                                  setSelectWebsite(profile);
+                                  setSelectWebsite && setSelectWebsite(profile);
                                   setNewlyCreatedProfileLinks(profile);
                                 }}
                                 className="p-1.5 px-3 text-sm rounded-lg text-red-600 border border-red-200 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity transition-colors duration-200"
@@ -1114,6 +1121,38 @@ export default function CreateDynamicPersonalWebsite({
                       }
                     }}
                     type="number"
+                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm"
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1 ">
+                    Website Purpose
+                  </label>
+                  <select
+                    value={selectedWebsitePurpose}
+                    onChange={(e) => setSelectedWebsitePurpose(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm"
+                  >
+                    <option value="upwork">Upwork</option>
+                    <option value="other_freelance_or_remote_jobs">
+                      Other Freelance or Remote Jobs
+                    </option>
+                    <option value="real_office_jobs_remote_hybrid">
+                      Real Office Jobs Remote/Hybrid
+                    </option>
+                    <option value="startups_clients">Startups Clients</option>
+                    <option value="students">Students</option>
+                  </select>
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1 ">
+                    Website Created For (URL)
+                  </label>
+                  <input
+                    value={websiteCreatedFor}
+                    onChange={(e) => setWebsiteCreatedFor(e.target.value)}
+                    type="text"
+                    placeholder="https://example.com"
                     className="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm"
                   />
                 </div>

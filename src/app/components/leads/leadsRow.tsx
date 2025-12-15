@@ -139,9 +139,38 @@ export const LeadRow = ({
   const handleView = () => onView(lead);
   const handleChangeStatus = () => console.log("Change Status Clicked");
 
+  // Helper: check if data is empty
+  const isEmpty = (value) => {
+    return (
+      value === null ||
+      value === undefined ||
+      value === "" ||
+      value === 0 ||
+      (Array.isArray(value) && value.length === 0)
+    );
+  };
+
+  // Helper: parse and sanitize HTML
+  const parseHTML = (htmlString) => {
+    if (!htmlString) return "";
+
+    // Check if string contains HTML tags
+    const htmlRegex = /<[^>]*>/g;
+    if (!htmlRegex.test(htmlString)) return htmlString;
+
+    // Basic sanitization: remove potentially dangerous tags/attributes
+    let sanitized = htmlString
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "") // Remove script tags
+      .replace(/on\w+\s*=\s*["'][^"']*["']/gi, "") // Remove event handlers
+      .replace(/on\w+\s*=\s*[^\s>]*/gi, ""); // Remove event handlers without quotes
+
+    return sanitized;
+  };
+
   // Helper: short link
-  const renderLink = (url, label = "Visit") =>
-    url ? (
+  const renderLink = (url, label = "Visit") => {
+    if (isEmpty(url)) return null;
+    return (
       <a
         href={url}
         target="_blank"
@@ -150,21 +179,20 @@ export const LeadRow = ({
       >
         {label}
       </a>
-    ) : (
-      <span className="text-gray-500">N/A</span>
     );
+  };
 
   // Helper: render list as chips
-  const renderChips = (arr) =>
-    arr && arr.length > 0 ? (
+  const renderChips = (arr) => {
+    if (isEmpty(arr)) return null;
+    return (
       <div className="flex flex-wrap gap-1 mt-1">
         {arr.map((item, idx) => (
           <SkillCard key={idx} skill={item} />
         ))}
       </div>
-    ) : (
-      <span className="text-gray-500">N/A</span>
     );
+  };
 
   return (
     <>
@@ -259,111 +287,166 @@ export const LeadRow = ({
                 {title || "Untitled Job"}
               </p>
 
-              <p className="text-sm text-gray-700 mb-3 whitespace-pre-wrap">
-                {displayedDescription || "No description provided."}
+              <div className="text-sm text-gray-700 mb-3">
+                {displayedDescription ? (
+                  //<[^>]*>/g.test(displayedDescription) ? (
+                  /<[^>]*>/g.test(displayedDescription) ? (
+                    <div
+                      dangerouslySetInnerHTML={{
+                        __html: parseHTML(displayedDescription),
+                      }}
+                    />
+                  ) : (
+                    <p className="whitespace-pre-wrap">
+                      {displayedDescription}
+                    </p>
+                  )
+                ) : (
+                  <p>No description provided.</p>
+                )}
                 {canToggleDescription && (
                   <button
                     onClick={() => setShowFullDescription(!showFullDescription)}
-                    className="text-xs ml-1 text-indigo-600 hover:text-indigo-800 font-medium"
+                    className="text-xs mt-2 text-indigo-600 hover:text-indigo-800 font-medium"
                   >
                     {showFullDescription ? "Read less" : "Read more"}
                   </button>
                 )}
-              </p>
+              </div>
 
               <div className="space-y-2 text-sm">
-                <p>
-                  <span className="font-semibold text-gray-800">Posted:</span>{" "}
-                  {formattedPostedDate}
-                </p>
-                <p>
-                  <span className="font-semibold text-gray-800">Expires:</span>{" "}
-                  {formattedExpiresAt}
-                </p>
-                <p>
-                  <span className="font-semibold text-gray-800">Source:</span>{" "}
-                  {lead_source || "N/A"}
-                </p>
-                <p>
-                  <span className="font-semibold text-gray-800">
-                    Fetch Date:
-                  </span>{" "}
-                  {formattedLeadFetchDate}
-                </p>
-                <p>
-                  <span className="font-semibold text-gray-800">
-                    Job Types:
-                  </span>{" "}
-                  {renderChips(safeJobTypes)}
-                </p>
-                <p>
-                  <span className="font-semibold text-gray-800">
-                    Categories:
-                  </span>{" "}
-                  {renderChips(safeCategories)}
-                </p>
-                <p>
-                  <span className="font-semibold text-gray-800">
-                    Locations:
-                  </span>{" "}
-                  {renderChips(safeLocations)}
-                </p>
-                <p>
-                  <span className="font-semibold text-gray-800">
-                    Allowed Locations:
-                  </span>{" "}
-                  {renderChips(safeAllowedLocations)}
-                </p>
-                <p>
-                  <span className="font-semibold text-gray-800">
-                    Remote Options:
-                  </span>{" "}
-                  {renderChips(safeRemoteOptions)}
-                </p>
-                <p>
-                  <span className="font-semibold text-gray-800">
-                    Education:
-                  </span>{" "}
-                  {renderChips(safeEducation)}
-                </p>
-                <p>
-                  <span className="font-semibold text-gray-800">
-                    Career Level:
-                  </span>{" "}
-                  {renderChips(safeCareerLevel)}
-                </p>
-                <p>
-                  <span className="font-semibold text-gray-800">Skills:</span>{" "}
-                  {renderChips(safeSkills)}
-                </p>
-                <p>
-                  <span className="font-semibold text-gray-800">Benefits:</span>{" "}
-                  {renderChips(safeBenefits)}
-                </p>
-                <p>
-                  <span className="font-semibold text-gray-800">Salary:</span>{" "}
-                  {salaryMin
-                    ? `${salaryCurrency || ""} ${salaryMin} - ${
-                        salaryMax || "?"
-                      } ${salaryUnit || ""}`
-                    : salary || "N/A"}
-                </p>
-                <p>
-                  <span className="font-semibold text-gray-800">Job Link:</span>{" "}
-                  {renderLink(job_link, "Open Job")}
-                </p>
-                <p>
-                  <span className="font-semibold text-gray-800">
-                    Apply URL:
-                  </span>{" "}
-                  {renderLink(applyURL, "Apply")}
-                </p>
-                <p>
-                  <span className="font-semibold text-gray-800">
-                    Career Page:
-                  </span>{" "}
-                  {renderLink(company_career_Page_Url, "Company Career Page")}
-                </p>
+                {!isEmpty(postedDate) && (
+                  <p>
+                    <span className="font-semibold text-gray-800">Posted:</span>{" "}
+                    {formattedPostedDate}
+                  </p>
+                )}
+                {!isEmpty(expires_at) && (
+                  <p>
+                    <span className="font-semibold text-gray-800">
+                      Expires:
+                    </span>{" "}
+                    {formattedExpiresAt}
+                  </p>
+                )}
+                {!isEmpty(lead_source) && (
+                  <p>
+                    <span className="font-semibold text-gray-800">Source:</span>{" "}
+                    {lead_source}
+                  </p>
+                )}
+                {!isEmpty(lead_fetch_date) && (
+                  <p>
+                    <span className="font-semibold text-gray-800">
+                      Fetch Date:
+                    </span>{" "}
+                    {formattedLeadFetchDate}
+                  </p>
+                )}
+                {renderChips(safeJobTypes) && (
+                  <p>
+                    <span className="font-semibold text-gray-800">
+                      Job Types:
+                    </span>{" "}
+                    {renderChips(safeJobTypes)}
+                  </p>
+                )}
+                {renderChips(safeCategories) && (
+                  <p>
+                    <span className="font-semibold text-gray-800">
+                      Categories:
+                    </span>{" "}
+                    {renderChips(safeCategories)}
+                  </p>
+                )}
+                {renderChips(safeLocations) && (
+                  <p>
+                    <span className="font-semibold text-gray-800">
+                      Locations:
+                    </span>{" "}
+                    {renderChips(safeLocations)}
+                  </p>
+                )}
+                {renderChips(safeAllowedLocations) && (
+                  <p>
+                    <span className="font-semibold text-gray-800">
+                      Allowed Locations:
+                    </span>{" "}
+                    {renderChips(safeAllowedLocations)}
+                  </p>
+                )}
+                {renderChips(safeRemoteOptions) && (
+                  <p>
+                    <span className="font-semibold text-gray-800">
+                      Remote Options:
+                    </span>{" "}
+                    {renderChips(safeRemoteOptions)}
+                  </p>
+                )}
+                {renderChips(safeEducation) && (
+                  <p>
+                    <span className="font-semibold text-gray-800">
+                      Education:
+                    </span>{" "}
+                    {renderChips(safeEducation)}
+                  </p>
+                )}
+                {renderChips(safeCareerLevel) && (
+                  <p>
+                    <span className="font-semibold text-gray-800">
+                      Career Level:
+                    </span>{" "}
+                    {renderChips(safeCareerLevel)}
+                  </p>
+                )}
+                {renderChips(safeSkills) && (
+                  <p>
+                    <span className="font-semibold text-gray-800">Skills:</span>{" "}
+                    {renderChips(safeSkills)}
+                  </p>
+                )}
+                {renderChips(safeBenefits) && (
+                  <p>
+                    <span className="font-semibold text-gray-800">
+                      Benefits:
+                    </span>{" "}
+                    {renderChips(safeBenefits)}
+                  </p>
+                )}
+                {!isEmpty(salaryMin) || !isEmpty(salary) ? (
+                  <p>
+                    <span className="font-semibold text-gray-800">Salary:</span>{" "}
+                    {salaryMin
+                      ? `${salaryCurrency || ""} ${salaryMin} - ${
+                          salaryMax || "?"
+                        } ${salaryUnit || ""}`
+                      : salary}
+                  </p>
+                ) : null}
+                {renderLink(job_link, "Open Job") && (
+                  <p>
+                    <span className="font-semibold text-gray-800">
+                      Job Link:
+                    </span>{" "}
+                    {renderLink(job_link, "Open Job")}
+                  </p>
+                )}
+                {renderLink(applyURL, "Apply") && (
+                  <p>
+                    <span className="font-semibold text-gray-800">
+                      Apply URL:
+                    </span>{" "}
+                    {renderLink(applyURL, "Apply")}
+                  </p>
+                )}
+                {renderLink(company_career_Page_Url, "Company Career Page") && (
+                  <p>
+                    <span className="font-semibold text-gray-800">
+                      Career Page:
+                    </span>{" "}
+                    {renderLink(company_career_Page_Url, "Company Career Page")}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -386,56 +469,96 @@ export const LeadRow = ({
               </div>
 
               <div className="space-y-1 text-sm">
-                <p>
-                  <span className="font-semibold text-gray-800">Website:</span>{" "}
-                  {renderLink(company_website, "Visit")}
-                </p>
-                <p>
-                  <span className="font-semibold text-gray-800">Summary:</span>{" "}
-                  {company_summary || "N/A"}
-                </p>
-                <p>
-                  <span className="font-semibold text-gray-800">Industry:</span>{" "}
-                  {company_industry || "N/A"}
-                </p>
-                <p>
-                  <span className="font-semibold text-gray-800">Size:</span>{" "}
-                  {company_size || "N/A"}
-                </p>
-                <p>
-                  <span className="font-semibold text-gray-800">
-                    Established:
-                  </span>{" "}
-                  {company_established || "N/A"}
-                </p>
-                <p>
-                  <span className="font-semibold text-gray-800">City:</span>{" "}
-                  {company_city || "N/A"}
-                </p>
-                <p>
-                  <span className="font-semibold text-gray-800">State:</span>{" "}
-                  {company_state || "N/A"}
-                </p>
-                <p>
-                  <span className="font-semibold text-gray-800">Country:</span>{" "}
-                  {company_country || "N/A"}
-                </p>
-                <p>
-                  <span className="font-semibold text-gray-800">Facebook:</span>{" "}
-                  {renderLink(company_facebook, "Page")}
-                </p>
-                <p>
-                  <span className="font-semibold text-gray-800">LinkedIn:</span>{" "}
-                  {renderLink(company_linkedin, "Profile")}
-                </p>
-                <p>
-                  <span className="font-semibold text-gray-800">Twitter:</span>{" "}
-                  {renderLink(company_twitter, "Profile")}
-                </p>
-                <p>
-                  <span className="font-semibold text-gray-800">YouTube:</span>{" "}
-                  {renderLink(company_youtube, "Channel")}
-                </p>
+                {renderLink(company_website, "Visit") && (
+                  <p>
+                    <span className="font-semibold text-gray-800">
+                      Website:
+                    </span>{" "}
+                    {renderLink(company_website, "Visit")}
+                  </p>
+                )}
+                {!isEmpty(company_summary) && (
+                  <p>
+                    <span className="font-semibold text-gray-800">
+                      Summary:
+                    </span>{" "}
+                    {company_summary}
+                  </p>
+                )}
+                {!isEmpty(company_industry) && (
+                  <p>
+                    <span className="font-semibold text-gray-800">
+                      Industry:
+                    </span>{" "}
+                    {company_industry}
+                  </p>
+                )}
+                {!isEmpty(company_size) && (
+                  <p>
+                    <span className="font-semibold text-gray-800">Size:</span>{" "}
+                    {company_size}
+                  </p>
+                )}
+                {!isEmpty(company_established) && (
+                  <p>
+                    <span className="font-semibold text-gray-800">
+                      Established:
+                    </span>{" "}
+                    {company_established}
+                  </p>
+                )}
+                {!isEmpty(company_city) && (
+                  <p>
+                    <span className="font-semibold text-gray-800">City:</span>{" "}
+                    {company_city}
+                  </p>
+                )}
+                {!isEmpty(company_state) && (
+                  <p>
+                    <span className="font-semibold text-gray-800">State:</span>{" "}
+                    {company_state}
+                  </p>
+                )}
+                {!isEmpty(company_country) && (
+                  <p>
+                    <span className="font-semibold text-gray-800">
+                      Country:
+                    </span>{" "}
+                    {company_country}
+                  </p>
+                )}
+                {renderLink(company_facebook, "Page") && (
+                  <p>
+                    <span className="font-semibold text-gray-800">
+                      Facebook:
+                    </span>{" "}
+                    {renderLink(company_facebook, "Page")}
+                  </p>
+                )}
+                {renderLink(company_linkedin, "Profile") && (
+                  <p>
+                    <span className="font-semibold text-gray-800">
+                      LinkedIn:
+                    </span>{" "}
+                    {renderLink(company_linkedin, "Profile")}
+                  </p>
+                )}
+                {renderLink(company_twitter, "Profile") && (
+                  <p>
+                    <span className="font-semibold text-gray-800">
+                      Twitter:
+                    </span>{" "}
+                    {renderLink(company_twitter, "Profile")}
+                  </p>
+                )}
+                {renderLink(company_youtube, "Channel") && (
+                  <p>
+                    <span className="font-semibold text-gray-800">
+                      YouTube:
+                    </span>{" "}
+                    {renderLink(company_youtube, "Channel")}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -456,20 +579,23 @@ export const LeadRow = ({
                         ({c.designation || "N/A"})
                       </span>
                     </p>
-                    <p className="text-xs text-gray-600">
-                      <span className="font-medium text-gray-800">Email:</span>{" "}
-                      {renderLink(
-                        c.email ? `mailto:${c.email}` : null,
-                        c.email || "N/A"
-                      )}
-                    </p>
-                    <p className="text-xs text-gray-600">
-                      <span className="font-medium text-gray-800">
-                        Contact:
-                      </span>{" "}
-                      {c.contact || "N/A"}
-                    </p>
-                    {c.website && (
+                    {!isEmpty(c.email) && (
+                      <p className="text-xs text-gray-600">
+                        <span className="font-medium text-gray-800">
+                          Email:
+                        </span>{" "}
+                        {renderLink(`mailto:${c.email}`, c.email)}
+                      </p>
+                    )}
+                    {!isEmpty(c.contact) && (
+                      <p className="text-xs text-gray-600">
+                        <span className="font-medium text-gray-800">
+                          Contact:
+                        </span>{" "}
+                        {c.contact}
+                      </p>
+                    )}
+                    {renderLink(c.website, "Visit") && (
                       <p className="text-xs text-gray-600">
                         <span className="font-medium text-gray-800">
                           Website:
@@ -477,7 +603,7 @@ export const LeadRow = ({
                         {renderLink(c.website, "Visit")}
                       </p>
                     )}
-                    {c.linkedIn && (
+                    {renderLink(c.linkedIn, "Profile") && (
                       <p className="text-xs text-gray-600">
                         <span className="font-medium text-gray-800">
                           LinkedIn:
@@ -485,7 +611,7 @@ export const LeadRow = ({
                         {renderLink(c.linkedIn, "Profile")}
                       </p>
                     )}
-                    {c.source && (
+                    {!isEmpty(c.source) && (
                       <p className="text-xs text-gray-600">
                         <span className="font-medium text-gray-800">
                           Source:

@@ -24,7 +24,7 @@ interface SkillData {
   catagory?: string;
   order?: string;
   description?: string;
-  is_tech_stack?: boolean;
+  is_techstack?: boolean;
   companytype?: string;
 }
 
@@ -37,6 +37,8 @@ export default function ManageSkills() {
   const [editingSkillId, setEditingSkillId] = useState<string | null>(null);
   const [editFormData, setEditFormData] = useState<SkillData | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [filterIsTechstack, setFilterIsTechstack] = useState<string>("");
+  const [filterOrder, setFilterOrder] = useState<string>("");
   const [showCreatePopup, setShowCreatePopup] = useState(false);
   const [showAIPopup, setShowAIPopup] = useState(false);
   const [showEditPopup, setShowEditPopup] = useState(false);
@@ -50,18 +52,25 @@ export default function ManageSkills() {
     catagory: "",
     order: "",
     description: "",
-    is_tech_stack: true,
+    is_techstack: true,
     companytype: "cypexsoft",
   });
 
   useEffect(() => {
     fetchAllSkills();
-  }, []);
+  }, [filterIsTechstack, filterOrder]);
 
   const fetchAllSkills = async () => {
     setLoadingSkills(true);
     try {
-      const response = await getAllSkills();
+      const query: any = {};
+      if (filterIsTechstack) {
+        query.is_techstack = filterIsTechstack;
+      }
+      if (filterOrder) {
+        query.order = filterOrder;
+      }
+      const response = await getAllSkills(query);
       if (response && response.data) {
         setAllSkills(response.data || []);
       }
@@ -128,7 +137,7 @@ export default function ManageSkills() {
           catagory: "",
           order: "",
           description: "",
-          is_tech_stack: true,
+          is_techstack: true,
           companytype: "cypexsoft",
         });
         fetchAllSkills();
@@ -174,7 +183,7 @@ export default function ManageSkills() {
       catagory: skill.catagory || "",
       order: skill.order || "",
       description: skill.description || "",
-      is_tech_stack: skill.is_tech_stack ?? skill.is_techstack,
+      is_techstack: skill.is_techstack,
       companytype: skill.companytype || "",
     });
     setShowEditPopup(true);
@@ -380,9 +389,9 @@ export default function ManageSkills() {
                       id="create-is-tech-stack"
                       type="checkbox"
                       className="w-5 h-5 rounded border-2 border-gray-300"
-                      checked={createForm.is_tech_stack || false}
+                      checked={createForm.is_techstack || false}
                       onChange={(e) =>
-                        updateCreateFormField("is_tech_stack", e.target.checked)
+                        updateCreateFormField("is_techstack", e.target.checked)
                       }
                     />
                     <label
@@ -589,9 +598,9 @@ export default function ManageSkills() {
                       id="edit-is-tech-stack"
                       type="checkbox"
                       className="w-5 h-5 rounded border-2 border-gray-300"
-                      checked={editFormData.is_tech_stack || false}
+                      checked={editFormData.is_techstack || false}
                       onChange={(e) =>
-                        updateEditFormField("is_tech_stack", e.target.checked)
+                        updateEditFormField("is_techstack", e.target.checked)
                       }
                     />
                     <label
@@ -681,6 +690,54 @@ export default function ManageSkills() {
               Showing {filteredSkills.length} of {allSkills.length} skills
             </p>
           )}
+        </div>
+
+        {/* Filters */}
+        <div className="mb-4 p-4 bg-gray-50 rounded-lg border">
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">Filters</h3>
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="text-sm font-medium text-gray-700 block mb-1">
+                Tech Stack
+              </label>
+              <select
+                className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={filterIsTechstack}
+                onChange={(e) => setFilterIsTechstack(e.target.value)}
+              >
+                <option value="">All Skills</option>
+                <option value="true">Tech Stack Only</option>
+                <option value="false">Non-Tech Stack Only</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium text-gray-700 block mb-1">
+                Filter by Order
+              </label>
+              <input
+                type="number"
+                className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Enter order number (e.g., 1, 2, 3)"
+                value={filterOrder}
+                onChange={(e) => setFilterOrder(e.target.value)}
+                min="0"
+              />
+            </div>
+
+            <div className="flex items-end">
+              <button
+                className="w-full bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition text-sm font-medium"
+                onClick={() => {
+                  setFilterIsTechstack("");
+                  setFilterOrder("");
+                  setSearchQuery("");
+                }}
+              >
+                Reset Filters
+              </button>
+            </div>
+          </div>
         </div>
 
         {loadingSkills ? (

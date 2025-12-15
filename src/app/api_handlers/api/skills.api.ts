@@ -7,12 +7,24 @@ import { SkillsAPIRoutes } from "../api_routes.enums"
 
 
 
-export async function getAllSkills() {
+export async function getAllSkills(filters?: any) {
+    const params: IApiParams = {};
+
+    if (filters) {
+        params.query = {};
+        if (filters.is_techstack) {
+            params.query.is_techstack = filters.is_techstack;
+        }
+        if (filters.order) {
+            params.query.order = filters.order;
+        }
+    }
+
     return await apiClient(
         SkillsAPIRoutes.GET_ALL,
         ApiMethod.GET,
         undefined,
-        undefined,
+        params,
         undefined,
         true,
         false
