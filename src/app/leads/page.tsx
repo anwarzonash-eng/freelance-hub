@@ -94,8 +94,6 @@ const LeadsComponent = () => {
   const fileInputRef = useRef(null);
 
   const loadLeads = async (currentFilters: IApiParams | null) => {
-    console.log(currentFilters);
-
     setIsLoading(true);
 
     const response = await getALLLeads(currentFilters);
@@ -109,7 +107,6 @@ const LeadsComponent = () => {
   };
 
   const handleDelete = async () => {
-    console.log(selectedIds);
     setIsDeleting(true);
 
     const response = await deleteBulkLead(selectedIdsArray);
@@ -324,7 +321,7 @@ const LeadsComponent = () => {
           />
         </GenericPopup>
       )}
-      
+
       {/* --- Search Panel with NEW Upload Button --- */}
       <div className="flex space-x-3 p-3 bg-white border border-gray-200 rounded-lg shadow-sm mb-4 items-center">
         {/* Text Search Field */}

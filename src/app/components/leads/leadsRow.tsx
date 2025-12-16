@@ -137,7 +137,7 @@ export const LeadRow = ({
   const handleChange = (e) => onCheckboxChange(id, e.target.checked);
   const handleVisit = () => job_link && window.open(job_link, "_blank");
   const handleView = () => onView(lead);
-  const handleChangeStatus = () => console.log("Change Status Clicked");
+  const handleChangeStatus = () => {};
 
   // Helper: check if data is empty
   const isEmpty = (value) => {

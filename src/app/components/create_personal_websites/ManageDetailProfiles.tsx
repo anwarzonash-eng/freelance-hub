@@ -101,6 +101,7 @@ export default function ManageDetailProfiles() {
           categoryIds.add(mainService.category_id);
         }
       });
+    console.log("Filtered Category IDs:", categories);
 
     return categories.filter((cat) => categoryIds.has(cat.id));
   };
@@ -248,7 +249,7 @@ export default function ManageDetailProfiles() {
               <option value="">Select Category</option>
               {filteredCategories.map((category) => (
                 <option key={category.id} value={category.id}>
-                  {category.name}
+                  {category.title}
                 </option>
               ))}
             </select>

@@ -63,6 +63,13 @@ export default function ManageTestimonials() {
   };
 
   const handleDelete = async (id: string) => {
+    if (
+      !confirm(
+        "Are you sure you want to delete this testimonial? This action cannot be undone."
+      )
+    ) {
+      return;
+    }
     await deleteTestimonial({ path: { id } });
     fetchData();
   };
@@ -96,10 +103,20 @@ export default function ManageTestimonials() {
 
   const handleSubmit = async (e: any) => {
     e.preventDefault();
+
+    const confirmMessage = isEdit
+      ? "Are you sure you want to update this testimonial?"
+      : "Are you sure you want to create this testimonial?";
+
+    if (!confirm(confirmMessage)) {
+      return;
+    }
+
+    const payload = { ...form, portfolio_id: null };
     if (isEdit) {
-      await updateTestimonial(form, { path: { id: form.id } });
+      await updateTestimonial(payload, { path: { id: form.id } });
     } else {
-      await createTestimonial(form);
+      await createTestimonial(payload);
     }
     setShowForm(false);
     setForm(null);
@@ -138,7 +155,6 @@ export default function ManageTestimonials() {
                 client_designation: "",
                 client_company: "",
                 client_company_website: "",
-                portfolio_id: null,
                 display_order: 0,
                 video: "",
                 linked_in: "",
@@ -394,7 +410,7 @@ export default function ManageTestimonials() {
                   />
                 </div>
 
-                <div>
+                <div className="col-span-2">
                   <label className="block text-sm font-semibold mb-1">
                     Display Order *
                   </label>
@@ -404,19 +420,6 @@ export default function ManageTestimonials() {
                     value={form?.display_order || 0}
                     onChange={handleFormChange}
                     required
-                    className="w-full border px-3 py-2 rounded"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold mb-1">
-                    Portfolio ID (optional)
-                  </label>
-                  <input
-                    type="text"
-                    name="portfolio_id"
-                    value={form?.portfolio_id || ""}
-                    onChange={handleFormChange}
                     className="w-full border px-3 py-2 rounded"
                   />
                 </div>

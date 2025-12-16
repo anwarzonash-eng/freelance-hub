@@ -202,9 +202,7 @@ export default function JobMatcher() {
           // You can also clear the session storage item if you wish
           // to prevent the data from persisting across refreshes.
           // sessionStorage.removeItem("currentJob");
-        } catch (e) {
-          // console.error("Failed to parse stored job data:", e);
-        }
+        } catch (e) {}
       }
     }
   }, []);
@@ -222,7 +220,6 @@ export default function JobMatcher() {
       const matches = await queryJob(newJob);
       setResults(matches);
     } catch (err) {
-      console.error(err);
       alert("Error matching jobs. Check logs.");
     }
 

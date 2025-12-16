@@ -218,6 +218,10 @@ export default function ManageCategories() {
 
   // Create category
   const handleCreate = async () => {
+    if (!confirm("Are you sure you want to create this category?")) {
+      return;
+    }
+
     try {
       const payload = {
         ...createForm,
@@ -268,6 +272,11 @@ export default function ManageCategories() {
   // Update category
   const handleUpdate = async () => {
     if (!selectedCategory) return;
+
+    if (!confirm("Are you sure you want to update this category?")) {
+      return;
+    }
+
     try {
       const payload = {
         ...editForm,
@@ -473,12 +482,12 @@ export default function ManageCategories() {
                 >
                   Edit
                 </button>
-                <button
+                {/* <button
                   onClick={() => handleDelete(category.id)}
                   className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition"
                 >
                   Delete
-                </button>
+                </button> */}
               </div>
             </div>
           </div>

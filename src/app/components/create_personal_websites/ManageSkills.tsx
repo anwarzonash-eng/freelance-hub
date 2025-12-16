@@ -95,6 +95,10 @@ export default function ManageSkills() {
   };
 
   const handleCreateSubmit = async () => {
+    if (!confirm("Are you sure you want to create this skill?")) {
+      return;
+    }
+
     setBusy(true);
     setMessage("");
 
@@ -203,6 +207,10 @@ export default function ManageSkills() {
 
   const saveSkillUpdate = async () => {
     if (!editFormData || !editingSkillId) return;
+
+    if (!confirm("Are you sure you want to update this skill?")) {
+      return;
+    }
 
     setBusy(true);
     setMessage("");
@@ -797,12 +805,12 @@ export default function ManageSkills() {
                     >
                       Edit
                     </button>
-                    <button
+                    {/* <button
                       className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition text-sm"
                       onClick={() => deleteSkill(skill.id)}
                     >
                       Delete
-                    </button>
+                    </button> */}
                   </div>
                 </div>
               </div>

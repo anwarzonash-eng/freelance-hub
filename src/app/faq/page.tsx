@@ -45,9 +45,15 @@ export default function FAQPage() {
   };
   const loadMainProfiles = async () => {
     const res = await getALLMainProfiles();
-    console.log(res);
-    if (res) {
+    if (res && res.data && res.data.length > 0) {
       setMainProfiles(res.data);
+      // Set first profile as default
+      const firstProfileId = res.data[0].id;
+      setMainProfile(firstProfileId);
+      setForm((prev) => ({
+        ...prev,
+        main_profile_id: firstProfileId,
+      }));
     }
   };
 
@@ -57,11 +63,18 @@ export default function FAQPage() {
   }, []);
 
   const save = async () => {
+    const confirmMessage = selectedFAQ
+      ? "Are you sure you want to update this FAQ?"
+      : "Are you sure you want to create this FAQ?";
+
+    if (!confirm(confirmMessage)) {
+      return;
+    }
+
     let res = null;
     let params: IApiParams = null;
 
     if (selectedFAQ) {
-      alert(selectedFAQ);
       params = { path: { id: selectedFAQ } };
       res = await updateFAQsByID(form, params);
     } else res = await addFAQs(form);
@@ -85,6 +98,14 @@ export default function FAQPage() {
   }
 
   const remove = async (id) => {
+    if (
+      !confirm(
+        "Are you sure you want to delete this FAQ? This action cannot be undone."
+      )
+    ) {
+      return;
+    }
+
     const params = { path: { id: id } };
     const res = await deleteFAQsByID(params);
 
@@ -132,6 +153,7 @@ export default function FAQPage() {
           onChange={(e) => setMainProfile(e.target.value)}
           style={{ padding: 8, borderRadius: 6, border: "1px solid #ccc" }}
         >
+          <option value="">All Profiles</option>
           {mainProfiles.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
@@ -161,11 +183,14 @@ export default function FAQPage() {
         >
           <select
             value={form.main_profile_id}
-            onChange={(e) =>
-              setForm({ ...form, main_profile_id: e.target.value })
-            }
+            onChange={(e) => {
+              const selectedId = e.target.value;
+              setForm({ ...form, main_profile_id: selectedId });
+              setMainProfile(selectedId);
+            }}
             style={{ padding: 8, borderRadius: 6, border: "1px solid #ccc" }}
           >
+            <option value="">Select Main Profile</option>
             {mainProfiles.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}

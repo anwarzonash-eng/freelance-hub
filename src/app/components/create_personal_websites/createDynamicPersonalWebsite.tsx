@@ -187,7 +187,6 @@ export default function CreateDynamicPersonalWebsite({
   const handleOnLoad = async () => {
     setIsLoading(true);
     const res = await getALLMainProfiles();
-    console.log(res);
     if (!res) {
     }
     const data = res.data;
@@ -198,9 +197,7 @@ export default function CreateDynamicPersonalWebsite({
   useEffect(() => {
     handleOnLoad();
   }, []);
-  useEffect(() => {
-    console.log({ allCategoriesMultiSelect });
-  }, [allCategoriesMultiSelect]);
+  useEffect(() => {}, [allCategoriesMultiSelect]);
 
   useEffect(() => {
     const modifiedSelectedSkills: FormattedSkill[] = allSelectedSkills.map(
@@ -228,7 +225,6 @@ export default function CreateDynamicPersonalWebsite({
         };
       }
     );
-    console.log({ modifiedSelectedSkills });
     setFormatedSelectedSkills(modifiedSelectedSkills);
   }, [allSKillGroups, allSelectedSkills]);
 
@@ -300,20 +296,12 @@ export default function CreateDynamicPersonalWebsite({
         response.data.selectedSkills
       );
       setMatchedCategories(matchedSkills);
-      console.log(matchedSkills);
       // // selectedCategories is not used in the provided template
       // setAllSkillsForSearch(response.data.allSkills);
-      //
-
-      console.log({
-        allSkills,
-        allCategories,
-      });
 
       setIsError(false);
       setErrorMessage("");
     } catch (error: any) {
-      console.error(error);
       setIsError(true);
       setErrorMessage(error.message || "Failed to fetch skills.");
     }
@@ -439,7 +427,7 @@ export default function CreateDynamicPersonalWebsite({
   // useEffect(() => {
   //   const matchedSkills = transformCategories(allCategories, allSelectedSkills);
   //   setMatchedCategories(matchedSkills);
-  //   console.log(matchedSkills);
+
   // }, [allSelectedSkills]);
 
   const createProfile = async () => {
@@ -557,8 +545,6 @@ export default function CreateDynamicPersonalWebsite({
       main_profile_id: selectedMainProfile,
     };
 
-    console.log({ data });
-
     try {
       const options: RequestInit = {
         method: "POST",
@@ -574,7 +560,7 @@ export default function CreateDynamicPersonalWebsite({
 
       if (response.ok) {
         const data = await response.json();
-        console.log({ matchedProfiles: data });
+
         setMatchedProfiles(data.data);
       }
     } catch (error: any) {}

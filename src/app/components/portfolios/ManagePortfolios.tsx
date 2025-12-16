@@ -114,6 +114,13 @@ export default function ManagePortfolios() {
   };
 
   const handleDelete = async (id: string) => {
+    if (
+      !confirm(
+        "Are you sure you want to delete this portfolio? This action cannot be undone."
+      )
+    ) {
+      return;
+    }
     await deletePortfolio({ path: { id } });
     fetchData();
   };
@@ -161,9 +168,7 @@ export default function ManagePortfolios() {
           setForm((prev: any) => ({ ...prev, [field]: res.url }));
         }
       }
-    } catch (error) {
-      console.error("File upload error:", error);
-    }
+    } catch (error) {}
   };
 
   const handleQuillChange = (field: string, value: string) => {
@@ -208,6 +213,15 @@ export default function ManagePortfolios() {
 
   const handleSubmit = async (e: any) => {
     e.preventDefault();
+
+    const confirmMessage = isEdit
+      ? "Are you sure you want to update this portfolio?"
+      : "Are you sure you want to create this portfolio?";
+
+    if (!confirm(confirmMessage)) {
+      return;
+    }
+
     if (isEdit) {
       await updatePortfolio(
         {

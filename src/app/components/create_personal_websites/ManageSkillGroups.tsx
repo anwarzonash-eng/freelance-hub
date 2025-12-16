@@ -119,6 +119,10 @@ export default function ManageSkillGroups() {
   }, [allGroups, selectedMainProfileFilter, searchQuery]);
 
   const handleCreate = async () => {
+    if (!confirm("Are you sure you want to create this skill group?")) {
+      return;
+    }
+
     setBusy(true);
     setMessage("");
     try {
@@ -137,6 +141,11 @@ export default function ManageSkillGroups() {
 
   const handleUpdate = async () => {
     if (!selectedGroup?.id) return;
+
+    if (!confirm("Are you sure you want to update this skill group?")) {
+      return;
+    }
+
     setBusy(true);
     setMessage("");
     try {
@@ -272,12 +281,12 @@ export default function ManageSkillGroups() {
                 >
                   Edit
                 </button>
-                <button
+                {/* <button
                   className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg"
                   onClick={() => handleDelete(g.id)}
                 >
                   Delete
-                </button>
+                </button> */}
               </div>
             </div>
           </div>

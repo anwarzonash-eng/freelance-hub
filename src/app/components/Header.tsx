@@ -147,11 +147,11 @@ const navItems: NavItem[] = [
         href: "/manage-testimonials",
         icon: "Contact",
       },
-        {
-          title: "FAQ",
-          href: "/faq",
-          icon: "FileText",
-        },
+      {
+        title: "FAQ",
+        href: "/faq",
+        icon: "FileText",
+      },
       {
         title: "Skill Groups",
         href: "/manage-skill-groups",
