@@ -17,7 +17,7 @@ interface Skill {
 
 interface Category {
   id: string;
-  name: string;
+  title: string;
 }
 
 interface MainProfile {
@@ -329,7 +329,7 @@ export default function ManageDetailProfiles() {
                       {/* Category Title */}
                       <div className="shrink-0">
                         <span className="inline-block px-2 py-1 bg-blue-50 text-blue-700 text-xs font-semibold rounded whitespace-nowrap border border-blue-200">
-                          {mainCategory?.name || "—"}
+                          {mainCategory?.title || "—"}
                         </span>
                       </div>
                     </button>
