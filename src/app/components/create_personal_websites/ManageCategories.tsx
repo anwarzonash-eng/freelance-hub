@@ -193,10 +193,12 @@ export default function ManageCategories() {
       return false;
     }
 
+    const searchLower = searchQuery.toLowerCase();
     const matchesSearch =
-      cat.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      cat.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      cat.designation.toLowerCase().includes(searchQuery.toLowerCase());
+      cat.id.toLowerCase().includes(searchLower) ||
+      cat.title.toLowerCase().includes(searchLower) ||
+      cat.label.toLowerCase().includes(searchLower) ||
+      cat.designation.toLowerCase().includes(searchLower);
 
     const matchesProfile = cat.main_profile_id === selectedMainProfileFilter;
 
@@ -426,7 +428,7 @@ export default function ManageCategories() {
           <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
           <input
             type="text"
-            placeholder="Search by title, label, or designation..."
+            placeholder="Search by ID, title, label, or designation..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -466,9 +468,18 @@ export default function ManageCategories() {
                 />
               </button>
               <div className="flex-1">
-                <h3 className="text-xl font-semibold text-gray-900">
-                  {category.title}
-                </h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-xl font-semibold text-gray-900">
+                    {category.title}
+                  </h3>
+                  <button
+                    title="Copy ID"
+                    className="ml-1 px-2 py-1 rounded bg-gray-200 hover:bg-blue-200 text-xs font-semibold transition border border-gray-300"
+                    onClick={() => navigator.clipboard.writeText(category.id)}
+                  >
+                    ID
+                  </button>
+                </div>
                 <p className="text-sm text-gray-600">{category.designation}</p>
                 <p className="text-sm text-gray-500 mt-1">{category.tagline}</p>
                 <p className="text-xs text-gray-400 mt-2">

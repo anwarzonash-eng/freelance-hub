@@ -138,9 +138,29 @@ const navItems: NavItem[] = [
         icon: "CreateProfile",
       },
       {
+        title: "Main Profiles",
+        href: "/main-profiles",
+        icon: "Users",
+      },
+      {
         title: "Portfolios",
         href: "/manage-portfolios",
         icon: "Briefcase",
+      },
+      {
+        title: "Educations",
+        href: "/manage-educations",
+        icon: "FileText",
+      },
+      {
+        title: "Experiences",
+        href: "/experiences",
+        icon: "Briefcase",
+      },
+      {
+        title: "Media Upload",
+        href: "/media-upload",
+        icon: "Aperture",
       },
       {
         title: "Testimonials",

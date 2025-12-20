@@ -111,10 +111,11 @@ export default function ManageSkillGroups() {
       if (!selectedMainProfileFilter) return false; // empty by default
       const matchesProfile = g.main_profile_id === selectedMainProfileFilter;
       const q = searchQuery.toLowerCase();
+      const idMatch = g.id?.toLowerCase().includes(q);
       const labelMatch = g.label?.toLowerCase().includes(q);
       const descText = (g.description || "").toLowerCase();
       const descMatch = descText.includes(q);
-      return matchesProfile && (labelMatch || descMatch);
+      return matchesProfile && (idMatch || labelMatch || descMatch);
     });
   }, [allGroups, selectedMainProfileFilter, searchQuery]);
 
@@ -215,7 +216,7 @@ export default function ManageSkillGroups() {
         <div className="flex-1">
           <input
             type="text"
-            placeholder="Search by label or description..."
+            placeholder="Search by ID, label or description..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-3 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -241,9 +242,18 @@ export default function ManageSkillGroups() {
           <div key={g.id} className="border rounded-lg p-4 bg-white shadow-sm">
             <div className="flex justify-between items-start">
               <div>
-                <h3 className="text-lg font-semibold text-gray-900">
-                  {g.label}
-                </h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    {g.label}
+                  </h3>
+                  <button
+                    title="Copy ID"
+                    className="ml-1 px-2 py-1 rounded bg-gray-200 hover:bg-blue-200 text-xs font-semibold transition border border-gray-300"
+                    onClick={() => navigator.clipboard.writeText(g.id)}
+                  >
+                    ID
+                  </button>
+                </div>
                 <div
                   className="text-sm text-gray-600"
                   dangerouslySetInnerHTML={{ __html: g.description || "" }}

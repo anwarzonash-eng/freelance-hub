@@ -43,6 +43,7 @@ export enum DetailProfilesAPIRoutes {
     GENERATE_PDF = 'detail-profiles/generatePRT',
 }
 
+
 export enum CategoriesAPIRoutes {
     ADD = 'categories',
     ADD_BULK = 'categories/bulk',

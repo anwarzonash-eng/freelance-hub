@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect } from "react";
+import { Copy } from "lucide-react";
 import {
   getAllSkills,
   addSkill,
@@ -29,6 +30,7 @@ interface SkillData {
 }
 
 export default function ManageSkills() {
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const imageViewer = useImageViewer();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -83,11 +85,12 @@ export default function ManageSkills() {
 
   const filteredSkills = allSkills.filter((skill) => {
     const searchLower = searchQuery.toLowerCase();
+    const idMatch = skill.id?.toLowerCase().includes(searchLower);
     const titleMatch = skill.title?.toLowerCase().includes(searchLower);
     const variationMatch = skill.variation?.some((v: string) =>
       v.toLowerCase().includes(searchLower)
     );
-    return titleMatch || variationMatch;
+    return idMatch || titleMatch || variationMatch;
   });
 
   const updateCreateFormField = (field: keyof SkillData, value: any) => {
@@ -776,7 +779,25 @@ export default function ManageSkills() {
                       </button>
                     )}
                     <div>
-                      <h3 className="font-semibold">{skill.title}</h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold">{skill.title}</h3>
+                        <button
+                          title="Copy Skill ID"
+                          className="p-1 hover:bg-gray-200 rounded"
+                          onClick={() => {
+                            navigator.clipboard.writeText(skill.id);
+                            setCopiedId(skill.id);
+                            setTimeout(() => setCopiedId(null), 1500);
+                          }}
+                        >
+                          <Copy className="w-4 h-4 text-gray-400 hover:text-gray-700" />
+                        </button>
+                        {copiedId === skill.id && (
+                          <span className="text-xs text-green-600 font-semibold">
+                            ✓
+                          </span>
+                        )}
+                      </div>
                       <p className="text-sm text-gray-600">
                         {skill.variation?.join(", ")}
                       </p>

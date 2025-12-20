@@ -369,14 +369,25 @@ export default function ManagePortfolios() {
               {/* Content */}
               <div className="flex-1 p-4 flex flex-col justify-between">
                 <div>
-                  <h3 className="font-bold text-lg text-gray-800 mb-1">
-                    {p.title}
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="font-bold text-lg text-gray-800">
+                      {p.title}
+                    </h3>
+                    <button
+                      title="Copy ID"
+                      className="ml-1 px-2 py-1 rounded bg-gray-200 hover:bg-blue-200 text-xs font-semibold transition border border-gray-300"
+                      onClick={() => {
+                        navigator.clipboard.writeText(p.id);
+                      }}
+                    >
+                      ID
+                    </button>
                     {p.is_active === false && (
                       <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">
                         Inactive
                       </span>
                     )}
-                  </h3>
+                  </div>
                   {p.private_title && (
                     <p className="text-sm text-gray-500 mb-2">
                       <span className="font-semibold">Private:</span>{" "}

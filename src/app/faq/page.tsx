@@ -27,14 +27,22 @@ export default function FAQPage() {
     is_upwork_allowed: false,
   });
 
+  const [faqSearch, setFaqSearch] = useState("");
   useEffect(() => {
+    let filtered = list;
     if (list) {
-      const tmpfilteredList = list.filter((i) => {
-        return mainProfile === String(i.main_profile_id);
+      filtered = list.filter((i) => {
+        const matchesProfile = mainProfile === String(i.main_profile_id);
+        const searchLower = faqSearch.toLowerCase();
+        const matchesSearch =
+          i.id?.toLowerCase().includes(searchLower) ||
+          i.question?.toLowerCase().includes(searchLower) ||
+          i.answer?.toLowerCase().includes(searchLower);
+        return matchesProfile && (!faqSearch || matchesSearch);
       });
-      setFilteredList(tmpfilteredList);
-    } else setFilteredList(list);
-  }, [list, mainProfile]);
+    }
+    setFilteredList(filtered);
+  }, [list, mainProfile, faqSearch]);
 
   const loadFaqs = async () => {
     const res = await getALLFAQs();
@@ -268,9 +276,20 @@ export default function FAQPage() {
       </div>
 
       <h3 style={{ marginBottom: 10 }}>FAQ List</h3>
-
+      <input
+        type="text"
+        placeholder="Search by ID, question, or answer"
+        value={faqSearch}
+        onChange={(e) => setFaqSearch(e.target.value)}
+        style={{
+          marginBottom: 16,
+          padding: 8,
+          borderRadius: 6,
+          border: "1px solid #ccc",
+          width: 350,
+        }}
+      />
       {filteredList?.length === 0 && <p>No FAQs found.</p>}
-
       <ul style={{ padding: 0, listStyle: "none" }}>
         {filteredList?.map((i) => (
           <li
@@ -293,8 +312,22 @@ export default function FAQPage() {
               <div style={{ fontSize: 13, color: "#666" }}>
                 Upwork: {i.is_upwork_allowed ? "Yes" : "No"}
               </div>
+              <button
+                title="Copy ID"
+                style={{
+                  marginTop: 8,
+                  padding: "2px 8px",
+                  borderRadius: 4,
+                  background: "#eee",
+                  border: "1px solid #ccc",
+                  fontSize: 12,
+                  cursor: "pointer",
+                }}
+                onClick={() => navigator.clipboard.writeText(i.id)}
+              >
+                Copy ID
+              </button>
             </div>
-
             <div style={{ display: "flex", gap: 10 }}>
               <button
                 onClick={() => update(i)}
@@ -308,7 +341,6 @@ export default function FAQPage() {
               >
                 Edit
               </button>
-
               <button
                 onClick={() => remove(i.id)}
                 style={{
