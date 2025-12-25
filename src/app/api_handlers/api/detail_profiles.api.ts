@@ -1,4 +1,5 @@
-'use client'
+
+
 
 import { IApiParams } from "../api.interface"
 import { apiClient } from "../api_client"
@@ -23,4 +24,18 @@ export async function updateDetailProfile(payload: any, params: IApiParams) {
 
 export async function generatePDF(payload: any) {
     return await apiClient(DetailProfilesAPIRoutes.GENERATE_PDF, ApiMethod.POST, payload, undefined, undefined, true, true, process.env.NEXT_PUBLIC_API_PATH_SERVER_2)
+}
+
+export async function resetAllDetailProfilesPDFURLs(payload) {
+    // type: 'all' for all profiles
+    return await apiClient(
+        DetailProfilesAPIRoutes.RESET_PDF_URL,
+        ApiMethod.POST,
+        payload,
+        undefined,
+        undefined,
+        true,
+        true,
+        process.env.NEXT_PUBLIC_API_PATH
+    );
 }

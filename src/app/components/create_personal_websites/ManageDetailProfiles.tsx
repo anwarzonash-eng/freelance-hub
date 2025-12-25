@@ -1,7 +1,10 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { getAllDetailProfiles } from "@/app/api_handlers/api/detail_profiles.api";
+import {
+  getAllDetailProfiles,
+  resetAllDetailProfilesPDFURLs,
+} from "@/app/api_handlers/api/detail_profiles.api";
 import { getALLMainProfiles } from "@/app/api_handlers/api/main_profiles.api";
 import { getAllCategories } from "@/app/api_handlers/api/categories.api";
 import { getAllSkills } from "@/app/api_handlers/api/skills.api";
@@ -195,6 +198,26 @@ export default function ManageDetailProfiles() {
                 title="Refresh data"
               >
                 🔄 Refresh
+              </button>
+              <button
+                onClick={async () => {
+                  if (
+                    window.confirm(
+                      "Are you sure you want to reset PDF URLs for all detail profiles?"
+                    )
+                  ) {
+                    try {
+                      await resetAllDetailProfilesPDFURLs({ type: "all" });
+                      window.location.reload();
+                    } catch (err) {
+                      alert("Failed to reset PDF URLs.");
+                    }
+                  }
+                }}
+                className="px-4 py-2 bg-red-600 text-white font-semibold rounded-lg shadow hover:bg-red-700 transition"
+                title="Reset PDF URLs for all profiles"
+              >
+                🧹 Reset All PDFs
               </button>
               <button
                 onClick={() => setOpenCreatePopup(true)}

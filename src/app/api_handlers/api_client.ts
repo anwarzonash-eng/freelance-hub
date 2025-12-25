@@ -60,8 +60,6 @@ export const apiClient = async <T = any, P = any>(
 ): Promise<IApiResponse> => {
 
 
-    console.log(apiBaseURL)
-    // Use the new buildUrl function
     const url = buildUrl(apiBaseURL, route, params);
 
     const isFormData = payload instanceof FormData;
