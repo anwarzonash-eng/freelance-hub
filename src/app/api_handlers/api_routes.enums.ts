@@ -81,6 +81,7 @@ export enum SkillsAPIRoutes {
     UPDATE = 'skills/:id',
     DELETE = 'skills/:id',
     HARD_DELETE = 'skills/:id/hard',
+    FIND_BY_DESCRIPTION = 'skills/find',
 }
 
 export enum PortfoliosAPIRoutes {

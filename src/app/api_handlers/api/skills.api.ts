@@ -1,3 +1,5 @@
+// Find skills by description (AI skill finder)
+
 'use client'
 
 import { IApiParams } from "../api.interface"
@@ -105,4 +107,16 @@ export async function hardDeleteSkillByID(params: IApiParams) {
         true
 
     )
+}
+
+export async function findSkills(payload: { description: string; main_profile_id: string }) {
+    return await apiClient(
+        SkillsAPIRoutes.FIND_BY_DESCRIPTION,
+        ApiMethod.POST,
+        payload,
+        undefined,
+        undefined,
+        true,
+        false
+    );
 }

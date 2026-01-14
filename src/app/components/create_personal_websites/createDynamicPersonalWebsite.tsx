@@ -4,6 +4,9 @@ import React, { useState, useEffect, use } from "react";
 import { addSubmittedUPworkJobs } from "../../api_handlers/api/upwork.api";
 import { Elsie_Swash_Caps } from "next/font/google";
 import { getALLMainProfiles } from "../../api_handlers/api/main_profiles.api";
+import { getAllSkills, findSkills } from "../../api_handlers/api/skills.api";
+import { getAllSkillGroups } from "../../api_handlers/api/skill_groups.api";
+import { getAllCategories } from "../../api_handlers/api/categories.api";
 import ExpandCollapse from "../ui/ExpandCollapse";
 import ChecklistSelector from "../ui/ChecklistSelector";
 import Loading from "../ui/Loading";
@@ -114,6 +117,7 @@ export default function CreateDynamicPersonalWebsite({
   const [uniqueID, setUniqueID] = useState("");
   const [matchedProfiles, setMatchedProfiles] = useState([]);
   const [allSKillGroups, setAllSKillGroups] = useState([]);
+  const [allCategoriesRaw, setAllCategoriesRaw] = useState([]); // store all categories from API
   const [profileLinkCv, setProfileLinkCv] = useState<string>("");
   const [profileLinkCoverletter, setProfileLinkCoverletter] =
     useState<string>("");
@@ -125,7 +129,7 @@ export default function CreateDynamicPersonalWebsite({
   const [allSelectedSkills, setAllSelectedSkills] = useState([]);
   const [allSkills, setAllSkills] = useState([]);
   const [allSkillsForSearch, setAllSkillsForSearch] = useState<Skill[]>([]);
-  const [allCategories, setAllCategories] = useState<Category[]>([]);
+  const [allCategories, setAllCategories] = useState<Category[]>([]); // filtered by main_profile_id
   const [allCategoriesMultiSelect, setAllCategoriesMultiSelect] = useState([]);
 
   const [selectedCategories, setSelectedCategories] = useState("");
@@ -184,19 +188,56 @@ export default function CreateDynamicPersonalWebsite({
     setJobDescription("");
   };
 
+  // Load all data on mount
   const handleOnLoad = async () => {
     setIsLoading(true);
-    const res = await getALLMainProfiles();
-    if (!res) {
+    try {
+      const [skillsRes, skillGroupsRes, categoriesRes, mainProfilesRes] =
+        await Promise.all([
+          getAllSkills(),
+          getAllSkillGroups(),
+          getAllCategories(),
+          getALLMainProfiles(),
+        ]);
+      setAllSkills(skillsRes.data);
+      setAllSKillGroups(skillGroupsRes.data);
+      setAllCategoriesRaw(categoriesRes.data);
+      setMainProfiles(mainProfilesRes.data);
+      // Filter categories for default main profile
+      if (selectedMainProfile) {
+        const filtered = categoriesRes.data.filter(
+          (cat) => cat.main_profile_id === selectedMainProfile
+        );
+        setAllCategories(filtered);
+        setAllCategoriesMultiSelect(filtered);
+      } else {
+        setAllCategories([]);
+        setAllCategoriesMultiSelect([]);
+      }
+    } catch (e) {
+      // handle error if needed
     }
-    const data = res.data;
-    setMainProfiles(data);
     setIsLoading(false);
   };
 
   useEffect(() => {
     handleOnLoad();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Filter categories when main profile changes
+  useEffect(() => {
+    if (allCategoriesRaw && selectedMainProfile) {
+      const filtered = allCategoriesRaw.filter(
+        (cat) => cat.main_profile_id === selectedMainProfile
+      );
+      setAllCategories(filtered);
+      setAllCategoriesMultiSelect(filtered);
+    } else {
+      setAllCategories([]);
+      setAllCategoriesMultiSelect([]);
+    }
+  }, [selectedMainProfile, allCategoriesRaw]);
   useEffect(() => {}, [allCategoriesMultiSelect]);
 
   useEffect(() => {
@@ -263,42 +304,25 @@ export default function CreateDynamicPersonalWebsite({
       .filter((category) => category.matchedSkills.length > 0);
   };
 
+  // Only set selected and matched skills from findSkills API
   const fetchSkills = async () => {
-    // if (!description || description === "") {
-    //   alert("provide some description!");
-    //   return;
-    // }
     setIsLoading(true);
     try {
       if (!selectedMainProfile || selectedMainProfile == "All") {
         alert("first select main profile.");
+        setIsLoading(false);
         return;
       }
       const data = {
         description: jobDescription,
-        main_profile_id: selectedMainProfile,
       };
-      const response = await fetcher(
-        `${environment.apiDomain}skillFinder/find`,
-        data
-      );
-
-      setAllSkills(response.data.allSkills);
-
-      setAllCategories(response.data.allCategories);
-      setAllCategoriesMultiSelect(response.data.allCategories);
-
-      setMainProfiles(response.data.mainProfiles);
-      setAllSKillGroups(response.data.allSkillGoups);
+      const response = await findSkills(data);
       setAllSelectedSkills(response.data.selectedSkills);
       const matchedSkills = await transformCategories(
-        response.data.allCategories,
+        allCategories,
         response.data.selectedSkills
       );
       setMatchedCategories(matchedSkills);
-      // // selectedCategories is not used in the provided template
-      // setAllSkillsForSearch(response.data.allSkills);
-
       setIsError(false);
       setErrorMessage("");
     } catch (error: any) {
@@ -706,10 +730,10 @@ export default function CreateDynamicPersonalWebsite({
           <DropdownTableSearch
             data={allCategories}
             valueKey="id"
-            displayKeys={["name"]} // Columns to show in the dropdown
+            displayKeys={["title"]} // Columns to show in the dropdown
             imageKeys={[]} // No images in this case
             isMultiSelect={false}
-            mainDisplayKey="name" // Text to show in the button after selection
+            mainDisplayKey="title" // Text to show in the button after selection
             initialSelectValue={mainCategoryId}
             setInitialSelectValue={changeMaincategory}
           />
@@ -1219,7 +1243,7 @@ export default function CreateDynamicPersonalWebsite({
               <ChecklistSelector
                 items={allCategoriesMultiSelect}
                 setItems={setAllCategoriesMultiSelect}
-                displayKey={"name"}
+                displayKey={"title"}
                 valueKey={"id"}
               />
             </ExpandCollapse>

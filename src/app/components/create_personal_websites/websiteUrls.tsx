@@ -24,7 +24,7 @@ export default function WebsiteURLs({ data, setData, websitePurpose }) {
   const handleResetPDF = async () => {
     setLoading(true);
     try {
-      const payload = {
+      const payload: any = {
         id: data.id,
         unique_id: data.uniqe_id,
         type: "single",

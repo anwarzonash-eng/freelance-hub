@@ -10,14 +10,14 @@ export async function getALLFAQs() {
 }
 
 export async function addFAQs(payload: any) {
-    return await apiClient(FAQAPIRoutes.ADD, ApiMethod.POST, payload, undefined, undefined, true, false)
+    return await apiClient(FAQAPIRoutes.ADD, ApiMethod.POST, payload, undefined, undefined, true, true)
 }
 
 export async function updateFAQsByID(payload: any, params: IApiParams) {
 
-    return await apiClient(FAQAPIRoutes.UPDATE, ApiMethod.PUT, payload, params, undefined, true, false)
+    return await apiClient(FAQAPIRoutes.UPDATE, ApiMethod.PUT, payload, params, undefined, true, true)
 }
 
 export async function deleteFAQsByID(params: IApiParams) {
-    return await apiClient(FAQAPIRoutes.DELETE, ApiMethod.DELETE, undefined, params, undefined, true, false)
+    return await apiClient(FAQAPIRoutes.DELETE, ApiMethod.DELETE, undefined, params, undefined, true, true)
 }
