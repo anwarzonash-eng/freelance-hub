@@ -30,11 +30,12 @@ export default function FilterForLatestUpworkJobs({ setFilterObject }) {
   const [reviews, setReviews] = useState(null);
   const [spent, setSpent] = useState(null);
   const [pastSkills, setPastSkills] = useState(null);
-  const [rate, setRate] = useState(null);
+  const [hourlyRate, setHourlyRate] = useState(null);
+  const [fixedAmount, setFixedAmount] = useState(null);
+  const [jobType, setJobType] = useState("all");
   const [visible, setVisible] = useState(true);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const [budgetType, setBudgetType] = useState("all");
 
   useEffect(() => {
     const saved = localStorage.getItem("upworkFilters");
@@ -46,8 +47,9 @@ export default function FilterForLatestUpworkJobs({ setFilterObject }) {
       setReviews(data.reviews || null);
       setSpent(data.spent || null);
       setPastSkills(data.pastSkills || null);
-      setRate(data.rate || null);
-      setBudgetType(data.budgetType);
+      setHourlyRate(data.hourlyRate || null);
+      setFixedAmount(data.fixedAmount || null);
+      setJobType(data.jobType || "all");
     }
   }, []);
 
@@ -58,7 +60,9 @@ export default function FilterForLatestUpworkJobs({ setFilterObject }) {
     setReviews(null);
     setSpent(null);
     setPastSkills(null);
-    setRate(null);
+    setHourlyRate(null);
+    setFixedAmount(null);
+    setJobType("all");
     handleFilter();
   }
   useEffect(() => {
@@ -83,8 +87,9 @@ export default function FilterForLatestUpworkJobs({ setFilterObject }) {
     reviews,
     spent,
     pastSkills,
-    rate,
-    budgetType,
+    hourlyRate,
+    fixedAmount,
+    jobType,
   ]);
 
   const handleFilter = () => {
@@ -95,8 +100,9 @@ export default function FilterForLatestUpworkJobs({ setFilterObject }) {
       reviews,
       spent,
       pastSkills,
-      rate,
-      budgetType,
+      hourlyRate,
+      fixedAmount,
+      jobType,
     };
     localStorage.setItem("upworkFilters", JSON.stringify(filterObj));
     setFilterObject(filterObj);
@@ -128,10 +134,7 @@ export default function FilterForLatestUpworkJobs({ setFilterObject }) {
       />
     </div>
   );
-  const handleChangeBudget = (event) => {
-    // The value of the selected option is available at event.target.value
-    setBudgetType(event.target.value);
-  };
+  // Removed Budget Type selector in favor of separate hourly/fixed inputs
 
   return (
     <div className="p-4 bg-white shadow rounded max-w-full mx-auto">
@@ -239,25 +242,29 @@ export default function FilterForLatestUpworkJobs({ setFilterObject }) {
             "number"
           )}
           {renderInput(
-            "Rate",
-            rate,
-            (e) => setRate(e.target.value ? parseFloat(e.target.value) : null),
+            "Hourly Rate",
+            hourlyRate,
+            (e) =>
+              setHourlyRate(e.target.value ? parseFloat(e.target.value) : null),
+            "number"
+          )}
+          {renderInput(
+            "Fixed Amount",
+            fixedAmount,
+            (e) =>
+              setFixedAmount(e.target.value ? parseFloat(e.target.value) : null),
             "number"
           )}
 
           <div className="flex flex-col min-w-[180px] mr-4 mb-4">
-            <label className="mb-1">Budget Type</label>
+            <label className="mb-1">Job Type</label>
             <select
-              name="paymentType"
-              value={budgetType} // Control the current selection with state
-              onChange={handleChangeBudget} // Update state when selection changes
+              value={jobType}
+              onChange={(e) => setJobType(e.target.value)}
               className="block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             >
-              {/* The first option's value should match the default state value */}
               <option value="all">All</option>
-
               <option value="fixed">Fixed</option>
-
               <option value="hourly">Hourly</option>
             </select>
           </div>

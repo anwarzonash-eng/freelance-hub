@@ -85,28 +85,47 @@ const JobCard = () => {
         else return false;
       });
     }
-    if (filterObject?.budgetType != "all") {
+
+    // Apply job type filter (All, Fixed, or Hourly)
+    if (filterObject?.jobType && filterObject.jobType !== "all") {
       tmpFIlteredJobs = tmpFIlteredJobs.filter((job) => {
-        if (filterObject?.budgetType === "fixed") {
-          if (!job.hourlyBudgetType) return true;
-        } else if (filterObject?.budgetType === "hourly") {
-          if (job.hourlyBudgetType) return true;
-        } else return false;
+        const isHourly = !!job.hourlyBudgetType;
+        if (filterObject.jobType === "hourly") {
+          return isHourly;
+        } else if (filterObject.jobType === "fixed") {
+          return !isHourly;
+        }
+        return true;
       });
     }
 
-    if (filterObject?.rate > 0 && filterObject?.budgetType === "hourly") {
+    // Apply hourly rate and fixed amount filters independently
+    if ((filterObject?.hourlyRate ?? 0) > 0 || (filterObject?.fixedAmount ?? 0) > 0) {
+      const hourlyThreshold = Number(filterObject?.hourlyRate ?? 0);
+      const fixedThreshold = Number(filterObject?.fixedAmount ?? 0);
+
       tmpFIlteredJobs = tmpFIlteredJobs.filter((job) => {
-        if (filterObject?.budgetType === "hourly") {
-          if (job.hourlyBudgetType && !job.hourlyBudgetMin) return true;
-          else if (
-            job.hourlyBudgetType &&
-            job.hourlyBudgetMin &&
-            job.hourlyBudgetMin.rawValue >= filterObject?.rate
-          )
-            return true;
-        } else if (filterObject?.budgetType === "fixed") return true;
-        else return false;
+        const isHourly = !!job.hourlyBudgetType;
+
+        if (isHourly) {
+          // If hourly filter provided, apply; else keep
+          if (hourlyThreshold > 0) {
+            const minRaw = Number(job.hourlyBudgetMin?.rawValue ?? job.hourlyBudgetMin?.displayValue ?? 0);
+            // If min is missing, keep as earlier behavior
+            if (!job.hourlyBudgetMin) return true;
+            return minRaw >= hourlyThreshold;
+          }
+          return true;
+        } else {
+          // Fixed jobs
+          if (fixedThreshold > 0) {
+            const amountRaw = Number(job.amount?.rawValue ?? job.amount?.displayValue ?? 0);
+            // If amount missing, exclude from fixed filter
+            if (!job.amount?.displayValue && job.amount?.rawValue === undefined) return false;
+            return amountRaw >= fixedThreshold;
+          }
+          return true;
+        }
       });
     }
 
