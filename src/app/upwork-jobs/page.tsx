@@ -8,8 +8,10 @@ import {
   getALLUPworkJobs,
   getSubmittedUPworkJobs,
 } from "../api_handlers/api/upwork.api";
+import { matchJob } from "../api_handlers/api/detail_profiles.api";
 import { useSearchParams } from "next/navigation";
 import FilterForLatestUpworkJobs from "../components/upwork-jobs/FilterForLatestUpworkJobs";
+import MatchResults from "../components/upwork-jobs/MatchResults";
 import { useInterval } from "react-use";
 
 const JobCard = () => {
@@ -30,6 +32,10 @@ const JobCard = () => {
 
   // NEW STATE: Tracks which job descriptions are expanded
   const [expandedJobs, setExpandedJobs] = useState({});
+
+  // NEW STATE: Tracks match results for each job
+  const [matchResults, setMatchResults] = useState({});
+  const [matchLoadingState, setMatchLoadingState] = useState({});
 
   // Ref to the audio element for playing the sound
   const audioRef = useRef(null);
@@ -332,6 +338,44 @@ const JobCard = () => {
       [jobId]: !prev[jobId],
     }));
   };
+
+  // NEW HANDLER: Handle job matching
+  const handleMatchJob = async (jobData) => {
+    const jobId = jobData.id;
+
+    // If match results already exist, toggle them
+    if (matchResults[jobId]) {
+      setMatchResults((prev) => ({
+        ...prev,
+        [jobId]: prev[jobId] ? null : matchResults[jobId],
+      }));
+      return;
+    }
+
+    // Otherwise, fetch match results
+    try {
+      setMatchLoadingState((prev) => ({ ...prev, [jobId]: true }));
+
+      const payload = {
+        title: jobData.title,
+        description: jobData.description,
+        skills: jobData.skills || [],
+      };
+
+      const response = await matchJob(payload);
+
+      setMatchResults((prev) => ({
+        ...prev,
+        [jobId]: response,
+      }));
+    } catch (err) {
+      console.error("Error matching job:", err);
+      alert("Failed to match job. Please try again.");
+    } finally {
+      setMatchLoadingState((prev) => ({ ...prev, [jobId]: false }));
+    }
+  };
+
   const handleOpenBestMatch = (jobData) => {
     if (typeof window !== "undefined") {
       sessionStorage.setItem("currentJob", JSON.stringify(jobData));
@@ -505,6 +549,13 @@ const JobCard = () => {
                 >
                   Match
                 </button>
+                <button
+                  onClick={() => handleMatchJob(jobData)}
+                  disabled={matchLoadingState[job.id]}
+                  className="px-3 py-1 bg-blue-600 text-white font-semibold text-sm rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {matchLoadingState[job.id] ? "Analyzing..." : "Analyze"}
+                </button>
                 {type == "all" ? (
                   <button
                     onClick={() => handleMarkSubmitted(job)}
@@ -666,17 +717,43 @@ const JobCard = () => {
             {/* Skills Tags */}
             {job.skills && (
               <div className="flex flex-wrap gap-2 mt-4">
-                {job.skills.map((skill) => (
-                  <span
-                    key={skill.name}
-                    className={`bg-gray-200 text-gray-800 text-xs px-3 py-1 rounded-full ${
-                      isSkillMatch(skill.prettyName) ? "bg-yellow-300" : ""
-                    }`}
-                  >
-                    {skill.prettyName}
-                  </span>
-                ))}
+                {job.skills.map((skill) => {
+                  // Get matched skills from match results
+                  const matchedSkillsFromAnalysis = matchResults[job.id]?.data?.identity_check?.matched_skills || [];
+                  const skillFrequency = matchResults[job.id]?.data?.authority_validation?.skill_frequency_in_history || {};
+                  
+                  const isAlreadyMatched = isSkillMatch(skill.prettyName);
+                  const isInFrequency = skillFrequency[skill.prettyName] !== undefined;
+                  const frequency = skillFrequency[skill.prettyName] || 0;
+                  
+                  // Determine color: yellow if already matched, green if in frequency but not matched, gray otherwise
+                  let bgColor = "bg-gray-200";
+                  if (isAlreadyMatched) {
+                    bgColor = "bg-yellow-300";
+                  } else if (isInFrequency) {
+                    bgColor = "bg-green-200";
+                  }
+                  
+                  return (
+                    <span
+                      key={skill.name}
+                      className={`${bgColor} text-gray-800 text-xs px-3 py-1 rounded-full relative`}
+                    >
+                      {skill.prettyName}
+                      {isInFrequency && (
+                        <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                          {frequency}
+                        </span>
+                      )}
+                    </span>
+                  );
+                })}
               </div>
+            )}
+
+            {/* Match Results */}
+            {matchResults[job.id] && (
+              <MatchResults matchData={matchResults[job.id]} jobTitle={job.title} />
             )}
           </div>
         );

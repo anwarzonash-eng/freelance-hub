@@ -43,3 +43,7 @@ export async function resetAllDetailProfilesPDFURLs(payload) {
 export async function generateProfile(payload: any) {
     return await apiClient(DetailProfilesAPIRoutes.GENERATE_PROFILE, ApiMethod.POST, payload, undefined, undefined, true, true)
 }
+
+export async function matchJob(payload: any) {
+    return await apiClient(DetailProfilesAPIRoutes.MATCH_JOB, ApiMethod.POST, payload, undefined, undefined, true, true, process.env.NEXT_PUBLIC_API_PATH)
+}

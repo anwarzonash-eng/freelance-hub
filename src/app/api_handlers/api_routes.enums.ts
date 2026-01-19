@@ -43,6 +43,7 @@ export enum DetailProfilesAPIRoutes {
     GENERATE_PDF = 'detail-profiles/generatePRT',
     RESET_PDF_URL = 'detail-profiles/resetPDFURL',
     GENERATE_PROFILE = 'detail-profiles/generateProfile',
+    MATCH_JOB = 'detail-profiles/match-job',
 }
 
 
