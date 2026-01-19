@@ -30,6 +30,32 @@ const MatchResults: React.FC<MatchResultsProps> = ({ matchData, jobTitle }) => {
     setIsAnalysisExpanded((prev) => !prev);
   };
 
+  // Helper function to highlight matched words in text
+  const highlightText = (text: string, matchedWords: string[]) => {
+    if (!matchedWords || matchedWords.length === 0) {
+      return text;
+    }
+
+    // Create a regex pattern that matches any of the words (case-insensitive)
+    const pattern = new RegExp(`\\b(${matchedWords.join('|')})\\b`, 'gi');
+    const parts = text.split(pattern);
+
+    return parts.map((part, index) => {
+      const isMatch = matchedWords.some(word => 
+        part.toLowerCase() === word.toLowerCase()
+      );
+      
+      if (isMatch) {
+        return (
+          <span key={index} className="bg-yellow-300 font-semibold">
+            {part}
+          </span>
+        );
+      }
+      return part;
+    });
+  };
+
   return (
     <div className="mt-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
       <div className="flex justify-between items-center p-4 cursor-pointer hover:bg-blue-100 transition" onClick={toggleAnalysisExpand}>
@@ -106,9 +132,11 @@ const MatchResults: React.FC<MatchResultsProps> = ({ matchData, jobTitle }) => {
                   .slice(0, expandedDescriptions['titles_all'] ? undefined : 3)
                   .map((detail: any, idx: number) => (
                     <div key={idx} className="text-sm text-gray-700 bg-gray-50 p-2 rounded">
-                      <div className="flex justify-between items-center">
-                        <span>• {detail.title}</span>
-                        <span className="text-indigo-600 font-semibold text-xs ml-2">
+                      <div className="flex justify-between items-start gap-2">
+                        <span className="flex-grow">
+                          • {highlightText(detail.title, detail.matched_words || [])}
+                        </span>
+                        <span className="text-indigo-600 font-semibold text-xs ml-2 flex-shrink-0">
                           {detail.title_match_pct}%
                         </span>
                       </div>
@@ -143,7 +171,9 @@ const MatchResults: React.FC<MatchResultsProps> = ({ matchData, jobTitle }) => {
                     <div key={idx} className="bg-gray-50 p-2 rounded text-sm">
                       <div className="flex justify-between items-start gap-2">
                         <div className="flex-grow">
-                          <p className="font-semibold text-gray-800">{detail.title}</p>
+                          <p className="font-semibold text-gray-800">
+                            {highlightText(detail.title, detail.matched_context_words || [])}
+                          </p>
                           <p className="text-gray-600 text-xs mt-1">
                             Match: <span className="text-indigo-600">{detail.description_match_pct}%</span>
                           </p>
@@ -158,8 +188,10 @@ const MatchResults: React.FC<MatchResultsProps> = ({ matchData, jobTitle }) => {
                         )}
                       </div>
                       {expandedDescriptions[`desc_${idx}`] && detail.description && (
-                        <div className="mt-2 bg-white p-2 rounded text-gray-700 max-h-32 overflow-y-auto text-xs border border-gray-200">
-                          <p className="whitespace-pre-wrap">{detail.description}</p>
+                        <div className="mt-2 bg-white p-2 rounded text-gray-700 text-xs border border-gray-200">
+                          <p className="whitespace-pre-wrap">
+                            {highlightText(detail.description, detail.matched_context_words || [])}
+                          </p>
                         </div>
                       )}
                     </div>
@@ -187,6 +219,7 @@ const MatchResults: React.FC<MatchResultsProps> = ({ matchData, jobTitle }) => {
             Object.keys(authorityValidation.skill_frequency_in_history).length > 0 && (
               <div className="mt-2 ml-2 space-y-1">
                 {Object.entries(authorityValidation.skill_frequency_in_history)
+                  .filter(([, count]: any) => count > 0)
                   .sort(([, a]: any, [, b]: any) => b - a)
                   .map(([skill, count]: any) => (
                     <div key={skill} className="flex justify-between text-sm">

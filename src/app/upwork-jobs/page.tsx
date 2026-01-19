@@ -723,10 +723,10 @@ const JobCard = () => {
                   const skillFrequency = matchResults[job.id]?.data?.authority_validation?.skill_frequency_in_history || {};
                   
                   const isAlreadyMatched = isSkillMatch(skill.prettyName);
-                  const isInFrequency = skillFrequency[skill.prettyName] !== undefined;
                   const frequency = skillFrequency[skill.prettyName] || 0;
+                  const isInFrequency = frequency > 0;
                   
-                  // Determine color: yellow if already matched, green if in frequency but not matched, gray otherwise
+                  // Determine color: yellow if already matched, green if in frequency (>0) but not matched, gray otherwise
                   let bgColor = "bg-gray-200";
                   if (isAlreadyMatched) {
                     bgColor = "bg-yellow-300";
