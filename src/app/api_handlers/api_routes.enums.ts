@@ -42,6 +42,7 @@ export enum DetailProfilesAPIRoutes {
     UPDATE = 'detail-profiles/:id',
     GENERATE_PDF = 'detail-profiles/generatePRT',
     RESET_PDF_URL = 'detail-profiles/resetPDFURL',
+    GENERATE_PROFILE = 'detail-profiles/generateProfile',
 }
 
 

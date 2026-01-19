@@ -39,3 +39,7 @@ export async function resetAllDetailProfilesPDFURLs(payload) {
         process.env.NEXT_PUBLIC_API_PATH
     );
 }
+
+export async function generateProfile(payload: any) {
+    return await apiClient(DetailProfilesAPIRoutes.GENERATE_PROFILE, ApiMethod.POST, payload, undefined, undefined, true, true)
+}

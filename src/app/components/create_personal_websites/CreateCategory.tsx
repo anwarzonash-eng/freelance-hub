@@ -62,7 +62,7 @@ export default function CreateCategory({
   "short_description": "<p>Professional <u>React developer</u>...</p>",
   "thumbnail": "https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/react.svg",
   "skills_ids": { "skills_ids": [] },
-  "main_profile_id": "4e567ac2-48d9-447f-a48e-635269db7802",
+  "main_profile_id": "8bc33b51-204f-4a85-9242-4a38c73e35aa",
   "experience_intro": {
     "intro1": "<p>Developed <u>React applications</u>...</p>",
     "intro2": "<p>Built <u>single-page applications</u>...</p>",

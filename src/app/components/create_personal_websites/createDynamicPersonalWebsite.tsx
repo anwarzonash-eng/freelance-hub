@@ -7,6 +7,7 @@ import { getALLMainProfiles } from "../../api_handlers/api/main_profiles.api";
 import { getAllSkills, findSkills } from "../../api_handlers/api/skills.api";
 import { getAllSkillGroups } from "../../api_handlers/api/skill_groups.api";
 import { getAllCategories } from "../../api_handlers/api/categories.api";
+
 import ExpandCollapse from "../ui/ExpandCollapse";
 import ChecklistSelector from "../ui/ChecklistSelector";
 import Loading from "../ui/Loading";
@@ -17,6 +18,7 @@ import CreateDynamicProfilePage from "@/app/create-personal-profile/page";
 import CreateSkill from "./CreateSkill";
 import CreateSkillGroup from "./CreateSkillGroup";
 import CreateCategory from "./CreateCategory";
+import { generateProfile } from "@/app/api_handlers/api/detail_profiles.api";
 
 const environment = {
   apiDomain:
@@ -218,6 +220,20 @@ export default function CreateDynamicPersonalWebsite({
       // handle error if needed
     }
     setIsLoading(false);
+  };
+
+  const loadSkills = async () => {
+    const skillsRes = await getAllSkills();
+    setAllSkills(skillsRes.data);
+  };
+
+  const loadCategories = async () => {
+    const categoriesRes = await getAllCategories();
+    categoriesRes?.data &&
+      categoriesRes?.data.map((category) => {
+        if (!allCategoriesRaw.some((cat) => cat.id === category.id))
+          setAllCategoriesRaw((prev) => [...prev, category]); // no duplicates
+      });
   };
 
   useEffect(() => {
@@ -518,25 +534,27 @@ export default function CreateDynamicPersonalWebsite({
     };
 
     try {
-      const options: RequestInit = {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: data ? JSON.stringify(data) : undefined,
-      };
-      const response: any = await fetch(
-        `${process.env.NEXT_PUBLIC_PERSONAL_SITES_API_DOMAIN}dynamic_Profile/create`,
-        options
-      );
+      // const options: RequestInit = {
+      //   method: "POST",
+      //   headers: {
+      //     "Content-Type": "application/json",
+      //   },
+      //   body: data ? JSON.stringify(data) : undefined,
+      // };
+      // const response: any = await fetch(
+      //   `${process.env.NEXT_PUBLIC_PERSONAL_SITES_API_DOMAIN}dynamic_Profile/create`,
+      //   options
+      // );
 
-      if (response.ok) {
-        const data = await response.json();
+      const response: any = await generateProfile(data);
+      console.log("create profile response", response);
+      if (response.data) {
+        // const data = await response.json();
         // setSelectedUniqueID(data.data.unique_id);
-        setUniqueID(data.data.unique_id);
+        setUniqueID(response.data.unique_id);
 
-        setNewlyCreatedProfileLinks(data.data);
-        isCloseOnSelect && setSelectWebsite && setSelectWebsite(data.data);
+        setNewlyCreatedProfileLinks(response.data);
+        isCloseOnSelect && setSelectWebsite && setSelectWebsite(response.data);
       }
 
       setIsCreatingProfile(false);
@@ -661,11 +679,15 @@ export default function CreateDynamicPersonalWebsite({
       {openAddSkillPopup && (
         <GenericPopup
           title="Create Skills"
-          onClose={() => setOpenAddSkillPopup(false)}
+          onClose={() => {
+            setOpenAddSkillPopup(false);
+            loadSkills();
+          }}
         >
           <CreateSkill />
         </GenericPopup>
       )}
+
       {openAddSkillGroupPopup && (
         <GenericPopup
           title="Create Skill Group"
@@ -705,7 +727,10 @@ export default function CreateDynamicPersonalWebsite({
       {openAddCategoryPopup && (
         <GenericPopup
           title="Create Category"
-          onClose={() => setOpenAddCategoryPopup(false)}
+          onClose={() => {
+            setOpenAddCategoryPopup(false);
+            loadCategories();
+          }}
         >
           <CreateCategory main_profile_id={selectedMainProfile} />
         </GenericPopup>
@@ -776,7 +801,8 @@ export default function CreateDynamicPersonalWebsite({
             >
               Analyze & Fetch Skills
             </button>
-            <button
+
+            {/* <button
               className="w-full px-6 py-2 flex flex-col disabled:bg-gray-400 disabled:shadow-none disabled:cursor-not-allowed  bg-amber-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition duration-150 self-end md:self-auto"
               onClick={fetchMatchedProfile}
               disabled={
@@ -786,7 +812,7 @@ export default function CreateDynamicPersonalWebsite({
               }
             >
               Get Matched Profiles
-            </button>
+            </button> */}
             <button
               className={`
                             w-full px-4 py-2 text-white font-bold rounded-lg shadow-xl transition duration-200 
@@ -1237,7 +1263,7 @@ export default function CreateDynamicPersonalWebsite({
           )}
           {allCategoriesMultiSelect.length > 0 && (
             <ExpandCollapse
-              title={`Select Caegories (${allCategoriesMultiSelect.length})`}
+              title={`Select Categories (${allCategoriesMultiSelect.length})`}
             >
               <br />
               <ChecklistSelector

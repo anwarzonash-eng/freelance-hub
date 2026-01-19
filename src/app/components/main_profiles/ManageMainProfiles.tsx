@@ -370,27 +370,25 @@ export default function ManageMainProfiles() {
             </div>
             {/* Social Icons */}
             <div className="flex gap-2 text-lg mb-2 flex-wrap justify-center px-4 mt-1">
-              {Object.entries(iconMap).map(
-                ([field, value]) => {
-                  const { icon, getHref } = value;
-                  const color = (value as any).color;
-                  const href = getHref(profile);
-                  if (!href) return null;
-                  return (
-                    <a
-                      key={field}
-                      href={href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="hover:text-red-900"
-                      title={field.replace(/_/g, " ")}
-                      style={color ? { color } : {}}
-                    >
-                      <i className={icon}></i>
-                    </a>
-                  );
-                }
-              )}
+              {Object.entries(iconMap).map(([field, value]) => {
+                const { icon, getHref } = value;
+                const color = (value as any).color;
+                const href = getHref(profile);
+                if (!href) return null;
+                return (
+                  <a
+                    key={field}
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:text-red-900"
+                    title={field.replace(/_/g, " ")}
+                    style={color ? { color } : {}}
+                  >
+                    <i className={icon}></i>
+                  </a>
+                );
+              })}
             </div>
             {/* Details Section */}
             <div className="w-full mt-2 text-xs text-gray-700 px-4 pb-4">
