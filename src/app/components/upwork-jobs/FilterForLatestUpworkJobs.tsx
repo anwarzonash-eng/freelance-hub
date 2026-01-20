@@ -124,40 +124,43 @@ export default function FilterForLatestUpworkJobs({ setFilterObject }) {
     onChange: (e: any) => void,
     type = "text"
   ) => (
-    <div className="flex flex-col min-w-[180px] mr-4 mb-4">
-      <label className="mb-1">{label}</label>
+    <div className="flex flex-col min-w-[180px] w-[200px] mr-2 mb-3">
+      <label className="mb-1 text-sm font-medium text-gray-700">{label}</label>
       <input
         type={type}
         value={value ?? ""}
         onChange={onChange}
-        className="border rounded px-2 py-1"
+        className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
       />
     </div>
   );
   // Removed Budget Type selector in favor of separate hourly/fixed inputs
 
   return (
-    <div className="p-4 bg-white shadow rounded max-w-full mx-auto">
-      <button
-        onClick={() => setVisible(!visible)}
-        className="mb-2 bg-gray-500 text-white py-1 px-3 rounded hover:bg-gray-600"
-      >
-        {visible ? "Hide Filters" : "Show Filters"}
-      </button>
+    <div className="p-4 bg-white border border-gray-200 shadow-sm rounded-xl max-w-full mx-auto">
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-lg font-semibold text-gray-800">Filters</div>
+        <button
+          onClick={() => setVisible(!visible)}
+          className="inline-flex items-center gap-2 rounded-full bg-gray-800 text-white px-4 py-2 text-sm font-medium shadow-sm hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-800"
+        >
+          {visible ? "Hide" : "Show"}
+        </button>
+      </div>
 
       {visible && (
-        <div className="flex flex-wrap items-start">
+        <div className="flex flex-wrap items-start gap-4">
           <div
-            className="flex flex-col min-w-[220px] mr-4 mb-4 relative"
+            className="flex flex-col min-w-[240px] mr-2 mb-2 relative"
             ref={dropdownRef}
           >
-            <label className="mb-1">Match Categories</label>
+            <label className="mb-1 text-sm font-medium text-gray-700">Match Categories</label>
             <div
               onClick={() => setDropdownOpen(!dropdownOpen)}
-              className="border rounded px-2 py-2 cursor-pointer bg-white flex flex-wrap min-h-[40px] items-center"
+              className="border rounded-lg px-3 py-2 cursor-pointer bg-white flex flex-wrap min-h-[44px] items-center gap-2 hover:border-blue-400 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500"
             >
               {selectedCategories.length === 0 ? (
-                <span className="text-gray-400">Select categories...</span>
+                <span className="text-gray-400 text-sm">Select categories...</span>
               ) : (
                 selectedCategories.map((cat) => {
                   const text =
@@ -165,7 +168,7 @@ export default function FilterForLatestUpworkJobs({ setFilterObject }) {
                   return (
                     <span
                       key={cat}
-                      className="bg-blue-100 text-blue-800 text-sm px-2 py-1 rounded mr-1 mb-1 flex items-center"
+                      className="bg-blue-100 text-blue-800 text-sm px-2 py-1 rounded-full flex items-center"
                     >
                       {text}
                       <button
@@ -174,7 +177,8 @@ export default function FilterForLatestUpworkJobs({ setFilterObject }) {
                           e.stopPropagation();
                           toggleCategory(cat);
                         }}
-                        className="ml-1 text-blue-500 hover:text-blue-700 font-bold"
+                        className="ml-1 text-blue-600 hover:text-blue-800 font-bold"
+                        aria-label="Remove category"
                       >
                         ×
                       </button>
@@ -183,16 +187,15 @@ export default function FilterForLatestUpworkJobs({ setFilterObject }) {
                 })
               )}
             </div>
-            <div></div>
             {dropdownOpen && (
-              <div className="absolute top-full left-0 right-0 border bg-white rounded shadow max-h-64 overflow-auto mt-1 z-10">
+              <div className="absolute top-full left-0 right-0 border bg-white rounded-lg shadow-lg max-h-64 overflow-auto mt-1 z-10">
                 {MATCH_CATEGORIES.map((cat) => (
                   <div
                     key={cat.value}
                     onClick={() => toggleCategory(cat.value)}
-                    className={`px-2 py-1 cursor-pointer hover:bg-blue-100 ${
+                    className={`px-3 py-2 cursor-pointer hover:bg-blue-50 text-sm ${
                       selectedCategories.includes(cat.value)
-                        ? "bg-blue-100"
+                        ? "bg-blue-50"
                         : ""
                     }`}
                   >
@@ -256,12 +259,12 @@ export default function FilterForLatestUpworkJobs({ setFilterObject }) {
             "number"
           )}
 
-          <div className="flex flex-col min-w-[180px] mr-4 mb-4">
-            <label className="mb-1">Job Type</label>
+          <div className="flex flex-col min-w-[180px] w-[200px] mr-2 mb-3">
+            <label className="mb-1 text-sm font-medium text-gray-700">Job Type</label>
             <select
               value={jobType}
               onChange={(e) => setJobType(e.target.value)}
-              className="block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              className="block w-full px-3 py-2 border border-gray-300 bg-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
             >
               <option value="all">All</option>
               <option value="fixed">Fixed</option>
@@ -269,18 +272,20 @@ export default function FilterForLatestUpworkJobs({ setFilterObject }) {
             </select>
           </div>
 
-          {/* <button
-            onClick={handleFilter}
-            className="mt-2 bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600"
-          >
-            Filter
-          </button> */}
-          <button
-            onClick={clear}
-            className="mt-2 ml-2 bg-red-500 text-white py-2 px-4 rounded "
-          >
-            Clear
-          </button>
+          <div className="w-full flex justify-end items-center gap-2 mt-2">
+            <button
+              onClick={handleFilter}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg shadow-sm text-sm font-semibold hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            >
+              Apply Filters
+            </button>
+            <button
+              onClick={clear}
+              className="bg-red-500 text-white px-4 py-2 rounded-lg shadow-sm text-sm font-semibold hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+            >
+              Clear
+            </button>
+          </div>
         </div>
       )}
     </div>

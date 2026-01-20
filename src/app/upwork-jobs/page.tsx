@@ -491,18 +491,11 @@ const JobCard = () => {
   }
 
   return (
-    <div className="container mx-auto px-4">
+    <div className="w-full px-4">
       {/* Timer and Refresh Button */}
       {type == "all" && (
-        <div className="flex justify-between items-center  bg-gray-100 rounded-lg shadow-inner">
+        <div className="bg-gray-50 rounded-xl shadow-inner border border-gray-200">
           <FilterForLatestUpworkJobs setFilterObject={setFilterObject} />
-          <button
-            onClick={onLoad}
-            className="px-4 py-2 mx-1 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-          >
-            Refresh
-            {/* {timer}s */}
-          </button>
         </div>
       )}
 
@@ -513,6 +506,8 @@ const JobCard = () => {
 
       {filteredUpworkJobs.map((job) => {
         if (!job.id) return null;
+
+        const isUK = job.client?.location?.country === "United Kingdom";
 
         const jobUrl = `https://www.upwork.com/jobs/${job.ciphertext}`;
 
@@ -540,7 +535,11 @@ const JobCard = () => {
         return (
           <div
             key={job.id}
-            className="max-w-4xl mx-auto p-6 my-4 bg-white rounded-lg shadow-md border border-gray-200"
+            className={`w-full p-6 my-4 rounded-xl border shadow-[0_8px_24px_rgba(0,0,0,0.08)] transition-shadow ${
+              isUK
+                ? "bg-sky-100 border-sky-400 shadow-[0_10px_30px_rgba(56,189,248,0.25)]"
+                : "bg-white border-indigo-100 shadow-[0_8px_24px_rgba(99,102,241,0.18)]"
+            }`}
           >
             {/* Header Section */}
             <div className="flex justify-between items-start">
@@ -600,18 +599,13 @@ const JobCard = () => {
 
             {/* Client Metrics */}
             <div className="flex items-center flex-wrap gap-y-2 gap-x-4 text-sm text-gray-600 my-2">
-              {/* Category from occupations */}
-              {job.occupations?.category?.prefLabel && (
-                <span className="inline-flex items-center text-gray-700 font-semibold bg-blue-100 px-2 py-0.5 rounded-md">
-                  {job.occupations.category.prefLabel}
-                </span>
-              )}
-
+              {/* Subcategory */}
               {job.subcategory && (
                 <span className="inline-flex items-center text-gray-700 font-semibold bg-blue-100 px-2 py-0.5 rounded-md">
                   {job.subcategory}
                 </span>
               )}
+
               {/* Client Verification Status */}
               {job.client?.verificationStatus === "VERIFIED" && (
                 <span className="inline-flex items-center bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
@@ -659,49 +653,40 @@ const JobCard = () => {
 
               {/* Client Location */}
               {job.client?.location?.country && (
-                <span className="inline-flex items-center text-gray-500">
+                <span className="inline-flex items-center text-gray-500 gap-2">
                   {/* SVG for location icon */}
                   {job.client.location.country}
+                  {job.description && job.description.length > 0 && (
+                    <button
+                      onClick={() => toggleDescription(job.id)}
+                      className="text-indigo-600 hover:text-indigo-800 text-sm font-semibold focus:outline-none"
+                    >
+                      {isExpanded ? "Read Less" : "Read More"}
+                    </button>
+                  )}
                 </span>
               )}
             </div>
 
             {/* DESCRIPTION SECTION (Expandable) */}
-            <div className="py-3 mt-3 border-t border-gray-200">
-              {isExpanded ? (
+            {isExpanded && (
+              <div className="py-3 mt-3 border-t border-gray-200">
                 <div className="whitespace-pre-wrap text-gray-700">
                   {jobDescription}
                 </div>
-              ) : (
-                // Show a snippet if not expanded, preventing error if description is missing
-                <div className="text-gray-700 italic">
-                  {jobDescription.length > 200
-                    ? `${jobDescription.substring(0, 200)}...`
-                    : jobDescription}
-                </div>
-              )}
-
-              {/* Toggle Button */}
-              {job.description && job.description.length > 0 && (
-                <button
-                  onClick={() => toggleDescription(job.id)}
-                  className="mt-2 text-sm font-semibold text-indigo-600 hover:text-indigo-800 focus:outline-none"
-                >
-                  {isExpanded ? "Read Less" : "Read More"}
-                </button>
-              )}
-            </div>
+              </div>
+            )}
             {/* END DESCRIPTION SECTION */}
 
             {/* Budget and Engagement Details */}
             <div className="pt-3 mt-3 border-t border-gray-200 text-gray-700 text-sm">
               {/* Hourly Budget Details */}
               {job.hourlyBudgetType && (
-                <p className="font-semibold text-base mb-2">
+                <p className="font-semibold text-base mb-2 flex flex-wrap items-center gap-2">
                   <span className="text-indigo-600 font-bold">
                     Hourly:{" "}
                     {job.hourlyBudgetMin?.displayValue &&
-                      `$${job.hourlyBudgetMin.displayValue}`}{" "}
+                      `$${job.hourlyBudgetMin.displayValue}`} {" "}
                     {job.hourlyBudgetMin?.displayValue &&
                       job.hourlyBudgetMax?.displayValue &&
                       ` - `}
@@ -709,8 +694,14 @@ const JobCard = () => {
                       `$${job.hourlyBudgetMax.displayValue}`}
                   </span>
                   {job.experienceLevel && (
-                    <span className="ml-2 inline-flex items-center bg-gray-200 text-gray-800 text-sm px-2 py-0.5 rounded-full font-medium">
+                    <span className="inline-flex items-center bg-gray-200 text-gray-800 text-sm px-2 py-0.5 rounded-full font-medium">
                       {job.experienceLevel}
+                    </span>
+                  )}
+                  {(job.engagementDuration?.label || job.engagement) && (
+                    <span className="text-sm text-gray-700">
+                      Est. time: {job.engagementDuration?.label || "N/A"},{" "}
+                      {job.engagement || "N/A"}
                     </span>
                   )}
                 </p>
@@ -719,18 +710,16 @@ const JobCard = () => {
               {job.amount?.displayValue &&
                 job.amount.displayValue !== "0.0" &&
                 !job.hourlyBudgetType && (
-                  <p className="font-semibold text-base mb-2 text-indigo-600 font-bold">
-                    Fixed Price: {job.amount.displayValue}
+                  <p className="font-semibold text-base mb-2 flex flex-wrap items-center gap-2 text-indigo-600 font-bold">
+                    <span>Fixed Price: {job.amount.displayValue}</span>
+                    {(job.engagementDuration?.label || job.engagement) && (
+                      <span className="text-sm text-gray-700 font-normal">
+                        Est. time: {job.engagementDuration?.label || "N/A"},{" "}
+                        {job.engagement || "N/A"}
+                      </span>
+                    )}
                   </p>
                 )}
-
-              {/* Engagement Duration */}
-              {(job.engagementDuration?.label || job.engagement) && (
-                <p className="mt-1">
-                  Est. time: {job.engagementDuration?.label || "N/A"},{" "}
-                  {job.engagement || "N/A"}
-                </p>
-              )}
             </div>
 
             {/* Skills Tags */}

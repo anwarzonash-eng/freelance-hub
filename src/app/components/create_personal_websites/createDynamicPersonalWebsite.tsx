@@ -331,6 +331,7 @@ export default function CreateDynamicPersonalWebsite({
       }
       const data = {
         description: jobDescription,
+        main_profile_id: selectedMainProfile,
       };
       const response = await findSkills(data);
       setAllSelectedSkills(response.data.selectedSkills);
