@@ -452,6 +452,39 @@ export default function ManageDetailProfiles() {
                               </p>
                             </div>
                           )}
+                          {(profile as any).salary_type && (
+                            <div>
+                              <span className="font-semibold text-gray-600">
+                                Salary Type:
+                              </span>
+                              <p className="text-gray-700">
+                                {((profile as any).salary_type || "").replace(
+                                  /_/g,
+                                  " ",
+                                )}
+                              </p>
+                            </div>
+                          )}
+                          {(profile as any).job_country && (
+                            <div>
+                              <span className="font-semibold text-gray-600">
+                                Job Country:
+                              </span>
+                              <p className="text-gray-700 uppercase">
+                                {(profile as any).job_country}
+                              </p>
+                            </div>
+                          )}
+                          {(profile as any).experience_years !== undefined && (
+                            <div>
+                              <span className="font-semibold text-gray-600">
+                                Years of Experience:
+                              </span>
+                              <p className="text-gray-700">
+                                {(profile as any).experience_years}
+                              </p>
+                            </div>
+                          )}
                         </div>
 
                         <WebsiteURLs

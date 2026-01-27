@@ -137,12 +137,15 @@ export default function CreateDynamicPersonalWebsite({
   const [selectedCategories, setSelectedCategories] = useState("");
   const [selectedSkill, setSelectSkill] = useState("");
   const [selectedMainProfile, setSelectedMainProfile] = useState<string | null>(
-    "8bc33b51-204f-4a85-9242-4a38c73e35aa"
+    "8bc33b51-204f-4a85-9242-4a38c73e35aa",
   );
   const [newlyCreatedProfileLinks, setNewlyCreatedProfileLinks] =
     useState(null);
   const [isLoading, setIsLoading] = useState(null);
   const [isCreateShortURLs, setIsCreateShortURLs] = useState(true);
+  const [salaryType, setSalaryType] = useState<string>("per_hour");
+  const [jobCountry, setJobCountry] = useState<string>("uk");
+  const [experienceYears, setExperienceYears] = useState<number>(10);
   const [openAddSkillPopup, setOpenAddSkillPopup] = useState(false);
   const [openAddSkillGroupPopup, setOpenAddSkillGroupPopup] = useState(false);
   const [openAddCategoryPopup, setOpenAddCategoryPopup] = useState(false);
@@ -159,13 +162,13 @@ export default function CreateDynamicPersonalWebsite({
   const deleteSkill = (skillId) => {
     // Filter out the skill that matches the given ID
     setAllSelectedSkills((prevSkills) =>
-      prevSkills.filter((skillItem) => skillItem.id !== skillId)
+      prevSkills.filter((skillItem) => skillItem.id !== skillId),
     );
     const updatedMatchedCategories = matchedCategories.map((category) => {
       return {
         ...category,
         matchedSkills: category.matchedSkills.filter(
-          (item) => item.id !== skillId
+          (item) => item.id !== skillId,
         ),
       };
     });
@@ -208,7 +211,7 @@ export default function CreateDynamicPersonalWebsite({
       // Filter categories for default main profile
       if (selectedMainProfile) {
         const filtered = categoriesRes.data.filter(
-          (cat) => cat.main_profile_id === selectedMainProfile
+          (cat) => cat.main_profile_id === selectedMainProfile,
         );
         setAllCategories(filtered);
         setAllCategoriesMultiSelect(filtered);
@@ -245,7 +248,7 @@ export default function CreateDynamicPersonalWebsite({
   useEffect(() => {
     if (allCategoriesRaw && selectedMainProfile) {
       const filtered = allCategoriesRaw.filter(
-        (cat) => cat.main_profile_id === selectedMainProfile
+        (cat) => cat.main_profile_id === selectedMainProfile,
       );
       setAllCategories(filtered);
       setAllCategoriesMultiSelect(filtered);
@@ -280,7 +283,7 @@ export default function CreateDynamicPersonalWebsite({
             else false;
           }),
         };
-      }
+      },
     );
     setFormatedSelectedSkills(modifiedSelectedSkills);
   }, [allSKillGroups, allSelectedSkills]);
@@ -337,7 +340,7 @@ export default function CreateDynamicPersonalWebsite({
       setAllSelectedSkills(response.data.selectedSkills);
       const matchedSkills = await transformCategories(
         allCategories,
-        response.data.selectedSkills
+        response.data.selectedSkills,
       );
       setMatchedCategories(matchedSkills);
       setIsError(false);
@@ -351,13 +354,13 @@ export default function CreateDynamicPersonalWebsite({
 
   const addSkill = () => {
     const categoryExists = matchedCategories.find(
-      (category) => category.id === selectedCategories
+      (category) => category.id === selectedCategories,
     );
     const skill = allSkills.find((skill) => skill.id === selectedSkill);
 
     if (!categoryExists) {
       const newcategory = allCategories.find(
-        (category) => category.id === selectedCategories
+        (category) => category.id === selectedCategories,
       );
       const updatedCategories = [
         ...matchedCategories,
@@ -384,7 +387,7 @@ export default function CreateDynamicPersonalWebsite({
       const updatedCategories = matchedCategories.map((category) => {
         if (category.id === selectedCategories) {
           const isSkillExist = category.matchedSkills.find(
-            (skill) => skill.id === selectedSkill
+            (skill) => skill.id === selectedSkill,
           );
           if (isSkillExist) return category;
           else
@@ -403,7 +406,7 @@ export default function CreateDynamicPersonalWebsite({
     }
 
     const isSkillExistInAllSelectedSkills = allSelectedSkills.find(
-      (skill) => skill.id === selectedSkill
+      (skill) => skill.id === selectedSkill,
     );
     if (!isSkillExistInAllSelectedSkills) {
       const updateAllSelectedSkills = [
@@ -421,7 +424,7 @@ export default function CreateDynamicPersonalWebsite({
   const addNewSkill = () => {
     const skill = allSkills.find((skill) => skill.id === selectedSkill);
     const isSkillExistInAllSelectedSkills = allSelectedSkills.find(
-      (skill) => skill.id === selectedSkill
+      (skill) => skill.id === selectedSkill,
     );
     if (!isSkillExistInAllSelectedSkills) {
       const updateAllSelectedSkills = [
@@ -438,7 +441,7 @@ export default function CreateDynamicPersonalWebsite({
 
   const changeMaincategory = (categoryid) => {
     const category = allCategories.find(
-      (category) => category.id === categoryid
+      (category) => category.id === categoryid,
     );
     category && setDesignation(category.designation);
     category && setTagline(category.tagline);
@@ -452,7 +455,7 @@ export default function CreateDynamicPersonalWebsite({
         return {
           ...category,
           matchedSkills: category.matchedSkills.filter(
-            (item) => item.id !== skillId
+            (item) => item.id !== skillId,
           ),
         };
       } else return category;
@@ -461,7 +464,7 @@ export default function CreateDynamicPersonalWebsite({
   };
   const deleteSkillCategroy = (categoryId) => {
     const updateMatchedCategory = matchedCategories?.filter(
-      (category) => category.id != categoryId
+      (category) => category.id != categoryId,
     );
     setMatchedCategories(updateMatchedCategory);
   };
@@ -517,7 +520,7 @@ export default function CreateDynamicPersonalWebsite({
     //   return { type, category_id, skills: skillsData };
     // });
     const selectedDomain = mainProfiles.find(
-      (options) => options.id === selectedMainProfile
+      (options) => options.id === selectedMainProfile,
     )?.domain;
     const services = [mainService, ...detailServices];
     const data = {
@@ -532,6 +535,9 @@ export default function CreateDynamicPersonalWebsite({
       hourly_rate: hourlyRate,
       website_purpose: selectedWebsitePurpose,
       website_created_for: websiteCreatedFor,
+      salary_type: salaryType,
+      job_country: jobCountry,
+      experience_years: experienceYears,
     };
 
     try {
@@ -598,7 +604,7 @@ export default function CreateDynamicPersonalWebsite({
       };
       const response: any = await fetch(
         `${process.env.NEXT_PUBLIC_PERSONAL_SITES_API_DOMAIN}dynamic_Profile/findmatchedProfile`,
-        options
+        options,
       );
 
       if (response.ok) {
@@ -939,10 +945,10 @@ export default function CreateDynamicPersonalWebsite({
                                 onClick={() => {
                                   setOpenAddSkillGroupPopup(true);
                                   setSelectedSkillToCreateSkillGroup(
-                                    skillItem.id
+                                    skillItem.id,
                                   );
                                   setSelectedSkillToCreateSkillGroupName(
-                                    skillItem.title
+                                    skillItem.title,
                                   );
                                 }}
                               >
@@ -996,7 +1002,7 @@ export default function CreateDynamicPersonalWebsite({
                     <ul className="divide-y divide-gray-100">
                       {matchedProfiles
                         .sort(
-                          (a, b) => b.matched_percentage - a.matched_percentage
+                          (a, b) => b.matched_percentage - a.matched_percentage,
                         )
                         .map((profile) => (
                           <li
@@ -1024,8 +1030,8 @@ export default function CreateDynamicPersonalWebsite({
                                   ...profile.skills_ids
                                     .filter((skillId) =>
                                       allSelectedSkills.find(
-                                        (s) => s.id === skillId
-                                      )
+                                        (s) => s.id === skillId,
+                                      ),
                                     )
                                     .map((skillId) => {
                                       const skillTitle =
@@ -1046,8 +1052,8 @@ export default function CreateDynamicPersonalWebsite({
                                     .filter(
                                       (skillId) =>
                                         !allSelectedSkills.find(
-                                          (s) => s.id === skillId
-                                        )
+                                          (s) => s.id === skillId,
+                                        ),
                                     )
                                     .map((skillId) => {
                                       const skillTitle =
@@ -1203,6 +1209,59 @@ export default function CreateDynamicPersonalWebsite({
                     />
                     Create Short URLs
                   </label>
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1 ">
+                    Salary Type
+                  </label>
+                  <select
+                    value={salaryType}
+                    onChange={(e) => setSalaryType(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm"
+                  >
+                    <option value="per_hour">Per Hour</option>
+                    <option value="per_day">Per Day</option>
+                  </select>
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1 ">
+                    Job Country
+                  </label>
+                  <select
+                    value={jobCountry}
+                    onChange={(e) => setJobCountry(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm"
+                  >
+                    <option value="uk">UK</option>
+                    <option value="us">US</option>
+                    <option value="europe">Europe</option>
+                    <option value="others">Others</option>
+                  </select>
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1 ">
+                    Years of Experience
+                  </label>
+                  <input
+                    value={experienceYears}
+                    onChange={(e) => {
+                      const rawValue = e.target.value;
+                      if (rawValue === "") {
+                        setExperienceYears(0);
+                      } else {
+                        const numericValue = parseInt(rawValue, 10);
+                        if (!isNaN(numericValue)) {
+                          setExperienceYears(numericValue);
+                        }
+                      }
+                    }}
+                    type="number"
+                    min="0"
+                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm"
+                  />
                 </div>
 
                 {/* Select Fields */}
