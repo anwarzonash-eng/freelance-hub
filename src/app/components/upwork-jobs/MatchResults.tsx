@@ -21,12 +21,8 @@ const MatchResults: React.FC<MatchResultsProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>("usman");
   const [selectedCategoryData, setSelectedCategoryData] = useState<any>(null);
 
-  if (!matchData?.data) {
-    return null;
-  }
-
-  const data = matchData.data;
-  const results = data.results || [];
+  const data = matchData?.data;
+  const results = data?.results || [];
 
   // Update selected category data when component mounts or data changes
   useEffect(() => {
@@ -42,7 +38,11 @@ const MatchResults: React.FC<MatchResultsProps> = ({
         setSelectedCategoryData(categoryData);
       }
     }
-  }, [data, results]);
+  }, [data, results, selectedCategory]);
+
+  if (!matchData?.data) {
+    return null;
+  }
 
   const toggleDescription = (index: string) => {
     setExpandedDescriptions((prev) => ({
