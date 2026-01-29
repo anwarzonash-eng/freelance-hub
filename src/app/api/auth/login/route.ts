@@ -24,7 +24,8 @@ export async function POST(req: Request) {
     const userData = {
         id: data.data.user.id,
         authenticated: true,
-        roles: data.data.user.roles
+        roles: data.data.user.roles,
+        token: data.data.user.access_token
     };
     // const userData = {}
 
@@ -41,6 +42,7 @@ export async function POST(req: Request) {
         secure: process.env.NODE_ENV === "production",
         path: "/",
         maxAge: 60 * 60, // 1 hour
+
     });
 
     return res;

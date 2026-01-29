@@ -122,7 +122,7 @@ export default function FilterForLatestUpworkJobs({ setFilterObject }) {
     label: string,
     value: string,
     onChange: (e: any) => void,
-    type = "text"
+    type = "text",
   ) => (
     <div className="flex flex-col min-w-[180px] w-[200px] mr-2 mb-3">
       <label className="mb-1 text-sm font-medium text-gray-700">{label}</label>
@@ -154,13 +154,17 @@ export default function FilterForLatestUpworkJobs({ setFilterObject }) {
             className="flex flex-col min-w-[240px] mr-2 mb-2 relative"
             ref={dropdownRef}
           >
-            <label className="mb-1 text-sm font-medium text-gray-700">Match Categories</label>
+            <label className="mb-1 text-sm font-medium text-gray-700">
+              Match Categories
+            </label>
             <div
               onClick={() => setDropdownOpen(!dropdownOpen)}
               className="border rounded-lg px-3 py-2 cursor-pointer bg-white flex flex-wrap min-h-[44px] items-center gap-2 hover:border-blue-400 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500"
             >
               {selectedCategories.length === 0 ? (
-                <span className="text-gray-400 text-sm">Select categories...</span>
+                <span className="text-gray-400 text-sm">
+                  Select categories...
+                </span>
               ) : (
                 selectedCategories.map((cat) => {
                   const text =
@@ -194,9 +198,7 @@ export default function FilterForLatestUpworkJobs({ setFilterObject }) {
                     key={cat.value}
                     onClick={() => toggleCategory(cat.value)}
                     className={`px-3 py-2 cursor-pointer hover:bg-blue-50 text-sm ${
-                      selectedCategories.includes(cat.value)
-                        ? "bg-blue-50"
-                        : ""
+                      selectedCategories.includes(cat.value) ? "bg-blue-50" : ""
                     }`}
                   >
                     {cat.text}
@@ -211,56 +213,60 @@ export default function FilterForLatestUpworkJobs({ setFilterObject }) {
             matchedSkills,
             (e) =>
               setMatchedSkills(
-                e.target.value ? parseFloat(e.target.value) : null
+                e.target.value ? parseFloat(e.target.value) : null,
               ),
-            "number"
+            "number",
           )}
           {renderInput(
             "Hiring Ratio >",
             hiringRatio,
             (e) =>
               setHiringRatio(
-                e.target.value ? parseFloat(e.target.value) : null
+                e.target.value ? parseFloat(e.target.value) : null,
               ),
-            "number"
+            "number",
           )}
           {renderInput(
             "Reviews",
             reviews,
             (e) =>
               setReviews(e.target.value ? parseFloat(e.target.value) : null),
-            "number"
+            "number",
           )}
           {renderInput(
             "Spent",
             spent,
             (e) => setSpent(e.target.value ? parseFloat(e.target.value) : null),
-            "number"
+            "number",
           )}
           {renderInput(
             "Past Skills (%)",
             pastSkills,
             (e) =>
               setPastSkills(e.target.value ? parseFloat(e.target.value) : null),
-            "number"
+            "number",
           )}
           {renderInput(
             "Hourly Rate",
             hourlyRate,
             (e) =>
               setHourlyRate(e.target.value ? parseFloat(e.target.value) : null),
-            "number"
+            "number",
           )}
           {renderInput(
             "Fixed Amount",
             fixedAmount,
             (e) =>
-              setFixedAmount(e.target.value ? parseFloat(e.target.value) : null),
-            "number"
+              setFixedAmount(
+                e.target.value ? parseFloat(e.target.value) : null,
+              ),
+            "number",
           )}
 
           <div className="flex flex-col min-w-[180px] w-[200px] mr-2 mb-3">
-            <label className="mb-1 text-sm font-medium text-gray-700">Job Type</label>
+            <label className="mb-1 text-sm font-medium text-gray-700">
+              Job Type
+            </label>
             <select
               value={jobType}
               onChange={(e) => setJobType(e.target.value)}

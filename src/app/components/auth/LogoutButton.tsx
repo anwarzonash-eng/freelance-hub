@@ -13,12 +13,8 @@ export default function LogoutButton() {
     setLoading(true);
 
     try {
-      const success = await fetch("/api/auth/logout", { method: "POST" });
-      if (success.ok) {
-        // router.refresh();
-        router.push("/login");
-        window.location.reload();
-      }
+      localStorage.removeItem("authToken");
+      router.push("/login");
 
       // On success:
       // The loading state remains TRUE until the new page loads,

@@ -46,7 +46,9 @@ export enum DetailProfilesAPIRoutes {
     MATCH_JOB = 'detail-profiles/match-job',
 }
 
-
+export enum AuthAPIRoutes {
+    LOGIN = 'auth/login'
+}
 
 export enum CategoriesAPIRoutes {
     ADD = 'categories',

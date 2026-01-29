@@ -6,11 +6,15 @@ import {
 } from "@/app/api_handlers/api/detail_profiles.api";
 
 import React, { useState } from "react";
+import ViewPDF from "./ViewPDF";
 
 export default function WebsiteURLs({ data, setData, websitePurpose }) {
   // const [data, setData] = useState(newlyCreatedProfileLinks);
 
   const [loading, setLoading] = useState(false);
+  const [viewPDFOpen, setViewPDFOpen] = useState(false);
+  const [selectedPDFUrl, setSelectedPDFUrl] = useState<string | null>(null);
+  const [selectedPDFName, setSelectedPDFName] = useState<string>("");
 
   const handleCopy = (e, linkText) => {
     e.preventDefault();
@@ -65,6 +69,16 @@ export default function WebsiteURLs({ data, setData, websitePurpose }) {
 
   return (
     <>
+      <ViewPDF
+        isOpen={viewPDFOpen}
+        onClose={() => {
+          setViewPDFOpen(false);
+          setSelectedPDFUrl(null);
+          setSelectedPDFName("");
+        }}
+        pdfUrl={selectedPDFUrl || ""}
+        fileName={selectedPDFName}
+      />
       {data !== null && (
         <div className="mt-6 p-4 border border-blue-200 bg-blue-50 rounded-lg shadow-inner">
           <div>
@@ -75,9 +89,12 @@ export default function WebsiteURLs({ data, setData, websitePurpose }) {
           </div>
 
           <div className="space-y-2">
-            {data?.urls?.map((url) => {
+            {data?.urls?.map((url, index) => {
               return (
-                <div key={url} className="flex items-center justify-between">
+                <div
+                  key={`${url.page}-${index}`}
+                  className="flex items-center justify-between"
+                >
                   <div className={url.is_portfolio_detail ? "pl-6" : ""}>
                     {url.page}
                   </div>
@@ -161,9 +178,9 @@ export default function WebsiteURLs({ data, setData, websitePurpose }) {
             })}
 
             {data?.pdf_urls?.length > 0 && (
-              <div className="mt-6 p-4 border border-red-200 bg-red-50 rounded-lg shadow-inner">
+              <div className="mt-6 p-4 border border-purple-200 bg-purple-50 rounded-lg shadow-inner">
                 <div className="flex justify-between items-center mb-3">
-                  <h2 className="text-red-800 font-semibold">PDF URLs</h2>
+                  <h2 className="text-purple-800 font-semibold">PDF URLs</h2>
                   <div className="flex justify-end mb-2">
                     <button
                       disabled={loading}
@@ -171,7 +188,7 @@ export default function WebsiteURLs({ data, setData, websitePurpose }) {
                       className={`px-4 py-2 text-sm font-medium rounded-md ${
                         loading
                           ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                          : "bg-orange-500 text-white hover:bg-orange-600"
+                          : "bg-purple-600 text-white hover:bg-purple-700"
                       }`}
                     >
                       Reset PDF URLs
@@ -191,7 +208,7 @@ export default function WebsiteURLs({ data, setData, websitePurpose }) {
                         className={`px-4 py-2 text-sm font-medium rounded-md ${
                           loading
                             ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                            : "bg-red-500 text-white hover:bg-red-600"
+                            : "bg-purple-600 text-white hover:bg-purple-700"
                         }`}
                       >
                         {"Generate All"}
@@ -201,24 +218,33 @@ export default function WebsiteURLs({ data, setData, websitePurpose }) {
                 </div>
                 <div className="space-y-2">
                   {data.pdf_urls.map((p, i) => (
-                    <>
+                    <React.Fragment key={`pdf-${p.type}-${i}`}>
                       {(websitePurpose === "personal_website"
                         ? p.type.endsWith("_with_u")
                         : true) && (
-                        <div
-                          key={i}
-                          className="flex justify-between items-center border-b border-red-200 pb-2"
-                        >
-                          <span className="text-red-900">{p.type}</span>
+                        <div className="flex justify-between items-center border-b border-purple-200 pb-2">
+                          <span className="text-purple-900">{p.type}</span>
                           {p.url ? (
-                            <a
-                              href={p.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="px-3 py-1 bg-green-500 text-white rounded-md hover:bg-green-600"
-                            >
-                              Download
-                            </a>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => {
+                                  setSelectedPDFUrl(p.url);
+                                  setSelectedPDFName(`${p.type}.pdf`);
+                                  setViewPDFOpen(true);
+                                }}
+                                className="px-3 py-1 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition"
+                              >
+                                👁️ View
+                              </button>
+                              <a
+                                href={p.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-3 py-1 bg-green-500 text-white rounded-md hover:bg-green-600"
+                              >
+                                ⬇️ Download
+                              </a>
+                            </div>
                           ) : (
                             <button
                               disabled={loading}
@@ -234,7 +260,7 @@ export default function WebsiteURLs({ data, setData, websitePurpose }) {
                           )}
                         </div>
                       )}
-                    </>
+                    </React.Fragment>
                   ))}
                 </div>
               </div>

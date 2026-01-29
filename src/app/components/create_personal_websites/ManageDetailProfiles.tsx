@@ -39,6 +39,7 @@ interface DetailProfile {
   skills_ids: any;
   services: any[];
   website_created_for?: string;
+  ai_short_description?: string;
 }
 
 export default function ManageDetailProfiles() {
@@ -303,11 +304,11 @@ export default function ManageDetailProfiles() {
                     className="bg-white rounded-lg shadow-sm border border-gray-200"
                   >
                     {/* Compact Row */}
-                    <button
+                    <div
                       onClick={() =>
                         setExpandedId(isExpanded ? null : profile.id)
                       }
-                      className="w-full p-2 hover:bg-gray-50 transition flex items-center justify-between gap-4"
+                      className="w-full p-2 hover:bg-gray-50 transition flex items-center justify-between gap-4 cursor-pointer"
                     >
                       {/* Expand Icon */}
                       <div className="shrink-0">
@@ -375,7 +376,7 @@ export default function ManageDetailProfiles() {
                           {mainCategory?.title || "—"}
                         </span>
                       </div>
-                    </button>
+                    </div>
 
                     {/* Expanded Content */}
                     {isExpanded && (
@@ -420,6 +421,16 @@ export default function ManageDetailProfiles() {
                               </span>
                               <p className="text-gray-700 truncate">
                                 {profile.tag_line}
+                              </p>
+                            </div>
+                          )}
+                          {(profile as any).ai_short_description && (
+                            <div className="col-span-2">
+                              <span className="font-semibold text-gray-600">
+                                AI Short Description:
+                              </span>
+                              <p className="text-gray-700 whitespace-pre-wrap break-words">
+                                {(profile as any).ai_short_description}
                               </p>
                             </div>
                           )}

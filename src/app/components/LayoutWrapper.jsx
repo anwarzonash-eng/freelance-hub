@@ -2,21 +2,40 @@
 "use client";
 import { useEffect, useState } from "react";
 import Header from "./Header"; // Adjust path if necessary
+import { usePathname, useRouter } from "next/navigation";
 
 const COLLAPSED_WIDTH = "w-14"; // Matches w-14 in Header.jsx
 const EXPANDED_WIDTH = "w-56"; // Matches w-56 in Header.jsx
 
 const LayoutWrapper = ({ children, useData }) => {
-  // useEffect(() => {
-  //   console.log(useData);
-  // }, []);
-  // Use state to track the sidebar's collapsed status
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  const router = useRouter();
+  const pathname = usePathname();
+
+  useEffect(() => {
+    setIsLoggedIn(checkAuth());
+    console.log("Auth check on path change:", pathname);
+  }, [pathname]);
 
   // Toggle function passed to the Header
   const toggleSidebar = () => {
     setIsCollapsed((prev) => !prev);
   };
+
+  function checkAuth() {
+    const token = localStorage.getItem("authToken");
+    if (!token) {
+      router.push("/login");
+      return false;
+    } else {
+      if (pathname === "/login") {
+        router.push("/");
+      }
+      return true;
+    }
+  }
 
   // Tailwind class for the main content margin
   const contentMarginClass = isCollapsed ? "ml-14" : "ml-56";
@@ -25,7 +44,8 @@ const LayoutWrapper = ({ children, useData }) => {
     // Flex container for the entire application layout
     <div className="flex h-screen overflow-hidden">
       {/* 1. Sidebar (Header) */}
-      {useData.authenticated && (
+      {/* {useData.authenticated && ( */}
+      {isLoggedIn && (
         <Header
           isCollapsed={isCollapsed}
           toggleSidebar={toggleSidebar}
@@ -35,6 +55,7 @@ const LayoutWrapper = ({ children, useData }) => {
           useData={useData}
         />
       )}
+      {/* )} */}
 
       {/* {!useData.authenticated && <h1>Hello</h1>} */}
 

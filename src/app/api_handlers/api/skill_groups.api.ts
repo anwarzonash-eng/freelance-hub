@@ -5,6 +5,7 @@ import { apiClient } from "../api_client";
 import { ApiMethod } from "../api_methods.enum";
 import { SkillGroupsAPIRoutes } from "../api_routes.enums";
 
+
 export async function addSkillGroup(payload: any) {
     return await apiClient(SkillGroupsAPIRoutes.ADD, ApiMethod.POST, payload, undefined, undefined, true, true);
 }

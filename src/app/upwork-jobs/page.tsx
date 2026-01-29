@@ -100,7 +100,10 @@ const JobCard = () => {
     }
 
     // Apply hourly rate and fixed amount filters independently
-    if ((filterObject?.hourlyRate ?? 0) > 0 || (filterObject?.fixedAmount ?? 0) > 0) {
+    if (
+      (filterObject?.hourlyRate ?? 0) > 0 ||
+      (filterObject?.fixedAmount ?? 0) > 0
+    ) {
       const hourlyThreshold = Number(filterObject?.hourlyRate ?? 0);
       const fixedThreshold = Number(filterObject?.fixedAmount ?? 0);
 
@@ -110,7 +113,11 @@ const JobCard = () => {
         if (isHourly) {
           // If hourly filter provided, apply; else keep
           if (hourlyThreshold > 0) {
-            const minRaw = Number(job.hourlyBudgetMin?.rawValue ?? job.hourlyBudgetMin?.displayValue ?? 0);
+            const minRaw = Number(
+              job.hourlyBudgetMin?.rawValue ??
+                job.hourlyBudgetMin?.displayValue ??
+                0,
+            );
             // If min is missing, keep as earlier behavior
             if (!job.hourlyBudgetMin) return true;
             return minRaw >= hourlyThreshold;
@@ -119,9 +126,12 @@ const JobCard = () => {
         } else {
           // Fixed jobs
           if (fixedThreshold > 0) {
-            const amountRaw = Number(job.amount?.rawValue ?? job.amount?.displayValue ?? 0);
+            const amountRaw = Number(
+              job.amount?.rawValue ?? job.amount?.displayValue ?? 0,
+            );
             // If amount missing, exclude from fixed filter
-            if (!job.amount?.displayValue && job.amount?.rawValue === undefined) return false;
+            if (!job.amount?.displayValue && job.amount?.rawValue === undefined)
+              return false;
             return amountRaw >= fixedThreshold;
           }
           return true;
@@ -210,7 +220,7 @@ const JobCard = () => {
   const timeAgo = (dateString) => {
     if (!dateString) return "Date unavailable";
     const seconds = Math.floor(
-      (new Date().getTime() - new Date(dateString).getTime()) / 1000
+      (new Date().getTime() - new Date(dateString).getTime()) / 1000,
     );
     let interval = seconds / 31536000;
     if (interval > 1) return `${Math.floor(interval)} years ago`;
@@ -268,7 +278,7 @@ const JobCard = () => {
   const isSkillMatch = (skillName) => {
     const normalizedSkill = skillName.toLowerCase();
     return myListedSkills.some(
-      (listedSkill) => listedSkill.toLowerCase() === normalizedSkill
+      (listedSkill) => listedSkill.toLowerCase() === normalizedSkill,
     );
   };
 
@@ -311,7 +321,7 @@ const JobCard = () => {
             viewBox="0 0 20 20"
           >
             <path d="M10 15l-5.878 3.09 1.123-6.545-4.756-4.632 6.572-.955L10 0l2.889 5.858 6.572.955-4.756 4.632 1.123 6.545z" />
-          </svg>
+          </svg>,
         );
       } else if (i === fullStars + 1 && rating - fullStars >= 0.25) {
         // Simple visual indicator for a fractional star (e.g., 4.5 star rating will show 5 yellow stars)
@@ -323,7 +333,7 @@ const JobCard = () => {
             viewBox="0 0 20 20"
           >
             <path d="M10 15l-5.878 3.09 1.123-6.545-4.756-4.632 6.572-.955L10 0l2.889 5.858 6.572.955-4.756 4.632 1.123 6.545z" />
-          </svg>
+          </svg>,
         );
       } else {
         stars.push(
@@ -333,7 +343,7 @@ const JobCard = () => {
             viewBox="0 0 20 20"
           >
             <path d="M10 15l-5.878 3.09 1.123-6.545-4.756-4.632 6.572-.955L10 0l2.889 5.858 6.572.955-4.756 4.632 1.123 6.545z" />
-          </svg>
+          </svg>,
         );
       }
     }
@@ -441,7 +451,7 @@ const JobCard = () => {
   //   );
   // }
   const formatPostgresDate = (
-    dateInput: string | Date | null | undefined
+    dateInput: string | Date | null | undefined,
   ): string => {
     // 1. Handle null or undefined input
     if (!dateInput) {
@@ -686,7 +696,7 @@ const JobCard = () => {
                   <span className="text-indigo-600 font-bold">
                     Hourly:{" "}
                     {job.hourlyBudgetMin?.displayValue &&
-                      `$${job.hourlyBudgetMin.displayValue}`} {" "}
+                      `$${job.hourlyBudgetMin.displayValue}`}{" "}
                     {job.hourlyBudgetMin?.displayValue &&
                       job.hourlyBudgetMax?.displayValue &&
                       ` - `}
@@ -727,13 +737,17 @@ const JobCard = () => {
               <div className="flex flex-wrap gap-2 mt-4">
                 {job.skills.map((skill) => {
                   // Get matched skills from match results
-                  const matchedSkillsFromAnalysis = matchResults[job.id]?.data?.identity_check?.matched_skills || [];
-                  const skillFrequency = matchResults[job.id]?.data?.authority_validation?.skill_frequency_in_history || {};
-                  
+                  const matchedSkillsFromAnalysis =
+                    matchResults[job.id]?.data?.identity_check
+                      ?.matched_skills || [];
+                  const skillFrequency =
+                    matchResults[job.id]?.data?.authority_validation
+                      ?.skill_frequency_in_history || {};
+
                   const isAlreadyMatched = isSkillMatch(skill.prettyName);
                   const frequency = skillFrequency[skill.prettyName] || 0;
                   const isInFrequency = frequency > 0;
-                  
+
                   // Determine color: yellow if already matched, green if in frequency (>0) but not matched, gray otherwise
                   let bgColor = "bg-gray-200";
                   if (isAlreadyMatched) {
@@ -741,7 +755,7 @@ const JobCard = () => {
                   } else if (isInFrequency) {
                     bgColor = "bg-green-200";
                   }
-                  
+
                   return (
                     <span
                       key={skill.name}
@@ -761,7 +775,11 @@ const JobCard = () => {
 
             {/* Match Results */}
             {matchResults[job.id] && (
-              <MatchResults matchData={matchResults[job.id]} jobTitle={job.title} />
+              <MatchResults
+                matchData={matchResults[job.id]}
+                jobTitle={job.title}
+                jobDescription={jobDescription}
+              />
             )}
           </div>
         );

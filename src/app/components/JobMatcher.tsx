@@ -62,7 +62,7 @@ function MatchedSkills({ str1, str2 }) {
           .replace(/,/g, " ")
           .split(" ")
           .map((w) => normalize(w))
-          .filter((w) => w.length > 0)
+          .filter((w) => w.length > 0),
       )
     : [];
 
@@ -75,7 +75,7 @@ function MatchedSkills({ str1, str2 }) {
   // Find matched skills: if any normalized input skill or word matches listed skill
   const matchedSet = new Set([...inputSkills, ...inputWords]);
   const matchedSkills = listedSkills.filter((skill) =>
-    matchedSet.has(skill.normalized)
+    matchedSet.has(skill.normalized),
   );
   const totalMatched = matchedSkills.length;
   const matchPercentage =
@@ -187,7 +187,7 @@ export default function JobMatcher() {
           settJobURL(
             jobData.ciphertext
               ? "https://www.upwork.com/jobs/" + jobData.ciphertext
-              : "www.upwork.com"
+              : "www.upwork.com",
           );
 
           setDescription(jobData.description || "");
@@ -248,12 +248,16 @@ export default function JobMatcher() {
             setSelectWebsite={setSelectedWebsite}
             selectedWebsite={selectedWebsite}
             description={
-              "Title:" +
+              "Job Title: " +
               title +
-              "\r\n \r\n \r\n" +
-              description +
-              "\r\n  \r\n \r\n" +
-              skills
+              "\r\n \r\n" +
+              "Job Description: " +
+              "\r\n  \r\n" +
+              description.trim() +
+              "\r\n  \r\n" +
+              "Skills Listed by Employer: " +
+              "\r\n  \r\n" +
+              skills.trim()
             }
             websitePurpose="personal_website"
             CreatedFor={jobURl}

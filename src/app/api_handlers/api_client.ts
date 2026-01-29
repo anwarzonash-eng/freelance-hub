@@ -54,11 +54,17 @@ export const apiClient = async <T = any, P = any>(
     headers: HeadersInit = {},
     showErrorMessage: boolean = false,
     showSuccessMessage: boolean = false,
-    apiBaseURL = BASE_API_URL
+    apiBaseURL = BASE_API_URL,
+    isPublicSiteAPI: boolean = false
 
 
 ): Promise<IApiResponse> => {
 
+    let token = null;
+    if (!isPublicSiteAPI) {
+        token = localStorage.getItem('authToken') || null;
+        console.log("Using auth token:", token);
+    }
 
     const url = buildUrl(apiBaseURL, route, params);
 
@@ -68,6 +74,7 @@ export const apiClient = async <T = any, P = any>(
         ? {} // FormData will set Content-Type automatically
         : {
             'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
             ...headers,
         };
 
@@ -85,6 +92,11 @@ export const apiClient = async <T = any, P = any>(
     try {
         const response = await fetch(url, config);
         const jsonResponse: IApiResponse<T> = await response.json();
+        if (response.status == 401) {
+            localStorage.removeItem('authToken');
+            window.location.href = '/login';
+            console.log("Unauthorized access - 401");
+        }
 
         if (!response.ok || jsonResponse.APIStatus === 'error') {
             const errorMessage = jsonResponse.message || 'An unknown API error occurred.';
@@ -97,6 +109,7 @@ export const apiClient = async <T = any, P = any>(
         return jsonResponse;
 
     } catch (error) {
+        console.error('API Client Error:', error);
         const errorMessage = `A network or parsing error occurred: ${error instanceof Error ? error.message : 'Unknown error'}`;
         showErrorMessage && showAppNotification('error', 'API Request Failed', errorMessage);
         return null;

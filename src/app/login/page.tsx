@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { login } from "../api_handlers/api/auth.api";
 
 export default function LoginPage() {
   const [userName, setUserName] = useState<string>("");
@@ -18,14 +19,13 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userName, password }),
-      });
+      const res = await login({ userid: userName, password });
 
-      if (res.ok) {
-        window.location.reload();
+      if (res) {
+        console.log("login success", res);
+        localStorage.setItem("authToken", res.data.user.access_token);
+        router.push("/");
+        // window.location.reload();
         // Successful login:
         // Loading state remains TRUE until the new page loads.
         // router.refresh();
@@ -39,6 +39,7 @@ export default function LoginPage() {
         setLoading(false);
       }
     } catch (err) {
+      console.error("Login error:", err);
       // Handle network/other errors
       setError("An error occurred during login.");
       // 3. Stop loading on error

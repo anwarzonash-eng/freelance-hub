@@ -210,7 +210,7 @@ const normalizePath = (path: string | undefined): string | null => {
  */
 const filterNavItems = (
   items: NavItem[],
-  allowedPaths: string[]
+  allowedPaths: string[],
 ): NavItem[] => {
   return items.filter((item) => {
     if (item.href) {
@@ -228,7 +228,7 @@ const filterNavItems = (
  */
 const findCurrentMenuItem = (
   items: NavItem[],
-  currentPath: string
+  currentPath: string,
 ): string | null => {
   // Note: This helper must use path normalization too to be reliable with usePathname
   const normalizedCurrentPath = normalizePath(currentPath);
@@ -366,7 +366,7 @@ const MenuItem: React.FC<MenuItemProps> = ({
     setActiveMenu((prev) =>
       !isOpen
         ? [...prev, item.title]
-        : prev.filter((title) => title !== item.title)
+        : prev.filter((title) => title !== item.title),
     );
   };
 
@@ -396,8 +396,8 @@ const MenuItem: React.FC<MenuItemProps> = ({
                 level > 1
                   ? "text-gray-300"
                   : isSelfActive
-                  ? "text-white"
-                  : "text-white font-semibold"
+                    ? "text-white"
+                    : "text-white font-semibold"
               }`}
             >
               {item.title}
@@ -468,7 +468,7 @@ const Header: React.FC<HeaderProps> = ({
   const [popoverMenuTitle, setPopoverMenuTitle] = useState<string | null>(null);
   const pathname = usePathname();
 
-  const roles = useData?.roles || [];
+  const roles = ["*"];
 
   // --- FILTERING LOGIC IMPLEMENTED HERE ---
 
@@ -506,7 +506,7 @@ const Header: React.FC<HeaderProps> = ({
   const sidebarWidthClass = isCollapsed ? collapsedWidth : expandedWidth;
   // Use the original navItems for the Popover logic (though popover won't show with flat structure)
   const activePopoverItem = navItems.find(
-    (item) => item.title === popoverMenuTitle
+    (item) => item.title === popoverMenuTitle,
   );
 
   const openPopover = (title: string) => {

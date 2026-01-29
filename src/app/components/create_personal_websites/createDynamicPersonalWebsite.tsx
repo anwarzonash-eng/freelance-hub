@@ -19,6 +19,7 @@ import CreateSkill from "./CreateSkill";
 import CreateSkillGroup from "./CreateSkillGroup";
 import CreateCategory from "./CreateCategory";
 import { generateProfile } from "@/app/api_handlers/api/detail_profiles.api";
+import { Prompts } from "@/utils/global";
 
 const environment = {
   apiDomain:
@@ -146,6 +147,7 @@ export default function CreateDynamicPersonalWebsite({
   const [salaryType, setSalaryType] = useState<string>("per_hour");
   const [jobCountry, setJobCountry] = useState<string>("uk");
   const [experienceYears, setExperienceYears] = useState<number>(10);
+  const [taxArea, setTaxArea] = useState<string>("");
   const [openAddSkillPopup, setOpenAddSkillPopup] = useState(false);
   const [openAddSkillGroupPopup, setOpenAddSkillGroupPopup] = useState(false);
   const [openAddCategoryPopup, setOpenAddCategoryPopup] = useState(false);
@@ -538,6 +540,7 @@ export default function CreateDynamicPersonalWebsite({
       salary_type: salaryType,
       job_country: jobCountry,
       experience_years: experienceYears,
+      ai_short_description: taxArea,
     };
 
     try {
@@ -672,6 +675,39 @@ export default function CreateDynamicPersonalWebsite({
       .writeText(linkText)
       .then(() => {})
       .catch((err) => {});
+  };
+
+  const copySuggestedSkillsPrompt = () => {
+    const prompt = Prompts.GENERATE_SUGGESTED_SKILLS.replace(
+      "{job_description}",
+      jobDescription || "[No job description provided]",
+    );
+    navigator.clipboard
+      .writeText(prompt)
+      .then(() => {
+        alert("Suggested Skills Prompt copied to clipboard!");
+      })
+      .catch((err) => {
+        alert("Failed to copy prompt: " + err.message);
+      });
+  };
+  const copySummaryDescriptionPrompt = () => {
+    let prompt = Prompts.GENERATE_SUMMARY_DESCRIPTION_SKILLS.replace(
+      "{job_description}",
+      jobDescription || "[No job description provided]",
+    );
+    prompt = prompt.replace(
+      "{years_of_experience}",
+      experienceYears.toString(),
+    );
+    navigator.clipboard
+      .writeText(prompt)
+      .then(() => {
+        alert("Suggested Skills Prompt copied to clipboard!");
+      })
+      .catch((err) => {
+        alert("Failed to copy prompt: " + err.message);
+      });
   };
 
   const selectWebsite = () => {
@@ -809,6 +845,21 @@ export default function CreateDynamicPersonalWebsite({
               Analyze & Fetch Skills
             </button>
 
+            <button
+              className="w-full px-6 py-2 flex flex-col bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition duration-150 self-end md:self-auto"
+              onClick={copySuggestedSkillsPrompt}
+              disabled={!jobDescription}
+            >
+              Suggested Skills Prompt
+            </button>
+
+            <button
+              className="w-full px-6 py-2 flex flex-col bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition duration-150 self-end md:self-auto"
+              onClick={copySummaryDescriptionPrompt}
+              disabled={!experienceYears}
+            >
+              Summary Description Prompt
+            </button>
             {/* <button
               className="w-full px-6 py-2 flex flex-col disabled:bg-gray-400 disabled:shadow-none disabled:cursor-not-allowed  bg-amber-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition duration-150 self-end md:self-auto"
               onClick={fetchMatchedProfile}
@@ -1260,6 +1311,19 @@ export default function CreateDynamicPersonalWebsite({
                     }}
                     type="number"
                     min="0"
+                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm"
+                  />
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1 ">
+                    Tax Area
+                  </label>
+                  <input
+                    value={taxArea}
+                    onChange={(e) => setTaxArea(e.target.value)}
+                    type="text"
+                    placeholder="e.g., US, UK, EU"
                     className="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm"
                   />
                 </div>

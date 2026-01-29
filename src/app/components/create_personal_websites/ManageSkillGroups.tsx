@@ -53,9 +53,10 @@ export default function ManageSkillGroups() {
   const [showCreatePopup, setShowCreatePopup] = useState(false);
   const [showEditPopup, setShowEditPopup] = useState(false);
   const [showAIPopup, setShowAIPopup] = useState(false);
+  const [showEditWithAIPopup, setShowEditWithAIPopup] = useState(false);
 
   const [selectedGroup, setSelectedGroup] = useState<SkillGroupData | null>(
-    null
+    null,
   );
 
   // Editors expanders
@@ -89,7 +90,7 @@ export default function ManageSkillGroups() {
   // AI select skills
   const [skillSearch, setSkillSearch] = useState("");
   const [selectedSkillIdsForAI, setSelectedSkillIdsForAI] = useState<string[]>(
-    []
+    [],
   );
 
   const imageViewer = useImageViewer();
@@ -174,7 +175,7 @@ export default function ManageSkillGroups() {
   const skillsFilteredForSearch = useMemo(() => {
     const q = skillSearch.toLowerCase();
     return (skills || []).filter((s: any) =>
-      s.title?.toLowerCase().includes(q)
+      s.title?.toLowerCase().includes(q),
     );
   }, [skillSearch, skills]);
 
@@ -263,6 +264,17 @@ export default function ManageSkillGroups() {
                 </p>
               </div>
               <div className="flex gap-2">
+                <button
+                  className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg flex items-center gap-2"
+                  onClick={() => {
+                    setSelectedGroup(g);
+                    setShowEditWithAIPopup(true);
+                  }}
+                  title="Edit with AI assistance"
+                >
+                  <Sparkles size={16} />
+                  Edit with AI
+                </button>
                 <button
                   className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg"
                   onClick={() => {
@@ -390,7 +402,7 @@ export default function ManageSkillGroups() {
                                         skills_ids: {
                                           skills_ids:
                                             prev.skills_ids.skills_ids.filter(
-                                              (x) => x !== id
+                                              (x) => x !== id,
                                             ),
                                         },
                                       }))
@@ -400,7 +412,7 @@ export default function ManageSkillGroups() {
                                   </button>
                                 </span>
                               );
-                            }
+                            },
                           )}
                         </div>
                         <input
@@ -424,7 +436,7 @@ export default function ManageSkillGroups() {
                                       new Set([
                                         ...(prev.skills_ids.skills_ids || []),
                                         s.id,
-                                      ])
+                                      ]),
                                     ),
                                   },
                                 }))
@@ -469,7 +481,7 @@ export default function ManageSkillGroups() {
                               }
                             />
                           </div>
-                        )
+                        ),
                       )}
                     </div>
                   </div>
@@ -539,7 +551,7 @@ export default function ManageSkillGroups() {
                                 }
                               />
                             </div>
-                          )
+                          ),
                         )}
                       </div>
                     )}
@@ -617,7 +629,7 @@ export default function ManageSkillGroups() {
                           className="ml-1"
                           onClick={() =>
                             setSelectedSkillIdsForAI((arr) =>
-                              arr.filter((x) => x !== id)
+                              arr.filter((x) => x !== id),
                             )
                           }
                         >
@@ -642,7 +654,7 @@ export default function ManageSkillGroups() {
                       className="w-full text-left px-3 py-2 hover:bg-gray-100"
                       onClick={() =>
                         setSelectedSkillIdsForAI((arr) =>
-                          Array.from(new Set([...arr, s.id]))
+                          Array.from(new Set([...arr, s.id])),
                         )
                       }
                     >
@@ -762,7 +774,7 @@ export default function ManageSkillGroups() {
                                       skills_ids: {
                                         skills_ids:
                                           prev.skills_ids.skills_ids.filter(
-                                            (x) => x !== id
+                                            (x) => x !== id,
                                           ),
                                       },
                                     }))
@@ -795,7 +807,7 @@ export default function ManageSkillGroups() {
                                       new Set([
                                         ...(prev.skills_ids.skills_ids || []),
                                         s.id,
-                                      ])
+                                      ]),
                                     ),
                                   },
                                 }))
@@ -840,7 +852,7 @@ export default function ManageSkillGroups() {
                               }
                             />
                           </div>
-                        )
+                        ),
                       )}
                     </div>
                   </div>
@@ -905,7 +917,7 @@ export default function ManageSkillGroups() {
                                 }
                               />
                             </div>
-                          )
+                          ),
                         )}
                       </div>
                     )}
@@ -930,6 +942,52 @@ export default function ManageSkillGroups() {
               >
                 Cancel
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit with AI Popup */}
+      {showEditWithAIPopup && selectedGroup && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-[95vw] h-[95vh] flex flex-col">
+            <div className="bg-gradient-to-r from-purple-600 to-purple-700 px-6 py-4 flex items-center justify-between rounded-t-lg">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-6 h-6 text-white" />
+                <h2 className="text-2xl font-bold text-white">
+                  Edit with AI - {selectedGroup.label}
+                </h2>
+              </div>
+              <button
+                onClick={() => {
+                  setShowEditWithAIPopup(false);
+                  setSelectedGroup(null);
+                }}
+                className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              <CreateSkillGroup
+                skill_ids={selectedGroup.skills_ids?.skills_ids || []}
+                skill_names={
+                  selectedGroup.skills_ids?.skills_ids
+                    ?.map((id: string) => {
+                      const skill = skills.find((s: any) => s.id === id);
+                      return skill?.title || id;
+                    })
+                    .filter(Boolean) || []
+                }
+                main_profile_id={selectedGroup.main_profile_id}
+                skill_group_id={selectedGroup.id}
+                initialData={selectedGroup}
+                onSuccess={() => {
+                  setShowEditWithAIPopup(false);
+                  setSelectedGroup(null);
+                  loadAll();
+                }}
+              />
             </div>
           </div>
         </div>

@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Prompts } from "@/utils/global";
 
 type CreateSkillGroupProps = {
@@ -7,6 +7,8 @@ type CreateSkillGroupProps = {
   skill_names: string[];
   main_profile_id: string;
   onSuccess?: () => void;
+  skill_group_id?: string; // Optional: for update mode
+  initialData?: any; // Optional: pre-filled data for editing
 };
 
 export default function CreateSkillGroup({
@@ -14,12 +16,14 @@ export default function CreateSkillGroup({
   skill_names,
   main_profile_id,
   onSuccess,
+  skill_group_id,
+  initialData,
 }: CreateSkillGroupProps) {
   const [pasted, setPasted] = useState("");
   const [verified, setVerified] = useState(false);
   const [description, setDescription] = useState("");
   const [experienceVariations, setExperienceVariations] = useState<string[]>(
-    []
+    [],
   );
   const [portfolioVariations, setPortfolioVariations] = useState<string[]>([]);
   const [label, setLabel] = useState("");
@@ -27,6 +31,7 @@ export default function CreateSkillGroup({
   const [busy, setBusy] = useState(false);
   const [isMultiple, setIsMultiple] = useState(false);
   const [groups, setGroups] = useState<any[]>([]);
+  const isEditMode = !!skill_group_id;
 
   const sampleJSON = `{
   "description": "...",
@@ -64,14 +69,39 @@ export default function CreateSkillGroup({
     return port;
   };
 
+  // Load initial data when in edit mode
+  useEffect(() => {
+    if (isEditMode && initialData) {
+      setDescription(initialData.description || "");
+      setExperienceVariations(parseExperience(initialData));
+      setPortfolioVariations(parsePortfolio(initialData));
+      setLabel(initialData.label || "");
+      setVerified(true);
+      setMessage("📝 Edit mode - Existing data loaded");
+    }
+  }, [isEditMode, initialData]);
+
   return (
     <div className="max-w-2xl mx-auto flex flex-col gap-4 p-6 bg-white rounded-2xl shadow">
       <div className="flex flex-col gap-1">
-        <span className="text-sm font-medium text-gray-700">Props:</span>
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium text-gray-700">Props:</span>
+          {isEditMode && (
+            <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded font-semibold">
+              ✏️ EDIT MODE
+            </span>
+          )}
+        </div>
         <div className="text-xs bg-gray-100 p-2 rounded font-mono text-gray-600">
           skill_ids: {JSON.stringify(skill_ids)} <br />
           main_profile_id: {main_profile_id} <br />
           skill_names: {JSON.stringify(skill_names)}
+          {isEditMode && (
+            <>
+              <br />
+              skill_group_id: {skill_group_id}
+            </>
+          )}
         </div>
       </div>
 
@@ -82,7 +112,7 @@ export default function CreateSkillGroup({
           const names = skill_names.join(", ");
           let prompt = (Prompts.SKILL_GROUP || "").replaceAll(
             "{main_profile_id}",
-            main_profile_id
+            main_profile_id,
           );
           // Provide skill_name(s)
           prompt = prompt.replaceAll("{skill_name}", names);
@@ -100,7 +130,9 @@ export default function CreateSkillGroup({
 
       <div className="flex flex-col gap-1">
         <label className="text-sm font-medium text-gray-700">
-          Paste ChatGPT JSON Here
+          {isEditMode
+            ? "Paste Updated ChatGPT JSON (or modify the form below directly)"
+            : "Paste ChatGPT JSON Here"}
           <div className="mt-1 text-xs bg-gray-100 p-2 rounded font-mono text-gray-600 whitespace-pre-wrap">
             {sampleJSON}
           </div>
@@ -109,7 +141,11 @@ export default function CreateSkillGroup({
           className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[140px]"
           value={pasted}
           onChange={(e) => setPasted(e.target.value)}
-          placeholder="Paste ChatGPT JSON here"
+          placeholder={
+            isEditMode
+              ? "(Optional) Paste new ChatGPT JSON to replace current values"
+              : "Paste ChatGPT JSON here"
+          }
         />
       </div>
 
@@ -120,8 +156,8 @@ export default function CreateSkillGroup({
           try {
             const parsed = JSON.parse(
               pasted.replace(/"([^"\\]*(\\.[^"\\]*)*)"/g, (match) =>
-                match.replace(/\r?\n/g, "\\n")
-              )
+                match.replace(/\r?\n/g, "\\n"),
+              ),
             );
             const arrayInput = Array.isArray(parsed) ? parsed : [parsed];
             setIsMultiple(Array.isArray(parsed));
@@ -133,7 +169,7 @@ export default function CreateSkillGroup({
                 Array.isArray(obj.skills_ids?.skills_ids) &&
                 obj.skills_ids.skills_ids.length >= 1 &&
                 obj.skills_ids.skills_ids.some((id: string) =>
-                  skill_ids.includes(id)
+                  skill_ids.includes(id),
                 );
 
               const ok =
@@ -145,7 +181,7 @@ export default function CreateSkillGroup({
               if (!ok) {
                 setVerified(false);
                 setMessage(
-                  "Pasted object structure or IDs are incorrect. Make sure each skill group has a valid skill_id from your selection."
+                  "Pasted object structure or IDs are incorrect. Make sure each skill group has a valid skill_id from your selection.",
                 );
                 return;
               }
@@ -254,16 +290,27 @@ export default function CreateSkillGroup({
                       acc[`portfolio_variation${i + 1}`] = pf;
                       return acc;
                     },
-                    {}
+                    {},
                   ),
                   main_profile_id,
                   label,
                 };
-                // Use API handler (default base URL)
-                const { addSkillGroup } = await import(
-                  "@/app/api_handlers/api/skill_groups.api"
-                );
-                const data = await addSkillGroup(body);
+
+                let data;
+                if (isEditMode) {
+                  // Update mode
+                  const { updateSkillGroupByID } =
+                    await import("@/app/api_handlers/api/skill_groups.api");
+                  data = await updateSkillGroupByID(body, {
+                    path: { id: skill_group_id },
+                  });
+                } else {
+                  // Create mode
+                  const { addSkillGroup } =
+                    await import("@/app/api_handlers/api/skill_groups.api");
+                  data = await addSkillGroup(body);
+                }
+
                 if (data && data.APIStatus === "success") {
                   setMessage("✅ Success");
                   onSuccess && onSuccess();
@@ -275,7 +322,7 @@ export default function CreateSkillGroup({
               }
             }}
           >
-            {busy ? "Saving..." : "Save"}
+            {busy ? "Saving..." : isEditMode ? "Update" : "Save"}
           </button>
         </div>
       )}
@@ -394,9 +441,8 @@ export default function CreateSkillGroup({
               setBusy(true);
               setMessage("");
               try {
-                const { addBulkSkillGroups } = await import(
-                  "@/app/api_handlers/api/skill_groups.api"
-                );
+                const { addBulkSkillGroups } =
+                  await import("@/app/api_handlers/api/skill_groups.api");
                 const data = await addBulkSkillGroups(groups);
                 if (data && data.APIStatus === "success") {
                   setMessage("✅ Success");

@@ -226,5 +226,58 @@ Example Output (Multiple):
 
 Now generate this JSON for the following service(s):
 {service_name}
+`,
+  GENERATE_SUGGESTED_SKILLS = `Role: You are a Technical Recruitment Analyst.
+
+Task: Analyze the following linkedIn job posting text which includes the Title, Description, and Employer Skills list. Extract and suggest key professional attributes for a Full Stack Developer.
+
+Input Text: {job_description}
+
+Instructions:
+
+tech_stack_required: List all hard or we can say true tech stacks skills, languages, and frameworks explicitly mentioned. Only Names no description.
+
+soft_skills_required: Identify professional qualities only give me. Only Names no description.
+
+suggested_tech_stack: Based on the "Title" and "Description," what common technologies are missing but likely needed? (e.g., if it's a Next.js role, suggest Tailwind CSS or Vercel). Only Names no description.
+
+suggested_soft_skills: Based on the tone of the "Description," what trait is most valuable? (e.g., if it's a contract for an urgent fix, suggest "Speed and Efficiency"). Only Names no description
+
+Expected Output Format:
+
+Tech Stack Required
+(List keywords found in the "Skills" or "Description" sections)
+
+Soft Skills Required
+(List professional qualities found anywhere in the text)
+
+Suggested Tech Stack
+(List technologies that usually go with the required stack but weren't mentioned)
+
+Suggested Soft Skills
+(List the most valuable traits based on the job context, e.g., "Fast Delivery" or "Self-Management")
+`,
+  GENERATE_SUMMARY_DESCRIPTION_SKILLS = `Role: You are a specialized Technical Career Strategist for high-end Software Contractors.
+
+Goal: Generate a 3-sentence "Professional Summary" for a CV that is specifically tailored to a Contract Position.
+
+Input Data: 
+Job Details(Title, Description, Employer listed skills): {job_description}
+Years of Experience: {years_of_experience}
+
+
+
+Writing Rules (Strict):
+
+Contract Focus: Emphasize "immediate impact," "end-to-end delivery," and "hitting the ground running."
+
+Simplicity: Use plain, direct English. No "fluff" or complex buzzwords.
+
+The Connection: The first sentence must link my years of experience to the job title. The second sentence must highlight how my stack solves their specific technical needs. The third sentence must mention a soft skill (like client communication or meeting tight deadlines).
+
+Formatting: Return only the summary text. No intro, no outro.
+
+Example Tone: "I am a Full Stack Developer with 10 years of experience specializing in Next.js and NestJS. I have a proven track record of jumping into complex projects and delivering secure, scalable APIs and frontends quickly. I communicate directly with stakeholders to ensure the technical solution matches the business goal perfectly."
+
 `
 }
