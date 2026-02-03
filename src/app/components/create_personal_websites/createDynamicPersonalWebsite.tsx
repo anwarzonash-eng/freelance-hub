@@ -1206,7 +1206,9 @@ export default function CreateDynamicPersonalWebsite({
               <div className="lg:col-span-1 bg-white p-4 rounded-xl shadow-lg border border-gray-200">
                 {/* Basic Information Category */}
                 <div className="mb-4">
-                  <h3 className="text-sm font-bold text-gray-800 mb-2 pb-2 border-b border-gray-300">Basic Information</h3>
+                  <h3 className="text-sm font-bold text-gray-800 mb-2 pb-2 border-b border-gray-300">
+                    Basic Information
+                  </h3>
                   <div className="space-y-2">
                     {[
                       {
@@ -1245,10 +1247,14 @@ export default function CreateDynamicPersonalWebsite({
 
                 {/* Pricing & Location Category */}
                 <div className="mb-4">
-                  <h3 className="text-sm font-bold text-gray-800 mb-2 pb-2 border-b border-gray-300">Pricing & Location</h3>
+                  <h3 className="text-sm font-bold text-gray-800 mb-2 pb-2 border-b border-gray-300">
+                    Pricing & Location
+                  </h3>
                   <div className="space-y-2">
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-0.5">Hourly Rate</label>
+                      <label className="block text-xs font-medium text-gray-700 mb-0.5">
+                        Hourly Rate
+                      </label>
                       <input
                         value={hourlyRate}
                         onChange={(e) => {
@@ -1267,7 +1273,9 @@ export default function CreateDynamicPersonalWebsite({
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-0.5">Salary Type</label>
+                      <label className="block text-xs font-medium text-gray-700 mb-0.5">
+                        Salary Type
+                      </label>
                       <select
                         value={salaryType}
                         onChange={(e) => setSalaryType(e.target.value)}
@@ -1278,7 +1286,9 @@ export default function CreateDynamicPersonalWebsite({
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-0.5">Job Country</label>
+                      <label className="block text-xs font-medium text-gray-700 mb-0.5">
+                        Job Country
+                      </label>
                       <select
                         value={jobCountry}
                         onChange={(e) => setJobCountry(e.target.value)}
@@ -1295,24 +1305,36 @@ export default function CreateDynamicPersonalWebsite({
 
                 {/* Website & Engagement Category */}
                 <div className="mb-4">
-                  <h3 className="text-sm font-bold text-gray-800 mb-2 pb-2 border-b border-gray-300">Website & Engagement</h3>
+                  <h3 className="text-sm font-bold text-gray-800 mb-2 pb-2 border-b border-gray-300">
+                    Website & Engagement
+                  </h3>
                   <div className="space-y-2">
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-0.5">Website Purpose</label>
+                      <label className="block text-xs font-medium text-gray-700 mb-0.5">
+                        Website Purpose
+                      </label>
                       <select
                         value={selectedWebsitePurpose}
-                        onChange={(e) => setSelectedWebsitePurpose(e.target.value)}
+                        onChange={(e) =>
+                          setSelectedWebsitePurpose(e.target.value)
+                        }
                         className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm"
                       >
                         <option value="upwork">Upwork</option>
-                        <option value="other_freelance_or_remote_jobs">Other Freelance/Remote</option>
-                        <option value="real_office_jobs_remote_hybrid">Office Jobs Remote/Hybrid</option>
-                        <option value="startups_clients">Startups Clients</option>
+                        <option value="contract">Other Freelance/Remote</option>
+                        <option value="real_office_jobs_remote_hybrid">
+                          Office Jobs Remote/Hybrid
+                        </option>
+                        <option value="startups_clients">
+                          Startups Clients
+                        </option>
                         <option value="students">Students</option>
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-0.5">Website Created For (URL)</label>
+                      <label className="block text-xs font-medium text-gray-700 mb-0.5">
+                        Website Created For (URL)
+                      </label>
                       <input
                         value={websiteCreatedFor}
                         onChange={(e) => setWebsiteCreatedFor(e.target.value)}
@@ -1329,17 +1351,26 @@ export default function CreateDynamicPersonalWebsite({
                         type="checkbox"
                         className="w-4 h-4"
                       />
-                      <label htmlFor="createUrls" className="text-xs font-medium text-gray-700">Create Short URLs</label>
+                      <label
+                        htmlFor="createUrls"
+                        className="text-xs font-medium text-gray-700"
+                      >
+                        Create Short URLs
+                      </label>
                     </div>
                   </div>
                 </div>
 
                 {/* Experience & Description Category */}
                 <div className="mb-4">
-                  <h3 className="text-sm font-bold text-gray-800 mb-2 pb-2 border-b border-gray-300">Experience & Description</h3>
+                  <h3 className="text-sm font-bold text-gray-800 mb-2 pb-2 border-b border-gray-300">
+                    Experience & Description
+                  </h3>
                   <div className="space-y-2">
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-0.5">Years of Experience</label>
+                      <label className="block text-xs font-medium text-gray-700 mb-0.5">
+                        Years of Experience
+                      </label>
                       <input
                         value={experienceYears}
                         onChange={(e) => {
@@ -1359,7 +1390,9 @@ export default function CreateDynamicPersonalWebsite({
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-0.5">AI CV Description</label>
+                      <label className="block text-xs font-medium text-gray-700 mb-0.5">
+                        AI CV Description
+                      </label>
                       <textarea
                         value={taxArea}
                         onChange={(e) => setTaxArea(e.target.value)}
@@ -1373,10 +1406,14 @@ export default function CreateDynamicPersonalWebsite({
 
                 {/* Upwork Settings Category */}
                 <div className="mb-4">
-                  <h3 className="text-sm font-bold text-gray-800 mb-2 pb-2 border-b border-gray-300">Upwork Settings</h3>
+                  <h3 className="text-sm font-bold text-gray-800 mb-2 pb-2 border-b border-gray-300">
+                    Upwork Settings
+                  </h3>
                   <div className="space-y-2">
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-0.5">Show Status</label>
+                      <label className="block text-xs font-medium text-gray-700 mb-0.5">
+                        Show Status
+                      </label>
                       <select
                         value={upworkShowStatus}
                         onChange={(e) => setUpworkShowStatus(e.target.value)}
@@ -1395,7 +1432,12 @@ export default function CreateDynamicPersonalWebsite({
                         type="checkbox"
                         className="w-4 h-4"
                       />
-                      <label htmlFor="hideEarningsCheck" className="text-xs font-medium text-gray-700">Hide Earnings</label>
+                      <label
+                        htmlFor="hideEarningsCheck"
+                        className="text-xs font-medium text-gray-700"
+                      >
+                        Hide Earnings
+                      </label>
                     </div>
                   </div>
                 </div>
