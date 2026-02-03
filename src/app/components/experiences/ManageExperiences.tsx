@@ -72,6 +72,13 @@ export default function ManageExperiences() {
     );
   });
 
+  const formatDateTime = (value: any) => {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toLocaleString();
+  };
+
   const handleEdit = (experience: any) => {
     setForm({ ...experience });
     setIsEdit(true);
@@ -211,7 +218,13 @@ export default function ManageExperiences() {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4">
-          {filteredExperiences.map((e: any) => (
+          {[...filteredExperiences]
+            .sort((a: any, b: any) => {
+              const aTime = a?.starting_date ? new Date(a.starting_date).getTime() : 0;
+              const bTime = b?.starting_date ? new Date(b.starting_date).getTime() : 0;
+              return bTime - aTime;
+            })
+            .map((e: any) => (
             <div
               key={e.id}
               className="bg-white border-2 border-gray-200 rounded-lg overflow-hidden shadow-md hover:shadow-lg transition hover:border-blue-300 flex"
@@ -260,6 +273,22 @@ export default function ManageExperiences() {
                       {e.company_name}
                     </p>
                   )}
+                  {e.type && (
+                    <p className="text-sm text-gray-600 mb-2">
+                      <span className="font-semibold">Type:</span>{" "}
+                      {e.type === "full_time"
+                        ? "Full Time"
+                        : e.type === "contract"
+                          ? "Contract"
+                          : "Freelance"}
+                    </p>
+                  )}
+                  {e.location && (
+                    <p className="text-sm text-gray-600 mb-2">
+                      <span className="font-semibold">Location:</span>{" "}
+                      {e.location}
+                    </p>
+                  )}
                   {e.company_website && (
                     <p className="text-sm text-blue-600 mb-2">
                       <span className="font-semibold">Website:</span>{" "}
@@ -273,18 +302,22 @@ export default function ManageExperiences() {
                       </a>
                     </p>
                   )}
-                  {e.starting_date && (
+                  {formatDateTime(e.starting_date) && (
                     <p className="text-sm text-gray-600 mb-2">
                       <span className="font-semibold">Start:</span>{" "}
-                      {new Date(e.starting_date).toLocaleDateString()}
+                      {formatDateTime(e.starting_date)}
                     </p>
                   )}
-                  {e.ending_Date && (
+                  {formatDateTime(e.ending_Date) && (
                     <p className="text-sm text-gray-600 mb-2">
                       <span className="font-semibold">End:</span>{" "}
-                      {e.ending_Date}
+                      {formatDateTime(e.ending_Date)}
                     </p>
                   )}
+                  <p className="text-xs text-gray-600 font-semibold">
+                    <span className="font-semibold">Working:</span>{" "}
+                    {e.working ? "Yes" : "No"}
+                  </p>
                 </div>
               </div>
               <div className="shrink-0 flex gap-2 p-4 items-center border-l-2 border-gray-200">
@@ -412,16 +445,45 @@ export default function ManageExperiences() {
                 <div className="grid grid-cols-2 gap-6 mb-6">
                   <div>
                     <label className="block font-bold text-gray-700 mb-2">
+                      Type
+                    </label>
+                    <select
+                      name="type"
+                      value={form?.type || ""}
+                      onChange={handleFormChange}
+                      className="w-full border-2 border-gray-300 px-4 py-2 rounded-lg focus:border-blue-500 focus:outline-none"
+                    >
+                      <option value="">Select Type</option>
+                      <option value="full_time">Full Time</option>
+                      <option value="contract">Contract</option>
+                      <option value="freelance">Freelance</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-bold text-gray-700 mb-2">
+                      Location
+                    </label>
+                    <input
+                      name="location"
+                      value={form?.location || ""}
+                      onChange={handleFormChange}
+                      className="w-full border-2 border-gray-300 px-4 py-2 rounded-lg focus:border-blue-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-6 mb-6">
+                  <div>
+                    <label className="block font-bold text-gray-700 mb-2">
                       Starting Date
                     </label>
                     <input
                       name="starting_date"
-                      type="date"
+                      type="datetime-local"
                       value={
                         form?.starting_date
                           ? new Date(form.starting_date)
                               .toISOString()
-                              .split("T")[0]
+                              .slice(0, 16)
                           : ""
                       }
                       onChange={(e) =>
@@ -441,12 +503,39 @@ export default function ManageExperiences() {
                     </label>
                     <input
                       name="ending_Date"
-                      type="text"
-                      value={form?.ending_Date || ""}
-                      onChange={handleFormChange}
+                      type="datetime-local"
+                      value={
+                        form?.ending_Date
+                          ? new Date(form.ending_Date).toISOString().slice(0, 16)
+                          : ""
+                      }
+                      onChange={(e) =>
+                        setForm((prev: any) => ({
+                          ...prev,
+                          ending_Date: e.target.value
+                            ? new Date(e.target.value).toISOString()
+                            : null,
+                        }))
+                      }
                       className="w-full border-2 border-gray-300 px-4 py-2 rounded-lg focus:border-blue-500 focus:outline-none"
                     />
                   </div>
+                </div>
+                <div className="mb-6">
+                  <label className="inline-flex items-center gap-2 font-bold text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={!!form?.working}
+                      onChange={(e) =>
+                        setForm((prev: any) => ({
+                          ...prev,
+                          working: e.target.checked,
+                        }))
+                      }
+                      className="w-5 h-5"
+                    />
+                    Working
+                  </label>
                 </div>
                 <div className="mb-6">
                   <label className="block font-bold text-gray-700 mb-2">
