@@ -10,6 +10,7 @@ import { getAllCategories } from "@/app/api_handlers/api/categories.api";
 import { getAllSkills } from "@/app/api_handlers/api/skills.api";
 import GenericPopup from "../popups/GenericPopup";
 import CreateDynamicPersonalWebsite from "./createDynamicPersonalWebsite";
+import SkillSearchPopup from "./SkillSearchPopup";
 import { Copy, Search, ChevronDown, ChevronUp } from "lucide-react";
 import WebsiteURLs from "./websiteUrls";
 
@@ -40,6 +41,8 @@ interface DetailProfile {
   services: any[];
   website_created_for?: string;
   ai_short_description?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export default function ManageDetailProfiles() {
@@ -55,8 +58,10 @@ export default function ManageDetailProfiles() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [openCreatePopup, setOpenCreatePopup] = useState(false);
+  const [openSkillSearchPopup, setOpenSkillSearchPopup] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [selectedSearchSkills, setSelectedSearchSkills] = useState<Skill[]>([]);
 
   const updateProfileData = (updatedProfile: DetailProfile) => {
     setAllProfiles((prev) =>
@@ -122,9 +127,27 @@ export default function ManageDetailProfiles() {
       .filter(Boolean);
   };
 
+  // Get full skill objects from IDs for matching
+  const getSkillObjects = (skillIds: any) => {
+    if (!skillIds?.skills_ids || !Array.isArray(skillIds.skills_ids)) return [];
+    return skillIds.skills_ids
+      .map((id: string) => allSkills.find((s) => String(s.id) === String(id)))
+      .filter(Boolean) as Skill[];
+  };
+
+  // Calculate matched percentage for a profile
+  const calculateMatchPercentage = (profile: DetailProfile): number => {
+    if (selectedSearchSkills.length === 0) return 0;
+    const profileSkills = getSkillObjects(profile.skills_ids);
+    const matchedCount = profileSkills.filter((ps) =>
+      selectedSearchSkills.some((s) => s.id === ps.id),
+    ).length;
+    return Math.round((matchedCount / selectedSearchSkills.length) * 100);
+  };
+
   // Filter profiles based on all criteria
   const getFilteredProfiles = () => {
-    return allProfiles.filter((profile) => {
+    let filtered = allProfiles.filter((profile) => {
       // Filter by main profile
       if (
         selectedMainProfile &&
@@ -152,10 +175,32 @@ export default function ManageDetailProfiles() {
           profile.website_created_for?.toLowerCase().includes(query)
         );
       }
-      // (JSX for expanded/copy must NOT be here)
 
       return true;
     });
+
+    // Sort profiles
+    if (selectedSearchSkills.length > 0) {
+      // Sort by matched percentage (descending), then by createdAt (most recent first)
+      filtered.sort((a, b) => {
+        const percentDiff = calculateMatchPercentage(b) - calculateMatchPercentage(a);
+        if (percentDiff !== 0) return percentDiff;
+        const dateA = new Date(a.createdAt || 0).getTime();
+        const dateB = new Date(b.createdAt || 0).getTime();
+        return dateB - dateA;
+      });
+      // Limit to top 20 profiles when matched
+      filtered = filtered.slice(0, 20);
+    } else {
+      // Sort by createdAt (most recent first)
+      filtered.sort((a, b) => {
+        const dateA = new Date(a.createdAt || 0).getTime();
+        const dateB = new Date(b.createdAt || 0).getTime();
+        return dateB - dateA;
+      });
+    }
+
+    return filtered;
   };
 
   const handleCopyUniqueId = (uniqueId: string) => {
@@ -181,6 +226,22 @@ export default function ManageDetailProfiles() {
         </GenericPopup>
       )}
 
+      {openSkillSearchPopup && (
+        <GenericPopup
+          title="Search & Match Skills"
+          onClose={() => setOpenSkillSearchPopup(false)}
+        >
+          <SkillSearchPopup
+            allSkills={allSkills}
+            onClose={() => setOpenSkillSearchPopup(false)}
+            onConfirm={(skills) => {
+              setSelectedSearchSkills(skills);
+              setOpenSkillSearchPopup(false);
+            }}
+          />
+        </GenericPopup>
+      )}
+
       {isLoading && (
         <div className="flex items-center justify-center min-h-screen">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
@@ -202,6 +263,22 @@ export default function ManageDetailProfiles() {
               >
                 🔄 Refresh
               </button>
+              <button
+                onClick={() => setOpenSkillSearchPopup(true)}
+                className="px-4 py-2 bg-purple-600 text-white font-semibold rounded-lg shadow hover:bg-purple-700 transition"
+                title="Search and match skills by description"
+              >
+                🔍 Search by Skills
+              </button>
+              {selectedSearchSkills.length > 0 && (
+                <button
+                  onClick={() => setSelectedSearchSkills([])}
+                  className="px-4 py-2 bg-yellow-600 text-white font-semibold rounded-lg shadow hover:bg-yellow-700 transition"
+                  title="Clear selected skills"
+                >
+                  ✕ Clear Skills
+                </button>
+              )}
               <button
                 onClick={async () => {
                   if (
@@ -297,6 +374,10 @@ export default function ManageDetailProfiles() {
                 );
                 const isExpanded = expandedId === profile.id;
                 const skillTitles = getSkillTitles(profile.skills_ids);
+                const matchPercentage = calculateMatchPercentage(profile);
+                const updatedDate = profile.updatedAt
+                  ? new Date(profile.updatedAt).toLocaleDateString()
+                  : "—";
 
                 return (
                   <div
@@ -376,6 +457,26 @@ export default function ManageDetailProfiles() {
                           {mainCategory?.title || "—"}
                         </span>
                       </div>
+
+                      {/* Match Percentage & Updated Date */}
+                      <div className="shrink-0 flex items-center gap-2">
+                        {selectedSearchSkills.length > 0 && (
+                          <span
+                            className={`inline-block px-2 py-1 text-xs font-semibold rounded whitespace-nowrap ${
+                              matchPercentage === 100
+                                ? "bg-green-100 text-green-700 border border-green-300"
+                                : matchPercentage >= 50
+                                  ? "bg-yellow-100 text-yellow-700 border border-yellow-300"
+                                  : "bg-red-100 text-red-700 border border-red-300"
+                            }`}
+                          >
+                            {matchPercentage}%
+                          </span>
+                        )}
+                        <span className="text-xs text-gray-500 whitespace-nowrap">
+                          {updatedDate}
+                        </span>
+                      </div>
                     </div>
 
                     {/* Expanded Content */}
@@ -386,20 +487,84 @@ export default function ManageDetailProfiles() {
                           <span className="text-xs font-semibold text-gray-600 uppercase block mb-2">
                             Skills ({skillTitles.length})
                           </span>
-                          <div className="flex flex-wrap gap-1">
-                            {skillTitles.length > 0 ? (
-                              skillTitles.map((skillTitle, idx) => (
-                                <span
-                                  key={idx}
-                                  className="inline-block px-2 py-1 bg-indigo-100 text-indigo-700 text-xs font-semibold rounded-full"
-                                >
-                                  {skillTitle}
+                          <div className="flex flex-col gap-3">
+                            {/* Profile Skills */}
+                            <div>
+                              <div className="flex flex-wrap gap-1">
+                                {skillTitles.length > 0 ? (
+                                  skillTitles.map((skillTitle, idx) => {
+                                    const profileSkill = getSkillObjects(
+                                      profile.skills_ids,
+                                    )[idx];
+                                    const isMatched = selectedSearchSkills.some(
+                                      (s) => s.id === profileSkill?.id,
+                                    );
+
+                                    return (
+                                      <span
+                                        key={idx}
+                                        className={`inline-block px-2 py-1 text-xs font-semibold rounded-full ${
+                                          isMatched
+                                            ? "bg-green-100 text-green-700 border border-green-300"
+                                            : "bg-indigo-100 text-indigo-700"
+                                        }`}
+                                      >
+                                        {skillTitle}
+                                      </span>
+                                    );
+                                  })
+                                ) : (
+                                  <span className="text-xs text-gray-400">
+                                    No skills
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Selected Skills Not in Profile */}
+                            {selectedSearchSkills.length > 0 && (
+                              <div className="border-t pt-2">
+                                <span className="text-xs font-semibold text-gray-600 uppercase block mb-1">
+                                  Missing from Profile (
+                                  {
+                                    selectedSearchSkills.filter(
+                                      (s) =>
+                                        !getSkillObjects(
+                                          profile.skills_ids,
+                                        ).some((ps) => ps.id === s.id),
+                                    ).length
+                                  }
+                                  )
                                 </span>
-                              ))
-                            ) : (
-                              <span className="text-xs text-gray-400">
-                                No skills
-                              </span>
+                                <div className="flex flex-wrap gap-1">
+                                  {selectedSearchSkills.filter(
+                                    (s) =>
+                                      !getSkillObjects(profile.skills_ids).some(
+                                        (ps) => ps.id === s.id,
+                                      ),
+                                  ).length > 0 ? (
+                                    selectedSearchSkills
+                                      .filter(
+                                        (s) =>
+                                          !getSkillObjects(
+                                            profile.skills_ids,
+                                          ).some((ps) => ps.id === s.id),
+                                      )
+                                      .map((skill) => (
+                                        <span
+                                          key={skill.id}
+                                          className="inline-block px-2 py-1 bg-orange-100 text-orange-700 text-xs font-semibold rounded-full border border-orange-300"
+                                        >
+                                          {skill.title}
+                                        </span>
+                                      ))
+                                  ) : (
+                                    <span className="text-xs text-gray-400">
+                                      All selected skills are in profile
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
                             )}
                           </div>
                         </div>

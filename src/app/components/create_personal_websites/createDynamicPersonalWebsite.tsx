@@ -160,6 +160,9 @@ export default function CreateDynamicPersonalWebsite({
     selectedSkillToCreateSkillGroupName,
     setSelectedSkillToCreateSkillGroupName,
   ] = useState<string | null>(null);
+  const [hideEarnings, setHideEarnings] = useState<boolean>(false);
+  const [upworkShowStatus, setUpworkShowStatus] = useState<string>("show");
+  const [importalSkills, setImportalSkills] = useState<string[]>([]);
 
   const deleteSkill = (skillId) => {
     // Filter out the skill that matches the given ID
@@ -193,6 +196,9 @@ export default function CreateDynamicPersonalWebsite({
     setSelectedMainProfile("8bc33b51-204f-4a85-9242-4a38c73e35aa");
     setMainCategoryId(null);
     setJobDescription("");
+    setHideEarnings(false);
+    setUpworkShowStatus("show");
+    setImportalSkills([]);
   };
 
   // Load all data on mount
@@ -259,6 +265,15 @@ export default function CreateDynamicPersonalWebsite({
       setAllCategoriesMultiSelect([]);
     }
   }, [selectedMainProfile, allCategoriesRaw]);
+
+  // Update upwork-specific fields based on website purpose
+  useEffect(() => {
+    if (selectedWebsitePurpose !== "upwork") {
+      setHideEarnings(true);
+      setUpworkShowStatus("hide");
+    }
+  }, [selectedWebsitePurpose]);
+
   useEffect(() => {}, [allCategoriesMultiSelect]);
 
   useEffect(() => {
@@ -541,6 +556,9 @@ export default function CreateDynamicPersonalWebsite({
       job_country: jobCountry,
       experience_years: experienceYears,
       ai_short_description: taxArea,
+      hide_earnings: hideEarnings,
+      upwork_show_status: upworkShowStatus,
+      importal_skills: importalSkills,
     };
 
     try {
@@ -980,10 +998,10 @@ export default function CreateDynamicPersonalWebsite({
                           <span className="ml-2 text-sm font-medium text-gray-700 truncate">
                             {skillItem.title}
                           </span>
-                          <div>
+                          <div className="flex gap-2 items-center">
                             {!skillItem.isMatchedSkillCategory ? (
-                              <span className="text-red-500 mr-4">
-                                No Skill Category
+                              <span className="text-red-500 mr-2 text-xs">
+                                No Category
                               </span>
                             ) : (
                               ""
@@ -991,7 +1009,7 @@ export default function CreateDynamicPersonalWebsite({
                             {!skillItem.isMatchedSkillGroup ? (
                               <button
                                 className={
-                                  "px-4 py-2 text-white font-bold rounded-lg shadow-xl transition duration-200 bg-gray-400  bg-green-600 hover:bg-green-700"
+                                  "px-2 py-1 text-xs text-white font-bold rounded shadow transition duration-200 bg-green-600 hover:bg-green-700"
                                 }
                                 onClick={() => {
                                   setOpenAddSkillGroupPopup(true);
@@ -1003,11 +1021,36 @@ export default function CreateDynamicPersonalWebsite({
                                   );
                                 }}
                               >
-                                Create Skill Group
+                                Skill Group
                               </button>
                             ) : (
                               ""
                             )}
+                            {/* Mark Important Button */}
+                            <button
+                              onClick={() => {
+                                if (importalSkills.includes(skillItem.id)) {
+                                  setImportalSkills(
+                                    importalSkills.filter(
+                                      (id) => id !== skillItem.id,
+                                    ),
+                                  );
+                                } else {
+                                  setImportalSkills([
+                                    ...importalSkills,
+                                    skillItem.id,
+                                  ]);
+                                }
+                              }}
+                              className={`px-2 py-1 text-xs font-bold rounded shadow transition duration-200 ${
+                                importalSkills.includes(skillItem.id)
+                                  ? "bg-yellow-500 text-white hover:bg-yellow-600"
+                                  : "bg-gray-300 text-gray-700 hover:bg-gray-400"
+                              }`}
+                              title={`Mark ${skillItem.title} as important`}
+                            >
+                              ★ Important
+                            </button>
                             {/* Delete Button */}
                             <button
                               onClick={() => deleteSkill(skillItem.id)}
@@ -1317,15 +1360,43 @@ export default function CreateDynamicPersonalWebsite({
 
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-1 ">
-                    Tax Area
+                    AI CV Description
                   </label>
                   <input
                     value={taxArea}
                     onChange={(e) => setTaxArea(e.target.value)}
                     type="text"
+                    multiple
                     placeholder="e.g., US, UK, EU"
                     className="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm"
                   />
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1 ">
+                    Upwork Show Status
+                  </label>
+                  <select
+                    value={upworkShowStatus}
+                    onChange={(e) => setUpworkShowStatus(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm"
+                  >
+                    <option value="show">Show</option>
+                    <option value="hide">Hide</option>
+                    <option value="show_at_end">Show at End</option>
+                  </select>
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <input
+                      checked={hideEarnings}
+                      onChange={(e) => setHideEarnings(e.target.checked)}
+                      type="checkbox"
+                      className="mr-2"
+                    />
+                    Hide Earnings
+                  </label>
                 </div>
 
                 {/* Select Fields */}
