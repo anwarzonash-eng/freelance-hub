@@ -71,7 +71,7 @@ export const apiClient = async <T = any, P = any>(
     const isFormData = payload instanceof FormData;
 
     const defaultHeaders: HeadersInit = isFormData
-        ? {} // FormData will set Content-Type automatically
+        ? { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) } // FormData will set Content-Type automatically
         : {
             'Content-Type': 'application/json',
             ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
