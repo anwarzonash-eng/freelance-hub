@@ -1203,250 +1203,203 @@ export default function CreateDynamicPersonalWebsite({
               setInitialSelectValue={changeMaincategory}
             /> */}
               {/* --- COLUMN 3: Profile Details & Output (Right) --- */}
-              <div className="lg:col-span-1 bg-white p-6 rounded-xl shadow-lg border border-gray-200">
-                {/* Input Fields (Styled with better spacing and labels) */}
-                {[
-                  {
-                    label: "Designation",
-                    state: designation,
-                    setter: setDesignation,
-                    type: "text",
-                  },
-
-                  {
-                    label: "Tag Line",
-                    state: tagline,
-                    setter: setTagline,
-                    type: "text",
-                  },
-                  {
-                    label: "Private Title",
-                    state: privateTitle,
-                    setter: setPrivateTitle,
-                    type: "text",
-                  },
-                ].map((field, index) => (
-                  <div key={index} className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1 ">
-                      {field.label}
-                    </label>
-                    <input
-                      value={field.state}
-                      onChange={(e) => field.setter(e.target.value)}
-                      type={field.type}
-                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm"
-                    />
+              <div className="lg:col-span-1 bg-white p-4 rounded-xl shadow-lg border border-gray-200">
+                {/* Basic Information Category */}
+                <div className="mb-4">
+                  <h3 className="text-sm font-bold text-gray-800 mb-2 pb-2 border-b border-gray-300">Basic Information</h3>
+                  <div className="space-y-2">
+                    {[
+                      {
+                        label: "Designation",
+                        state: designation,
+                        setter: setDesignation,
+                        type: "text",
+                      },
+                      {
+                        label: "Tag Line",
+                        state: tagline,
+                        setter: setTagline,
+                        type: "text",
+                      },
+                      {
+                        label: "Private Title",
+                        state: privateTitle,
+                        setter: setPrivateTitle,
+                        type: "text",
+                      },
+                    ].map((field, index) => (
+                      <div key={index}>
+                        <label className="block text-xs font-medium text-gray-700 mb-0.5">
+                          {field.label}
+                        </label>
+                        <input
+                          value={field.state}
+                          onChange={(e) => field.setter(e.target.value)}
+                          type={field.type}
+                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm"
+                        />
+                      </div>
+                    ))}
                   </div>
-                ))}
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1 ">
-                    Hourly Rate
-                  </label>
-                  <input
-                    value={hourlyRate}
-                    onChange={(e) => {
-                      const rawValue = e.target.value;
-
-                      if (rawValue === "") {
-                        sethourlyRate(0);
-                      } else {
-                        const numericValue = parseFloat(rawValue);
-
-                        if (!isNaN(numericValue)) {
-                          sethourlyRate(numericValue);
-                        }
-                      }
-                    }}
-                    type="number"
-                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm"
-                  />
-                </div>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1 ">
-                    Website Purpose
-                  </label>
-                  <select
-                    value={selectedWebsitePurpose}
-                    onChange={(e) => setSelectedWebsitePurpose(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm"
-                  >
-                    <option value="upwork">Upwork</option>
-                    <option value="other_freelance_or_remote_jobs">
-                      Other Freelance or Remote Jobs
-                    </option>
-                    <option value="real_office_jobs_remote_hybrid">
-                      Real Office Jobs Remote/Hybrid
-                    </option>
-                    <option value="startups_clients">Startups Clients</option>
-                    <option value="students">Students</option>
-                  </select>
-                </div>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1 ">
-                    Website Created For (URL)
-                  </label>
-                  <input
-                    value={websiteCreatedFor}
-                    onChange={(e) => setWebsiteCreatedFor(e.target.value)}
-                    type="text"
-                    placeholder="https://example.com"
-                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm"
-                  />
-                </div>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1 ">
-                    <input
-                      checked={isCreateShortURLs}
-                      onChange={(e) => setIsCreateShortURLs(e.target.checked)}
-                      type="checkbox"
-                      className="mr-2"
-                    />
-                    Create Short URLs
-                  </label>
                 </div>
 
+                {/* Pricing & Location Category */}
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1 ">
-                    Salary Type
-                  </label>
-                  <select
-                    value={salaryType}
-                    onChange={(e) => setSalaryType(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm"
-                  >
-                    <option value="per_hour">Per Hour</option>
-                    <option value="per_day">Per Day</option>
-                  </select>
-                </div>
-
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1 ">
-                    Job Country
-                  </label>
-                  <select
-                    value={jobCountry}
-                    onChange={(e) => setJobCountry(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm"
-                  >
-                    <option value="uk">UK</option>
-                    <option value="us">US</option>
-                    <option value="europe">Europe</option>
-                    <option value="others">Others</option>
-                  </select>
-                </div>
-
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1 ">
-                    Years of Experience
-                  </label>
-                  <input
-                    value={experienceYears}
-                    onChange={(e) => {
-                      const rawValue = e.target.value;
-                      if (rawValue === "") {
-                        setExperienceYears(0);
-                      } else {
-                        const numericValue = parseInt(rawValue, 10);
-                        if (!isNaN(numericValue)) {
-                          setExperienceYears(numericValue);
-                        }
-                      }
-                    }}
-                    type="number"
-                    min="0"
-                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm"
-                  />
-                </div>
-
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1 ">
-                    AI CV Description
-                  </label>
-                  <input
-                    value={taxArea}
-                    onChange={(e) => setTaxArea(e.target.value)}
-                    type="text"
-                    multiple
-                    placeholder="e.g., US, UK, EU"
-                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm"
-                  />
-                </div>
-
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1 ">
-                    Upwork Show Status
-                  </label>
-                  <select
-                    value={upworkShowStatus}
-                    onChange={(e) => setUpworkShowStatus(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm"
-                  >
-                    <option value="show">Show</option>
-                    <option value="hide">Hide</option>
-                    <option value="show_at_end">Show at End</option>
-                  </select>
-                </div>
-
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    <input
-                      checked={hideEarnings}
-                      onChange={(e) => setHideEarnings(e.target.checked)}
-                      type="checkbox"
-                      className="mr-2"
-                    />
-                    Hide Earnings
-                  </label>
-                </div>
-
-                {/* Select Fields */}
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Main Service Category
-                  </label>
-                  {/* <select
-                  value={mainCategoryId}
-                  className="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm"
-                  onChange={(e) => changeMaincategory(e.target.value)}
-                >
-                  <option value="select">-- Select Category --</option>
-                  {allCategories.map((category, index) => (
-                    <option key={index} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select> */}
-                </div>
-
-                {/* Create Profile Button */}
-                {/* <button
-                className={`
-                            w-full px-4 py-3 text-white font-bold rounded-lg shadow-xl transition duration-200 
-                            ${
-                              isCreatingProfile
-                                ? "bg-gray-400 cursor-not-allowed"
-                                : "bg-green-600 hover:bg-green-700"
+                  <h3 className="text-sm font-bold text-gray-800 mb-2 pb-2 border-b border-gray-300">Pricing & Location</h3>
+                  <div className="space-y-2">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-0.5">Hourly Rate</label>
+                      <input
+                        value={hourlyRate}
+                        onChange={(e) => {
+                          const rawValue = e.target.value;
+                          if (rawValue === "") {
+                            sethourlyRate(0);
+                          } else {
+                            const numericValue = parseFloat(rawValue);
+                            if (!isNaN(numericValue)) {
+                              sethourlyRate(numericValue);
                             }
-                        `}
-                disabled={isCreatingProfile}
-                onClick={createProfile}
-              >
-                {isCreatingProfile
-                  ? "Creating Profile..."
-                  : "Create Dynamic Profile"}
-              </button>
+                          }
+                        }}
+                        type="number"
+                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-0.5">Salary Type</label>
+                      <select
+                        value={salaryType}
+                        onChange={(e) => setSalaryType(e.target.value)}
+                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm"
+                      >
+                        <option value="per_hour">Per Hour</option>
+                        <option value="per_day">Per Day</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-0.5">Job Country</label>
+                      <select
+                        value={jobCountry}
+                        onChange={(e) => setJobCountry(e.target.value)}
+                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm"
+                      >
+                        <option value="uk">UK</option>
+                        <option value="us">US</option>
+                        <option value="europe">Europe</option>
+                        <option value="others">Others</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
 
-              <button
-                className={` mt-2
-                            w-full px-4 py-3 text-white font-bold rounded-lg shadow-xl transition duration-200 
-                             
-                                 bg-error-700 hover:bg-error-900
-                            
-                        `}
-                onClick={clear}
-              >
-                Clear
-              </button> */}
+                {/* Website & Engagement Category */}
+                <div className="mb-4">
+                  <h3 className="text-sm font-bold text-gray-800 mb-2 pb-2 border-b border-gray-300">Website & Engagement</h3>
+                  <div className="space-y-2">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-0.5">Website Purpose</label>
+                      <select
+                        value={selectedWebsitePurpose}
+                        onChange={(e) => setSelectedWebsitePurpose(e.target.value)}
+                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm"
+                      >
+                        <option value="upwork">Upwork</option>
+                        <option value="other_freelance_or_remote_jobs">Other Freelance/Remote</option>
+                        <option value="real_office_jobs_remote_hybrid">Office Jobs Remote/Hybrid</option>
+                        <option value="startups_clients">Startups Clients</option>
+                        <option value="students">Students</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-0.5">Website Created For (URL)</label>
+                      <input
+                        value={websiteCreatedFor}
+                        onChange={(e) => setWebsiteCreatedFor(e.target.value)}
+                        type="text"
+                        placeholder="https://example.com"
+                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        id="createUrls"
+                        checked={isCreateShortURLs}
+                        onChange={(e) => setIsCreateShortURLs(e.target.checked)}
+                        type="checkbox"
+                        className="w-4 h-4"
+                      />
+                      <label htmlFor="createUrls" className="text-xs font-medium text-gray-700">Create Short URLs</label>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Experience & Description Category */}
+                <div className="mb-4">
+                  <h3 className="text-sm font-bold text-gray-800 mb-2 pb-2 border-b border-gray-300">Experience & Description</h3>
+                  <div className="space-y-2">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-0.5">Years of Experience</label>
+                      <input
+                        value={experienceYears}
+                        onChange={(e) => {
+                          const rawValue = e.target.value;
+                          if (rawValue === "") {
+                            setExperienceYears(0);
+                          } else {
+                            const numericValue = parseInt(rawValue, 10);
+                            if (!isNaN(numericValue)) {
+                              setExperienceYears(numericValue);
+                            }
+                          }
+                        }}
+                        type="number"
+                        min="0"
+                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-0.5">AI CV Description</label>
+                      <textarea
+                        value={taxArea}
+                        onChange={(e) => setTaxArea(e.target.value)}
+                        rows={3}
+                        placeholder="Enter your CV description..."
+                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm resize-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Upwork Settings Category */}
+                <div className="mb-4">
+                  <h3 className="text-sm font-bold text-gray-800 mb-2 pb-2 border-b border-gray-300">Upwork Settings</h3>
+                  <div className="space-y-2">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-0.5">Show Status</label>
+                      <select
+                        value={upworkShowStatus}
+                        onChange={(e) => setUpworkShowStatus(e.target.value)}
+                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm"
+                      >
+                        <option value="show">Show</option>
+                        <option value="hide">Hide</option>
+                        <option value="show_at_end">Show at End</option>
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        id="hideEarningsCheck"
+                        checked={hideEarnings}
+                        onChange={(e) => setHideEarnings(e.target.checked)}
+                        type="checkbox"
+                        className="w-4 h-4"
+                      />
+                      <label htmlFor="hideEarningsCheck" className="text-xs font-medium text-gray-700">Hide Earnings</label>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Newly Created Links Output */}
                 <WebsiteURLs
                   data={newlyCreatedProfileLinks}

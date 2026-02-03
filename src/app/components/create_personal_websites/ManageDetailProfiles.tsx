@@ -41,6 +41,9 @@ interface DetailProfile {
   services: any[];
   website_created_for?: string;
   ai_short_description?: string;
+  hide_earnings?: boolean;
+  upwork_show_status?: string;
+  importal_skills?: string[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -458,6 +461,24 @@ export default function ManageDetailProfiles() {
                         </span>
                       </div>
 
+                      {/* Upwork Show Status & Hide Earnings */}
+                      <div className="shrink-0 flex items-center gap-2">
+                        <span className={`inline-block px-2 py-1 text-xs font-semibold rounded whitespace-nowrap ${
+                          profile.upwork_show_status === 'show' ? 'bg-green-100 text-green-700 border border-green-300' :
+                          profile.upwork_show_status === 'hide' ? 'bg-red-100 text-red-700 border border-red-300' :
+                          'bg-yellow-100 text-yellow-700 border border-yellow-300'
+                        }`}>
+                          {profile.upwork_show_status === 'show' ? 'Show Upwork' :
+                           profile.upwork_show_status === 'hide' ? 'Hide Upwork' :
+                           'Show at End'}
+                        </span>
+                        {profile.hide_earnings && (
+                          <span className="inline-block px-2 py-1 text-xs font-semibold rounded whitespace-nowrap bg-orange-100 text-orange-700 border border-orange-300">
+                            Hide Earnings
+                          </span>
+                        )}
+                      </div>
+
                       {/* Match Percentage & Updated Date */}
                       <div className="shrink-0 flex items-center gap-2">
                         {selectedSearchSkills.length > 0 && (
@@ -482,10 +503,32 @@ export default function ManageDetailProfiles() {
                     {/* Expanded Content */}
                     {isExpanded && (
                       <div className="border-t bg-gray-50 p-3 flex flex-col gap-2">
+                        {/* Important Skills */}
+                        {profile.importal_skills && profile.importal_skills.length > 0 && (
+                          <div>
+                            <span className="text-xs font-semibold text-gray-600 uppercase block mb-2">
+                              ⭐ Important Skills ({profile.importal_skills.length})
+                            </span>
+                            <div className="flex flex-wrap gap-1 mb-3">
+                              {profile.importal_skills.map((skillId, idx) => {
+                                const skill = allSkills.find((s) => s.id === skillId);
+                                return (
+                                  <span
+                                    key={idx}
+                                    className="inline-block px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-700 border border-yellow-300"
+                                  >
+                                    ★ {skill?.title || skillId}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
                         {/* Skills */}
                         <div>
                           <span className="text-xs font-semibold text-gray-600 uppercase block mb-2">
-                            Skills ({skillTitles.length})
+                            All Skills ({skillTitles.length})
                           </span>
                           <div className="flex flex-col gap-3">
                             {/* Profile Skills */}
