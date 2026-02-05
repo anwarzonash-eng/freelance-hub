@@ -846,15 +846,33 @@ export default function CreateDynamicPersonalWebsite({
       {/* Top Section: Description Input & Fetch Button */}
       <div className="bg-white p-6 rounded-xl shadow-lg mb-8 border border-gray-200">
         <div className="flex flex-col md:flex-row gap-4">
-          <textarea
-            id="jobDescription"
-            rows={20}
-            className="w-full border border-gray-300 rounded-lg p-3 text-gray-800 focus:ring-indigo-500 focus:border-indigo-500 transition shadow-inner flex-1"
-            placeholder="Paste the job description or a list of required skills here..."
-            value={jobDescription}
-            onChange={(e) => setJobDescription(e.target.value)}
-          ></textarea>
+          <div className="w-full">
+            <textarea
+              id="jobDescription"
+              rows={20}
+              className="w-full border border-gray-300 rounded-lg p-3 text-gray-800 focus:ring-indigo-500 focus:border-indigo-500 transition shadow-inner flex-1"
+              placeholder="Paste the job description or a list of required skills here..."
+              value={jobDescription}
+              onChange={(e) => setJobDescription(e.target.value)}
+            ></textarea>
+            <div className="flex gap-2">
+              <button
+                className=" px-6 py-2 flex flex-col bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition duration-150 self-end md:self-auto"
+                onClick={copySuggestedSkillsPrompt}
+                disabled={!jobDescription}
+              >
+                Suggested Skills Prompt
+              </button>
 
+              <button
+                className=" px-6 py-2 flex flex-col bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition duration-150 self-end md:self-auto"
+                onClick={copySummaryDescriptionPrompt}
+                disabled={!experienceYears}
+              >
+                Summary Description Prompt
+              </button>
+            </div>
+          </div>
           <div className="flex flex-col gap-1 ">
             <button
               className=" w-full  px-6 py-2 flex flex-col bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition duration-150 self-end md:self-auto"
@@ -863,21 +881,6 @@ export default function CreateDynamicPersonalWebsite({
               Analyze & Fetch Skills
             </button>
 
-            <button
-              className="w-full px-6 py-2 flex flex-col bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition duration-150 self-end md:self-auto"
-              onClick={copySuggestedSkillsPrompt}
-              disabled={!jobDescription}
-            >
-              Suggested Skills Prompt
-            </button>
-
-            <button
-              className="w-full px-6 py-2 flex flex-col bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition duration-150 self-end md:self-auto"
-              onClick={copySummaryDescriptionPrompt}
-              disabled={!experienceYears}
-            >
-              Summary Description Prompt
-            </button>
             {/* <button
               className="w-full px-6 py-2 flex flex-col disabled:bg-gray-400 disabled:shadow-none disabled:cursor-not-allowed  bg-amber-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition duration-150 self-end md:self-auto"
               onClick={fetchMatchedProfile}

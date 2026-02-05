@@ -11,7 +11,8 @@ import { getAllSkills } from "@/app/api_handlers/api/skills.api";
 import GenericPopup from "../popups/GenericPopup";
 import CreateDynamicPersonalWebsite from "./createDynamicPersonalWebsite";
 import SkillSearchPopup from "./SkillSearchPopup";
-import { Copy, Search, ChevronDown, ChevronUp } from "lucide-react";
+import EditDetailProfilePopup from "./EditDetailProfilePopup";
+import { Copy, Search, ChevronDown, ChevronUp, Edit } from "lucide-react";
 import WebsiteURLs from "./websiteUrls";
 
 interface Skill {
@@ -22,6 +23,7 @@ interface Skill {
 interface Category {
   id: string;
   title: string;
+  main_profile_id?: string;
 }
 
 interface MainProfile {
@@ -44,6 +46,11 @@ interface DetailProfile {
   hide_earnings?: boolean;
   upwork_show_status?: string;
   importal_skills?: string[];
+  website_purpose?: string;
+  salary_type?: string;
+  job_country?: string;
+  hourly_rate?: string;
+  experience_years?: number;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -62,6 +69,8 @@ export default function ManageDetailProfiles() {
   const [isLoading, setIsLoading] = useState(false);
   const [openCreatePopup, setOpenCreatePopup] = useState(false);
   const [openSkillSearchPopup, setOpenSkillSearchPopup] = useState(false);
+  const [openEditProfilePopup, setOpenEditProfilePopup] = useState(false);
+  const [selectedProfileForEdit, setSelectedProfileForEdit] = useState<DetailProfile | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedSearchSkills, setSelectedSearchSkills] = useState<Skill[]>([]);
@@ -99,24 +108,11 @@ export default function ManageDetailProfiles() {
     loadInitialData();
   }, []);
 
-  // Filter categories based on selected main profile and services
+  // Filter categories based on selected main profile
   const getFilteredCategories = () => {
     if (!selectedMainProfile) return [];
 
-    const categoryIds = new Set<string>();
-    allProfiles
-      .filter((p) => p.main_profile_id === selectedMainProfile)
-      .forEach((profile) => {
-        const mainService = profile.services?.find(
-          (s: any) => s.type === "main",
-        );
-        if (mainService?.category_id) {
-          categoryIds.add(mainService.category_id);
-        }
-      });
-    console.log("Filtered Category IDs:", categories);
-
-    return categories.filter((cat) => categoryIds.has(cat.id));
+    return categories.filter((cat) => cat.main_profile_id === selectedMainProfile);
   };
 
   // Get skill titles from IDs
@@ -240,6 +236,31 @@ export default function ManageDetailProfiles() {
             onConfirm={(skills) => {
               setSelectedSearchSkills(skills);
               setOpenSkillSearchPopup(false);
+            }}
+          />
+        </GenericPopup>
+      )}
+
+      {openEditProfilePopup && selectedProfileForEdit && (
+        <GenericPopup
+          title="Edit Profile"
+          onClose={() => {
+            setOpenEditProfilePopup(false);
+            setSelectedProfileForEdit(null);
+          }}
+        >
+          <EditDetailProfilePopup
+            profile={selectedProfileForEdit}
+            allSkills={allSkills}
+            allCategories={categories.filter((cat) => cat.main_profile_id === selectedProfileForEdit.main_profile_id)}
+            onClose={() => {
+              setOpenEditProfilePopup(false);
+              setSelectedProfileForEdit(null);
+            }}
+            onSuccess={(updatedProfile) => {
+              updateProfileData(updatedProfile);
+              setOpenEditProfilePopup(false);
+              setSelectedProfileForEdit(null);
             }}
           />
         </GenericPopup>
@@ -637,7 +658,7 @@ export default function ManageDetailProfiles() {
                               <span className="font-semibold text-gray-600">
                                 AI Short Description:
                               </span>
-                              <p className="text-gray-700 whitespace-pre-wrap break-words">
+                              <p className="text-gray-700 whitespace-pre-wrap overflow-wrap">
                                 {(profile as any).ai_short_description}
                               </p>
                             </div>
@@ -711,6 +732,21 @@ export default function ManageDetailProfiles() {
                           setData={updateProfileData}
                           websitePurpose="remote_job"
                         />
+
+                        {/* Action Buttons */}
+                        <div className="flex gap-2 pt-2 border-t">
+                          <button
+                            onClick={() => {
+                              setSelectedProfileForEdit(profile);
+                              setOpenEditProfilePopup(true);
+                            }}
+                            className="flex-1 px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition flex items-center justify-center gap-2"
+                            title="Edit profile details"
+                          >
+                            <Edit size={16} />
+                            Edit Profile
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
