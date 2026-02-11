@@ -39,6 +39,7 @@ interface DetailProfile {
   upwork_show_status?: string;
   hide_earnings?: boolean;
   importal_skills?: string[];
+  email_type?: string;
 }
 
 interface EditDetailProfilePopupProps {
@@ -70,10 +71,14 @@ export default function EditDetailProfilePopup({
     experience_years: profile.experience_years || 10,
     upwork_show_status: profile.upwork_show_status || "show",
     hide_earnings: profile.hide_earnings || false,
+    email_type: profile.email_type || "personal",
   });
 
   const [selectedSkills, setSelectedSkills] = useState<Skill[]>(() => {
-    if (profile.skills_ids?.skills_ids && Array.isArray(profile.skills_ids.skills_ids)) {
+    if (
+      profile.skills_ids?.skills_ids &&
+      Array.isArray(profile.skills_ids.skills_ids)
+    ) {
       return profile.skills_ids.skills_ids
         .map((id: string) => allSkills.find((s) => String(s.id) === String(id)))
         .filter(Boolean) as Skill[];
@@ -81,9 +86,9 @@ export default function EditDetailProfilePopup({
     return [];
   });
 
-  const [importantSkillIds, setImportantSkillIds] = useState<Set<string | number>>(
-    new Set(profile.importal_skills || [])
-  );
+  const [importantSkillIds, setImportantSkillIds] = useState<
+    Set<string | number>
+  >(new Set(profile.importal_skills || []));
 
   const [mainService, setMainService] = useState<string | null>(() => {
     const main = profile.services?.find((s) => s.type === "main");
@@ -91,7 +96,11 @@ export default function EditDetailProfilePopup({
   });
 
   const [detailServices, setDetailServices] = useState<Set<string>>(
-    new Set(profile.services?.filter((s) => s.type === "detail").map((s) => s.category_id) || [])
+    new Set(
+      profile.services
+        ?.filter((s) => s.type === "detail")
+        .map((s) => s.category_id) || [],
+    ),
   );
 
   // UI state
@@ -116,7 +125,7 @@ export default function EditDetailProfilePopup({
   const availableCategories = useMemo(() => {
     const query = servicesSearchQuery.toLowerCase();
     return allCategories.filter((cat) =>
-      cat.title.toLowerCase().includes(query)
+      cat.title.toLowerCase().includes(query),
     );
   }, [allCategories, servicesSearchQuery]);
 
@@ -201,7 +210,7 @@ export default function EditDetailProfilePopup({
 
       // Build services array
       const services: Service[] = [];
-      
+
       if (mainService) {
         services.push({
           type: "main",
@@ -288,7 +297,9 @@ export default function EditDetailProfilePopup({
               <input
                 type="text"
                 value={formData.private_title || ""}
-                onChange={(e) => handleFieldChange("private_title", e.target.value)}
+                onChange={(e) =>
+                  handleFieldChange("private_title", e.target.value)
+                }
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
               />
             </div>
@@ -299,7 +310,9 @@ export default function EditDetailProfilePopup({
               <input
                 type="text"
                 value={formData.designation || ""}
-                onChange={(e) => handleFieldChange("designation", e.target.value)}
+                onChange={(e) =>
+                  handleFieldChange("designation", e.target.value)
+                }
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
               />
             </div>
@@ -329,7 +342,9 @@ export default function EditDetailProfilePopup({
               </label>
               <select
                 value={formData.website_purpose || ""}
-                onChange={(e) => handleFieldChange("website_purpose", e.target.value)}
+                onChange={(e) =>
+                  handleFieldChange("website_purpose", e.target.value)
+                }
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
               >
                 <option value="">Select Purpose</option>
@@ -345,7 +360,9 @@ export default function EditDetailProfilePopup({
               <input
                 type="text"
                 value={formData.website_created_for || ""}
-                onChange={(e) => handleFieldChange("website_created_for", e.target.value)}
+                onChange={(e) =>
+                  handleFieldChange("website_created_for", e.target.value)
+                }
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
               />
             </div>
@@ -355,7 +372,9 @@ export default function EditDetailProfilePopup({
               </label>
               <textarea
                 value={formData.ai_short_description || ""}
-                onChange={(e) => handleFieldChange("ai_short_description", e.target.value)}
+                onChange={(e) =>
+                  handleFieldChange("ai_short_description", e.target.value)
+                }
                 rows={3}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
               />
@@ -375,7 +394,9 @@ export default function EditDetailProfilePopup({
               </label>
               <select
                 value={formData.salary_type || "per_hour"}
-                onChange={(e) => handleFieldChange("salary_type", e.target.value)}
+                onChange={(e) =>
+                  handleFieldChange("salary_type", e.target.value)
+                }
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
               >
                 <option value="per_hour">Per Hour</option>
@@ -389,7 +410,9 @@ export default function EditDetailProfilePopup({
               <input
                 type="number"
                 value={formData.hourly_rate || ""}
-                onChange={(e) => handleFieldChange("hourly_rate", e.target.value)}
+                onChange={(e) =>
+                  handleFieldChange("hourly_rate", e.target.value)
+                }
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
               />
             </div>
@@ -400,7 +423,9 @@ export default function EditDetailProfilePopup({
               <input
                 type="text"
                 value={formData.job_country || ""}
-                onChange={(e) => handleFieldChange("job_country", e.target.value)}
+                onChange={(e) =>
+                  handleFieldChange("job_country", e.target.value)
+                }
                 placeholder="e.g., uk, us, ca"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
               />
@@ -412,7 +437,12 @@ export default function EditDetailProfilePopup({
               <input
                 type="number"
                 value={formData.experience_years || ""}
-                onChange={(e) => handleFieldChange("experience_years", parseInt(e.target.value) || 0)}
+                onChange={(e) =>
+                  handleFieldChange(
+                    "experience_years",
+                    parseInt(e.target.value) || 0,
+                  )
+                }
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
               />
             </div>
@@ -431,7 +461,9 @@ export default function EditDetailProfilePopup({
               </label>
               <select
                 value={formData.upwork_show_status || "show"}
-                onChange={(e) => handleFieldChange("upwork_show_status", e.target.value)}
+                onChange={(e) =>
+                  handleFieldChange("upwork_show_status", e.target.value)
+                }
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
               >
                 <option value="show">Show</option>
@@ -439,16 +471,36 @@ export default function EditDetailProfilePopup({
                 <option value="show_at_end">Show At End</option>
               </select>
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Email Type
+              </label>
+              <select
+                value={formData.email_type || "personal"}
+                onChange={(e) =>
+                  handleFieldChange("email_type", e.target.value)
+                }
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
+              >
+                <option value="personal">Personal</option>
+                <option value="findusman.me">findusman.me</option>
+              </select>
+            </div>
             <div className="flex items-center pt-6">
               <input
                 type="checkbox"
                 id="hide_earnings"
                 checked={formData.hide_earnings || false}
-                onChange={(e) => handleFieldChange("hide_earnings", e.target.checked)}
+                onChange={(e) =>
+                  handleFieldChange("hide_earnings", e.target.checked)
+                }
                 className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
               />
-              <label htmlFor="hide_earnings" className="ml-2 block text-sm text-gray-700">
-                Hide Earnings
+              <label
+                htmlFor="hide_earnings"
+                className="ml-2 block text-sm text-gray-700"
+              >
+                Hide Rates
               </label>
             </div>
           </div>
@@ -501,7 +553,9 @@ export default function EditDetailProfilePopup({
                     key={skill.id}
                     className="flex items-center justify-between bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2 group hover:bg-indigo-100 transition"
                   >
-                    <span className="text-sm font-medium text-gray-800">{skill.title}</span>
+                    <span className="text-sm font-medium text-gray-800">
+                      {skill.title}
+                    </span>
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => toggleImportantSkill(skill.id)}
@@ -526,7 +580,9 @@ export default function EditDetailProfilePopup({
                 ))}
               </div>
               {selectedSkills.length === 0 && (
-                <p className="text-sm text-gray-500 italic">No skills selected</p>
+                <p className="text-sm text-gray-500 italic">
+                  No skills selected
+                </p>
               )}
             </div>
           </div>
@@ -582,8 +638,7 @@ export default function EditDetailProfilePopup({
                     {availableCategories
                       .filter(
                         (cat) =>
-                          cat.id !== mainService &&
-                          !detailServices.has(cat.id)
+                          cat.id !== mainService && !detailServices.has(cat.id),
                       )
                       .map((cat) => (
                         <button
@@ -622,7 +677,9 @@ export default function EditDetailProfilePopup({
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-gray-500 italic">No detail services selected</p>
+                  <p className="text-sm text-gray-500 italic">
+                    No detail services selected
+                  </p>
                 )}
               </div>
             </div>

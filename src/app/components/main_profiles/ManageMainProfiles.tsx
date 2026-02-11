@@ -134,7 +134,7 @@ export default function ManageMainProfiles() {
       getHref: (profile) =>
         profile.location
           ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-              profile.location
+              profile.location,
             )}`
           : null,
       color: "#ea4335",
@@ -364,7 +364,7 @@ export default function ManageMainProfiles() {
                       className="w-5 h-4 rounded border border-gray-300"
                       style={{ background: profile[field] }}
                     ></span>
-                  ) : null
+                  ) : null,
                 )}
               </div>
             </div>
@@ -396,6 +396,16 @@ export default function ManageMainProfiles() {
                 <div>
                   <span className="font-semibold">Domain:</span>{" "}
                   <span className="text-gray-900">{profile.domain || "—"}</span>
+                </div>
+                <div>
+                  <span className="font-semibold">Email:</span>{" "}
+                  <span className="text-gray-900">{profile.email || "—"}</span>
+                </div>
+                <div>
+                  <span className="font-semibold">Non-Business Email:</span>{" "}
+                  <span className="text-gray-900">
+                    {profile.non_business_email || "—"}
+                  </span>
                 </div>
                 <div>
                   <span className="font-semibold">Tagline:</span>{" "}
@@ -465,6 +475,17 @@ export default function ManageMainProfiles() {
               className="w-full border px-3 py-2 rounded"
               name="email"
               value={form.email || ""}
+              onChange={handleFormChange}
+            />
+          </div>
+          <div className="mb-2">
+            <label className="block font-semibold mb-1">
+              Non-Business Email
+            </label>
+            <input
+              className="w-full border px-3 py-2 rounded"
+              name="non_business_email"
+              value={form.non_business_email || ""}
               onChange={handleFormChange}
             />
           </div>

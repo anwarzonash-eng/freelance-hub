@@ -51,6 +51,7 @@ interface DetailProfile {
   job_country?: string;
   hourly_rate?: string;
   experience_years?: number;
+  email_type?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -68,9 +69,11 @@ export default function ManageDetailProfiles() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [openCreatePopup, setOpenCreatePopup] = useState(false);
+
   const [openSkillSearchPopup, setOpenSkillSearchPopup] = useState(false);
   const [openEditProfilePopup, setOpenEditProfilePopup] = useState(false);
-  const [selectedProfileForEdit, setSelectedProfileForEdit] = useState<DetailProfile | null>(null);
+  const [selectedProfileForEdit, setSelectedProfileForEdit] =
+    useState<DetailProfile | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedSearchSkills, setSelectedSearchSkills] = useState<Skill[]>([]);
@@ -108,11 +111,19 @@ export default function ManageDetailProfiles() {
     loadInitialData();
   }, []);
 
+  useEffect(() => {
+    if (!openCreatePopup) {
+      getAllDetailProfiles();
+    }
+  }, [openCreatePopup]);
+
   // Filter categories based on selected main profile
   const getFilteredCategories = () => {
     if (!selectedMainProfile) return [];
 
-    return categories.filter((cat) => cat.main_profile_id === selectedMainProfile);
+    return categories.filter(
+      (cat) => cat.main_profile_id === selectedMainProfile,
+    );
   };
 
   // Get skill titles from IDs
@@ -182,7 +193,8 @@ export default function ManageDetailProfiles() {
     if (selectedSearchSkills.length > 0) {
       // Sort by matched percentage (descending), then by createdAt (most recent first)
       filtered.sort((a, b) => {
-        const percentDiff = calculateMatchPercentage(b) - calculateMatchPercentage(a);
+        const percentDiff =
+          calculateMatchPercentage(b) - calculateMatchPercentage(a);
         if (percentDiff !== 0) return percentDiff;
         const dateA = new Date(a.createdAt || 0).getTime();
         const dateB = new Date(b.createdAt || 0).getTime();
@@ -252,7 +264,10 @@ export default function ManageDetailProfiles() {
           <EditDetailProfilePopup
             profile={selectedProfileForEdit}
             allSkills={allSkills}
-            allCategories={categories.filter((cat) => cat.main_profile_id === selectedProfileForEdit.main_profile_id)}
+            allCategories={categories.filter(
+              (cat) =>
+                cat.main_profile_id === selectedProfileForEdit.main_profile_id,
+            )}
             onClose={() => {
               setOpenEditProfilePopup(false);
               setSelectedProfileForEdit(null);
@@ -288,7 +303,9 @@ export default function ManageDetailProfiles() {
                 🔄 Refresh
               </button>
               <button
-                onClick={() => setOpenSkillSearchPopup(true)}
+                onClick={() => {
+                  setOpenSkillSearchPopup(true);
+                }}
                 className="px-4 py-2 bg-purple-600 text-white font-semibold rounded-lg shadow hover:bg-purple-700 transition"
                 title="Search and match skills by description"
               >
@@ -484,23 +501,29 @@ export default function ManageDetailProfiles() {
 
                       {/* Upwork Show Status & Hide Earnings */}
                       <div className="shrink-0 flex items-center gap-2">
-                        <span className={`inline-block px-2 py-1 text-xs font-semibold rounded whitespace-nowrap ${
-                          profile.upwork_show_status === 'show' ? 'bg-green-100 text-green-700 border border-green-300' :
-                          profile.upwork_show_status === 'hide' ? 'bg-red-100 text-red-700 border border-red-300' :
-                          'bg-yellow-100 text-yellow-700 border border-yellow-300'
-                        }`}>
-                          {profile.upwork_show_status === 'show' ? 'Show Upwork' :
-                           profile.upwork_show_status === 'hide' ? 'Hide Upwork' :
-                           'Show at End'}
+                        <span
+                          className={`inline-block px-2 py-1 text-xs font-semibold rounded whitespace-nowrap ${
+                            profile.upwork_show_status === "show"
+                              ? "bg-green-100 text-green-700 border border-green-300"
+                              : profile.upwork_show_status === "hide"
+                                ? "bg-red-100 text-red-700 border border-red-300"
+                                : "bg-yellow-100 text-yellow-700 border border-yellow-300"
+                          }`}
+                        >
+                          {profile.upwork_show_status === "show"
+                            ? "Show Upwork"
+                            : profile.upwork_show_status === "hide"
+                              ? "Hide Upwork"
+                              : "Show at End"}
                         </span>
                         {profile.hide_earnings && (
                           <span className="inline-block px-2 py-1 text-xs font-semibold rounded whitespace-nowrap bg-orange-100 text-orange-700 border border-orange-300">
-                            Hide Earnings
+                            Hide Rates
                           </span>
                         )}
                       </div>
 
-                      {/* Match Percentage & Updated Date */}
+                      {/* Match Percentage & Updated Date & Edit Button */}
                       <div className="shrink-0 flex items-center gap-2">
                         {selectedSearchSkills.length > 0 && (
                           <span
@@ -518,6 +541,17 @@ export default function ManageDetailProfiles() {
                         <span className="text-xs text-gray-500 whitespace-nowrap">
                           {updatedDate}
                         </span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedProfileForEdit(profile);
+                            setOpenEditProfilePopup(true);
+                          }}
+                          className="p-1.5 hover:bg-blue-100 rounded transition text-blue-600"
+                          title="Edit profile details"
+                        >
+                          <Edit size={18} />
+                        </button>
                       </div>
                     </div>
 
@@ -525,26 +559,30 @@ export default function ManageDetailProfiles() {
                     {isExpanded && (
                       <div className="border-t bg-gray-50 p-3 flex flex-col gap-2">
                         {/* Important Skills */}
-                        {profile.importal_skills && profile.importal_skills.length > 0 && (
-                          <div>
-                            <span className="text-xs font-semibold text-gray-600 uppercase block mb-2">
-                              ⭐ Important Skills ({profile.importal_skills.length})
-                            </span>
-                            <div className="flex flex-wrap gap-1 mb-3">
-                              {profile.importal_skills.map((skillId, idx) => {
-                                const skill = allSkills.find((s) => s.id === skillId);
-                                return (
-                                  <span
-                                    key={idx}
-                                    className="inline-block px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-700 border border-yellow-300"
-                                  >
-                                    ★ {skill?.title || skillId}
-                                  </span>
-                                );
-                              })}
+                        {profile.importal_skills &&
+                          profile.importal_skills.length > 0 && (
+                            <div>
+                              <span className="text-xs font-semibold text-gray-600 uppercase block mb-2">
+                                ⭐ Important Skills (
+                                {profile.importal_skills.length})
+                              </span>
+                              <div className="flex flex-wrap gap-1 mb-3">
+                                {profile.importal_skills.map((skillId, idx) => {
+                                  const skill = allSkills.find(
+                                    (s) => s.id === skillId,
+                                  );
+                                  return (
+                                    <span
+                                      key={idx}
+                                      className="inline-block px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-700 border border-yellow-300"
+                                    >
+                                      ★ {skill?.title || skillId}
+                                    </span>
+                                  );
+                                })}
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          )}
 
                         {/* Skills */}
                         <div>
@@ -725,6 +763,16 @@ export default function ManageDetailProfiles() {
                               </p>
                             </div>
                           )}
+                          {(profile as any).email_type && (
+                            <div>
+                              <span className="font-semibold text-gray-600">
+                                Email Type:
+                              </span>
+                              <p className="text-gray-700">
+                                {(profile as any).email_type}
+                              </p>
+                            </div>
+                          )}
                         </div>
 
                         <WebsiteURLs
@@ -732,21 +780,6 @@ export default function ManageDetailProfiles() {
                           setData={updateProfileData}
                           websitePurpose="remote_job"
                         />
-
-                        {/* Action Buttons */}
-                        <div className="flex gap-2 pt-2 border-t">
-                          <button
-                            onClick={() => {
-                              setSelectedProfileForEdit(profile);
-                              setOpenEditProfilePopup(true);
-                            }}
-                            className="flex-1 px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition flex items-center justify-center gap-2"
-                            title="Edit profile details"
-                          >
-                            <Edit size={16} />
-                            Edit Profile
-                          </button>
-                        </div>
                       </div>
                     )}
                   </div>

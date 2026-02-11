@@ -163,6 +163,7 @@ export default function CreateDynamicPersonalWebsite({
   const [hideEarnings, setHideEarnings] = useState<boolean>(false);
   const [upworkShowStatus, setUpworkShowStatus] = useState<string>("show");
   const [importalSkills, setImportalSkills] = useState<string[]>([]);
+  const [emailType, setEmailType] = useState<string>("personal");
 
   const deleteSkill = (skillId) => {
     // Filter out the skill that matches the given ID
@@ -198,6 +199,7 @@ export default function CreateDynamicPersonalWebsite({
     setJobDescription("");
     setHideEarnings(false);
     setUpworkShowStatus("show");
+    setEmailType("personal");
     setImportalSkills([]);
   };
 
@@ -559,6 +561,7 @@ export default function CreateDynamicPersonalWebsite({
       hide_earnings: hideEarnings,
       upwork_show_status: upworkShowStatus,
       importal_skills: importalSkills,
+      email_type: emailType,
     };
 
     try {
@@ -1439,8 +1442,21 @@ export default function CreateDynamicPersonalWebsite({
                         htmlFor="hideEarningsCheck"
                         className="text-xs font-medium text-gray-700"
                       >
-                        Hide Earnings
+                        Hide Rates
                       </label>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-0.5">
+                        Email Type
+                      </label>
+                      <select
+                        value={emailType}
+                        onChange={(e) => setEmailType(e.target.value)}
+                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm"
+                      >
+                        <option value="personal">Personal</option>
+                        <option value="findusman.me">findusman.me</option>
+                      </select>
                     </div>
                   </div>
                 </div>

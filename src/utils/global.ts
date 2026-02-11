@@ -125,7 +125,7 @@ Follow these exact rules:
    - 'main_profile_id': Hard-coded as {main_profile_id}
    - 'thumbnail': SVG icon URL from 'https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/[iconname].svg'
    - 'experience_intro': An object with keys intro1 to intro10, each containing an HTML description (100-150 words) of different experiences/projects using this service. Important keywords wrapped in <u> tags.
-
+   - 'experience_titles': An object with keys title1 to title10. Generate 10 unique Job Titles based on the service name, arranged from highest seniority (Lead/Senior) to lowest experience (Junior/Associate). Ensure a natural career progression.
 Return **only** clean JSON (object or array), properly formatted (no markdown or explanations).
 
 Notes: 
@@ -162,7 +162,8 @@ Example Output (Single):
         "intro8": "<p>Implemented <u>authentication</u> and <u>authorization</u> flows in <u>React</u>.</p>",
         "intro9": "<p>Built <u>e-commerce platforms</u> with <u>shopping cart</u> functionality.</p>",
         "intro10": "<p>Created <u>progressive web apps</u> with <u>offline capabilities</u>.</p>"
-    }
+    },
+    "experience_titles": { "title1": "Lead React Developer", "title2": "Senior React Engineer", "title3": "Senior React Developer", "title4": "React Software Engineer", "title5": "React Developer", "title6": "Web Developer (React)", "title7": "Frontend React Developer", "title8": "Associate React Developer", "title9": "Junior React Engineer", "title10": "Junior React Developer" }
 }
 
 Example Input (Multiple):
@@ -194,7 +195,8 @@ Example Output (Multiple):
         "intro8": "<p>Implemented <u>authentication</u>...</p>",
         "intro9": "<p>Built <u>e-commerce platforms</u>...</p>",
         "intro10": "<p>Created <u>progressive web apps</u>...</p>"
-    }
+    },
+    "experience_titles": { "title1": "Lead React Developer", "title2": "Senior React Engineer", "title3": "Senior React Developer", "title4": "React Software Engineer", "title5": "React Developer", "title6": "Web Developer (React)", "title7": "Frontend React Developer", "title8": "Associate React Developer", "title9": "Junior React Engineer", "title10": "Junior React Developer" }
   },
   {
     "label": "nodejs-developer",
@@ -220,7 +222,9 @@ Example Output (Multiple):
         "intro8": "<p>Implemented caching strategies...</p>",
         "intro9": "<p>Built file upload systems...</p>",
         "intro10": "<p>Created email notification services...</p>"
-    }
+    },
+    "experience_titles": { "title1": "Lead React Developer", "title2": "Senior React Engineer", "title3": "Senior React Developer", "title4": "React Software Engineer", "title5": "React Developer", "title6": "Web Developer (React)", "title7": "Frontend React Developer", "title8": "Associate React Developer", "title9": "Junior React Engineer", "title10": "Junior React Developer" }
+
   }
 ]
 
