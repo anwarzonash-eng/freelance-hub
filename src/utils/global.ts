@@ -71,8 +71,8 @@ Follow these exact rules:
 3. Each object must include these fields:
    - description: 100–200 characters about expertise in the specific <u>skill</u>. Do not mention other tech stacks. Wrap important keywords in <u> tags.
    - skills_ids: Hard-coded as {"skills_ids": ["{skill_id}"]} where {skill_id} is the provided variable for that skill.
-   - experience_variation1 ... experience_variation10: Ten distinct, practical experience lines using ONLY this <u>skill</u>. 100–200 characters each. No "I" or "we". Wrap important keywords in <u> tags.
-   - portfolio_variations: Object with keys portfolio_variation1 ... portfolio_variation10, each 100–200 character module description using ONLY this <u>skill</u> (e.g., <u>authentication</u>, <u>payment integration</u>, <u>forms</u>, <u>API integration</u>). Use <u> tags for keywords.
+   - experience_variation1 ... experience_variation10: Ten distinct, practical experience lines using ONLY this <u>skill</u>. It should write as a whole experience in that company not specific to very child feature like implement actions in redux instead it should managed complex state management using redux and redux presist. It should be at high level. Wrap important keywords in <u> tags.100–150 characters each. No "I" or "we". Wrap important keywords in <u> tags.
+   - portfolio_variations: Object with keys portfolio_variation1 ... portfolio_variation10, It should write as a whole portfolio experience in that project not specific to very child feature like implement actions in redux instead it should managed complex state management using redux and redux presist. It should be at high level. each 100–150 character module description using ONLY this <u>skill</u> (e.g., <u>authentication</u>, <u>payment integration</u>, <u>forms</u>, <u>API integration</u>). Use <u> tags for keywords.
    - main_profile_id: Hard-coded as {main_profile_id}.
    - label: The skill name in a short label format.
 
@@ -119,12 +119,24 @@ Follow these exact rules:
    - 'intro_heading': A heading for the introduction section (e.g., "Expert Node.js Development Services")
    - 'intro': A brief HTML introduction paragraph about the service (100-150 words) with important keywords wrapped in <u> tags
    - 'mainIntro_heading': A heading for the main introduction (e.g., "Why Choose Me for Node.js Development")
-   - 'mainIntro': A detailed HTML description (200-300 words) highlighting expertise, with keywords in <u> tags
+   - 'mainIntro': A detailed HTML description (200-300 words) highlighting expertise, with keywords in <u> tags. 
    - 'short_description': A short HTML summary (50-100 words) with keywords in <u> tags
    - 'skills_ids': Hard-coded as {"skills_ids": []}
    - 'main_profile_id': Hard-coded as {main_profile_id}
    - 'thumbnail': SVG icon URL from 'https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/[iconname].svg'
-   - 'experience_intro': An object with keys intro1 to intro10, each containing an HTML description (100-150 words) of different experiences/projects using this service. Important keywords wrapped in <u> tags.
+   - 'experience_intro': An object with keys intro1 to intro10, Each version must:
+		  - Be written in first person.
+		  - Be limited to 2–3 lines maximum.
+		  - Include both \${designation} and \${Company_name} naturally within the sentence (do NOT start with "As a").
+		  - Focus on responsibilities, technologies used, contributions, and measurable impact.
+		  - Highlight key technical skills, tools, or methodologies using <u> tags>.
+		  - Sound like a real work experience entry, not a generic bio.
+		  - Vary sentence structure and phrasing across all 10 versions.
+      - put \${designation} and \${Company_name} at different positions randomly
+
+		  Keep each version professional, achievement-driven, and dynamic based on the provided role and company.
+		  Return only the 10 HTML-formatted summaries.
+
    - 'experience_titles': An object with keys title1 to title10. Generate 10 unique Job Titles based on the service name, arranged from highest seniority (Lead/Senior) to lowest experience (Junior/Associate). Ensure a natural career progression.
 Return **only** clean JSON (object or array), properly formatted (no markdown or explanations).
 
@@ -152,17 +164,17 @@ Example Output (Single):
     },
     "main_profile_id": "{main_profile_id}",
     "experience_intro": {
-        "intro1": "<p>Developed enterprise-level <u>React applications</u> with <u>Redux</u> state management and <u>RESTful APIs</u>.</p>",
-        "intro2": "<p>Built responsive <u>single-page applications</u> using <u>React Router</u> and <u>Material-UI</u>.</p>",
-        "intro3": "<p>Implemented <u>real-time features</u> with <u>WebSockets</u> and <u>React Context</u>.</p>",
-        "intro4": "<p>Created reusable <u>component libraries</u> following <u>best practices</u>.</p>",
-        "intro5": "<p>Optimized application performance with <u>lazy loading</u> and <u>code splitting</u>.</p>",
-        "intro6": "<p>Integrated <u>third-party APIs</u> and payment gateways in <u>React apps</u>.</p>",
-        "intro7": "<p>Developed <u>admin dashboards</u> with <u>data visualization</u> using <u>React</u>.</p>",
-        "intro8": "<p>Implemented <u>authentication</u> and <u>authorization</u> flows in <u>React</u>.</p>",
-        "intro9": "<p>Built <u>e-commerce platforms</u> with <u>shopping cart</u> functionality.</p>",
-        "intro10": "<p>Created <u>progressive web apps</u> with <u>offline capabilities</u>.</p>"
-    },
+    "intro1": "<p>At \${Company_name}, my role as \${designation} involved building robust <u>RESTful APIs</u> with <u>Express.js</u> to support scalable applications.</p>",
+    "intro2": "<p>Designed and implemented a <u>microservices architecture</u> to improve modularity and performance across projects at \${Company_name} as \${designation}.</p>",
+    "intro3": "<p>Led development of <u>real-time applications</u> using <u>WebSockets</u> and <u>Node.js</u> while working as \${designation} at \${Company_name}.</p>",
+    "intro4": "<p>Integrated complex <u>database systems</u> and optimized queries to enhance efficiency as \${designation} at \${Company_name}.</p>",
+    "intro5": "<p>Built secure <u>authentication</u> and <u>authorization systems</u> to safeguard user data, contributing as \${designation} at \${Company_name}.</p>",
+    "intro6": "<p>Developed <u>payment processing</u> workflows and integrated APIs to streamline transactions in my role as \${designation} at \${Company_name}.</p>",
+    "intro7": "<p>Created <u>cloud-based solutions</u> with scalable infrastructure, ensuring high availability while serving as \${designation} at \${Company_name}.</p>",
+    "intro8": "<p>Implemented effective <u>caching strategies</u> to enhance performance and reduce load times as \${designation} at \${Company_name}.</p>",
+    "intro9": "<p>Built <u>file upload</u> and management systems with error handling and security measures, contributing as \${designation} at \${Company_name}.</p>",
+    "intro10": "<p>Designed and deployed <u>email notification services</u> for better user engagement in my capacity as \${designation} at \${Company_name}.</p>"
+}
     "experience_titles": { "title1": "Lead React Developer", "title2": "Senior React Engineer", "title3": "Senior React Developer", "title4": "React Software Engineer", "title5": "React Developer", "title6": "Web Developer (React)", "title7": "Frontend React Developer", "title8": "Associate React Developer", "title9": "Junior React Engineer", "title10": "Junior React Developer" }
 }
 
@@ -184,18 +196,18 @@ Example Output (Multiple):
     "thumbnail": "https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/react.svg",
     "skills_ids": {"skills_ids": []},
     "main_profile_id": "{main_profile_id}",
-    "experience_intro": {
-        "intro1": "<p>Developed enterprise-level <u>React applications</u>...</p>",
-        "intro2": "<p>Built responsive <u>single-page applications</u>...</p>",
-        "intro3": "<p>Implemented <u>real-time features</u>...</p>",
-        "intro4": "<p>Created reusable <u>component libraries</u>...</p>",
-        "intro5": "<p>Optimized application performance...</p>",
-        "intro6": "<p>Integrated <u>third-party APIs</u>...</p>",
-        "intro7": "<p>Developed <u>admin dashboards</u>...</p>",
-        "intro8": "<p>Implemented <u>authentication</u>...</p>",
-        "intro9": "<p>Built <u>e-commerce platforms</u>...</p>",
-        "intro10": "<p>Created <u>progressive web apps</u>...</p>"
-    },
+   "experience_intro": {
+    "intro1": "<p>At \${Company_name}, my role as \${designation} involved building robust <u>RESTful APIs</u> with <u>Express.js</u> to support scalable applications.</p>",
+    "intro2": "<p>Designed and implemented a <u>microservices architecture</u> to improve modularity and performance across projects at \${Company_name} as \${designation}.</p>",
+    "intro3": "<p>Led development of <u>real-time applications</u> using <u>WebSockets</u> and <u>Node.js</u> while working as \${designation} at \${Company_name}.</p>",
+    "intro4": "<p>Integrated complex <u>database systems</u> and optimized queries to enhance efficiency as \${designation} at \${Company_name}.</p>",
+    "intro5": "<p>Built secure <u>authentication</u> and <u>authorization systems</u> to safeguard user data, contributing as \${designation} at \${Company_name}.</p>",
+    "intro6": "<p>Developed <u>payment processing</u> workflows and integrated APIs to streamline transactions in my role as \${designation} at \${Company_name}.</p>",
+    "intro7": "<p>Created <u>cloud-based solutions</u> with scalable infrastructure, ensuring high availability while serving as \${designation} at \${Company_name}.</p>",
+    "intro8": "<p>Implemented effective <u>caching strategies</u> to enhance performance and reduce load times as \${designation} at \${Company_name}.</p>",
+    "intro9": "<p>Built <u>file upload</u> and management systems with error handling and security measures, contributing as \${designation} at \${Company_name}.</p>",
+    "intro10": "<p>Designed and deployed <u>email notification services</u> for better user engagement in my capacity as \${designation} at \${Company_name}.</p>"
+}
     "experience_titles": { "title1": "Lead React Developer", "title2": "Senior React Engineer", "title3": "Senior React Developer", "title4": "React Software Engineer", "title5": "React Developer", "title6": "Web Developer (React)", "title7": "Frontend React Developer", "title8": "Associate React Developer", "title9": "Junior React Engineer", "title10": "Junior React Developer" }
   },
   {
@@ -211,18 +223,18 @@ Example Output (Multiple):
     "thumbnail": "https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/nodedotjs.svg",
     "skills_ids": {"skills_ids": []},
     "main_profile_id": "{main_profile_id}",
-    "experience_intro": {
-        "intro1": "<p>Built RESTful APIs with <u>Express.js</u>...</p>",
-        "intro2": "<p>Developed microservices architecture...</p>",
-        "intro3": "<p>Implemented real-time applications...</p>",
-        "intro4": "<p>Created database integration...</p>",
-        "intro5": "<p>Built authentication systems...</p>",
-        "intro6": "<p>Developed payment processing...</p>",
-        "intro7": "<p>Created cloud-based solutions...</p>",
-        "intro8": "<p>Implemented caching strategies...</p>",
-        "intro9": "<p>Built file upload systems...</p>",
-        "intro10": "<p>Created email notification services...</p>"
-    },
+   "experience_intro": {
+     "intro1": "<p>At \${Company_name}, my role as \${designation} involved building robust <u>RESTful APIs</u> with <u>Express.js</u> to support scalable applications.</p>",
+    "intro2": "<p>Designed and implemented a <u>microservices architecture</u> to improve modularity and performance across projects at \${Company_name} as \${designation}.</p>",
+    "intro3": "<p>Led development of <u>real-time applications</u> using <u>WebSockets</u> and <u>Node.js</u> while working as \${designation} at \${Company_name}.</p>",
+    "intro4": "<p>Integrated complex <u>database systems</u> and optimized queries to enhance efficiency as \${designation} at \${Company_name}.</p>",
+    "intro5": "<p>Built secure <u>authentication</u> and <u>authorization systems</u> to safeguard user data, contributing as \${designation} at \${Company_name}.</p>",
+    "intro6": "<p>Developed <u>payment processing</u> workflows and integrated APIs to streamline transactions in my role as \${designation} at \${Company_name}.</p>",
+    "intro7": "<p>Created <u>cloud-based solutions</u> with scalable infrastructure, ensuring high availability while serving as \${designation} at \${Company_name}.</p>",
+    "intro8": "<p>Implemented effective <u>caching strategies</u> to enhance performance and reduce load times as \${designation} at \${Company_name}.</p>",
+    "intro9": "<p>Built <u>file upload</u> and management systems with error handling and security measures, contributing as \${designation} at \${Company_name}.</p>",
+    "intro10": "<p>Designed and deployed <u>email notification services</u> for better user engagement in my capacity as \${designation} at \${Company_name}.</p>"
+}
     "experience_titles": { "title1": "Lead React Developer", "title2": "Senior React Engineer", "title3": "Senior React Developer", "title4": "React Software Engineer", "title5": "React Developer", "title6": "Web Developer (React)", "title7": "Frontend React Developer", "title8": "Associate React Developer", "title9": "Junior React Engineer", "title10": "Junior React Developer" }
 
   }

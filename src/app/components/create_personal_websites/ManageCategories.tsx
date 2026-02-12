@@ -49,6 +49,7 @@ interface Category {
   thumbnail: string;
   skills_ids?: { skills_ids: string[] };
   experience_intro?: any;
+  experience_titles?: any;
   is_deleted: boolean;
   is_category_static: boolean;
   companytype: string;
@@ -66,6 +67,11 @@ interface Skill {
 }
 
 export default function ManageCategories() {
+  // For CreateCategory edit popup
+  const [showCreateCategoryEdit, setShowCreateCategoryEdit] = useState(false);
+  const [editCategoryData, setEditCategoryData] = useState<Category | null>(
+    null,
+  );
   const [categories, setCategories] = useState<Category[]>([]);
   const [mainProfiles, setMainProfiles] = useState<MainProfile[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
@@ -76,7 +82,7 @@ export default function ManageCategories() {
   const [showAIPopup, setShowAIPopup] = useState(false);
   const [showEditPopup, setShowEditPopup] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(
-    null
+    null,
   );
 
   // Skills search states
@@ -88,6 +94,11 @@ export default function ManageCategories() {
   // Experience intro expand state
   const [expandExperienceCreate, setExpandExperienceCreate] = useState(false);
   const [expandExperienceEdit, setExpandExperienceEdit] = useState(false);
+
+  // Expanded state for each category row (by id)
+  const [expandedRows, setExpandedRows] = useState<{ [id: string]: boolean }>(
+    {},
+  );
 
   // Create form states
   const [createForm, setCreateForm] = useState({
@@ -115,6 +126,18 @@ export default function ManageCategories() {
       intro9: "",
       intro10: "",
     },
+    experience_titles: {
+      title1: "",
+      title2: "",
+      title3: "",
+      title4: "",
+      title5: "",
+      title6: "",
+      title7: "",
+      title8: "",
+      title9: "",
+      title10: "",
+    },
   });
 
   const [editForm, setEditForm] = useState<any>({
@@ -141,6 +164,18 @@ export default function ManageCategories() {
       intro8: "",
       intro9: "",
       intro10: "",
+    },
+    experience_titles: {
+      title1: "",
+      title2: "",
+      title3: "",
+      title4: "",
+      title5: "",
+      title6: "",
+      title7: "",
+      title8: "",
+      title9: "",
+      title10: "",
     },
   });
 
@@ -262,6 +297,18 @@ export default function ManageCategories() {
             intro9: "",
             intro10: "",
           },
+          experience_titles: {
+            title1: "",
+            title2: "",
+            title3: "",
+            title4: "",
+            title5: "",
+            title6: "",
+            title7: "",
+            title8: "",
+            title9: "",
+            title10: "",
+          },
         });
         setSkillSearchCreate("");
         setExpandExperienceCreate(false);
@@ -306,6 +353,7 @@ export default function ManageCategories() {
   const openEditPopup = (category: Category) => {
     setSelectedCategory(category);
     const experienceIntro = category.experience_intro || {};
+    const experienceTitles = category.experience_titles || {};
     const skillsArray =
       typeof category.skills_ids === "object" && category.skills_ids
         ? (category.skills_ids as any).skills_ids || []
@@ -335,6 +383,18 @@ export default function ManageCategories() {
         intro8: (experienceIntro as any)?.intro8 || "",
         intro9: (experienceIntro as any)?.intro9 || "",
         intro10: (experienceIntro as any)?.intro10 || "",
+      },
+      experience_titles: {
+        title1: (experienceTitles as any)?.title1 || "",
+        title2: (experienceTitles as any)?.title2 || "",
+        title3: (experienceTitles as any)?.title3 || "",
+        title4: (experienceTitles as any)?.title4 || "",
+        title5: (experienceTitles as any)?.title5 || "",
+        title6: (experienceTitles as any)?.title6 || "",
+        title7: (experienceTitles as any)?.title7 || "",
+        title8: (experienceTitles as any)?.title8 || "",
+        title9: (experienceTitles as any)?.title9 || "",
+        title10: (experienceTitles as any)?.title10 || "",
       },
     });
     setShowEditPopup(true);
@@ -389,7 +449,7 @@ export default function ManageCategories() {
     return skills.filter(
       (skill) =>
         skill.title.toLowerCase().includes(searchTerm.toLowerCase()) &&
-        !selectedSkills.includes(skill.id)
+        !selectedSkills.includes(skill.id),
     );
   };
 
@@ -485,6 +545,55 @@ export default function ManageCategories() {
                 <p className="text-xs text-gray-400 mt-2">
                   Label: {category.label}
                 </p>
+                <button
+                  className="mt-2 text-blue-600 underline text-xs"
+                  onClick={() =>
+                    setExpandedRows((prev) => ({
+                      ...prev,
+                      [category.id]: !prev[category.id],
+                    }))
+                  }
+                >
+                  {expandedRows[category.id] ? "Hide Details" : "Show Details"}
+                </button>
+                {expandedRows[category.id] && (
+                  <div className="mt-4 border-t pt-4">
+                    <h4 className="font-semibold text-gray-800 mb-2">
+                      Experience Intros
+                    </h4>
+                    <ul className="list-decimal ml-6 text-sm text-gray-700">
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => {
+                        const html = category.experience_intro?.[`intro${num}`];
+                        return (
+                          <li key={num} className="mb-1">
+                            <span className="font-medium">Intro {num}:</span>{" "}
+                            {html ? (
+                              <span
+                                className="inline"
+                                dangerouslySetInnerHTML={{ __html: html }}
+                              />
+                            ) : (
+                              <span className="text-gray-400">N/A</span>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    <h4 className="font-semibold text-gray-800 mt-4 mb-2">
+                      Experience Titles
+                    </h4>
+                    <ul className="list-decimal ml-6 text-sm text-gray-700">
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                        <li key={num} className="mb-1">
+                          <span className="font-medium">Title {num}:</span>{" "}
+                          {category.experience_titles?.[`title${num}`] || (
+                            <span className="text-gray-400">N/A</span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
               <div className="flex gap-2">
                 <button
@@ -492,6 +601,15 @@ export default function ManageCategories() {
                   className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg transition"
                 >
                   Edit
+                </button>
+                <button
+                  onClick={() => {
+                    setEditCategoryData(category);
+                    setShowCreateCategoryEdit(true);
+                  }}
+                  className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition"
+                >
+                  Edit (AI)
                 </button>
                 {/* <button
                   onClick={() => handleDelete(category.id)}
@@ -504,6 +622,33 @@ export default function ManageCategories() {
           </div>
         ))}
       </div>
+      {/* CreateCategory Edit Popup (AI Edit) */}
+      {showCreateCategoryEdit && editCategoryData && (
+        <div className="fixed w-full inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between">
+              <h2 className="text-xl font-bold">AI Edit Category</h2>
+              <button
+                onClick={() => setShowCreateCategoryEdit(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="p-6 w-full">
+              <CreateCategory
+                main_profile_id={editCategoryData.main_profile_id}
+                // Pass all data as a prop for preloading (extend CreateCategory to accept this prop)
+                preloadData={editCategoryData}
+                onSuccess={() => {
+                  setShowCreateCategoryEdit(false);
+                  fetchCategories();
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Create Popup */}
       {showCreatePopup && (
@@ -836,7 +981,7 @@ export default function ManageCategories() {
                 </div>
               </div>
 
-              {/* Experience Intro - Full Width Card */}
+              {/* Experience Intro & Titles - Full Width Card */}
               <div className="bg-white border-2 border-gray-200 rounded-xl p-5 shadow-sm">
                 <button
                   type="button"
@@ -847,7 +992,7 @@ export default function ManageCategories() {
                 >
                   <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
                     <div className="w-1 h-6 bg-blue-600 rounded"></div>
-                    Experience Introduction (10 sections)
+                    Experience Introduction & Titles (10 sections)
                   </h3>
                   {expandExperienceCreate ? (
                     <ChevronUp className="w-5 h-5 text-gray-500" />
@@ -882,6 +1027,28 @@ export default function ManageCategories() {
                               },
                             }))
                           }
+                        />
+                        <label className="block text-xs font-medium text-gray-600 mt-2">
+                          Experience Title {num}
+                        </label>
+                        <input
+                          type="text"
+                          className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm mt-1"
+                          value={
+                            createForm.experience_titles?.[
+                              `title${num}` as keyof typeof createForm.experience_titles
+                            ] || ""
+                          }
+                          onChange={(e) =>
+                            setCreateForm((prev) => ({
+                              ...prev,
+                              experience_titles: {
+                                ...prev.experience_titles,
+                                [`title${num}`]: e.target.value,
+                              },
+                            }))
+                          }
+                          placeholder={`Experience title ${num}...`}
                         />
                       </div>
                     ))}
@@ -1270,7 +1437,7 @@ export default function ManageCategories() {
                 </div>
               </div>
 
-              {/* Experience Intro - Full Width Card */}
+              {/* Experience Intro & Titles - Full Width Card */}
               <div className="bg-white border-2 border-gray-200 rounded-xl p-5 shadow-sm">
                 <button
                   type="button"
@@ -1279,7 +1446,7 @@ export default function ManageCategories() {
                 >
                   <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
                     <div className="w-1 h-6 bg-yellow-500 rounded"></div>
-                    Experience Introduction (10 sections)
+                    Experience Introduction & Titles (10 sections)
                   </h3>
                   {expandExperienceEdit ? (
                     <ChevronUp className="w-5 h-5 text-gray-500" />
@@ -1312,6 +1479,26 @@ export default function ManageCategories() {
                               },
                             }))
                           }
+                        />
+                        <label className="block text-xs font-medium text-gray-600 mt-2">
+                          Experience Title {num}
+                        </label>
+                        <input
+                          type="text"
+                          className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-yellow-500 text-sm mt-1"
+                          value={
+                            editForm.experience_titles?.[`title${num}`] || ""
+                          }
+                          onChange={(e) =>
+                            setEditForm((prev) => ({
+                              ...prev,
+                              experience_titles: {
+                                ...prev.experience_titles,
+                                [`title${num}`]: e.target.value,
+                              },
+                            }))
+                          }
+                          placeholder={`Experience title ${num}...`}
                         />
                       </div>
                     ))}

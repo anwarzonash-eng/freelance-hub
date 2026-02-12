@@ -80,7 +80,55 @@ export default function ManageExperiences() {
   };
 
   const handleEdit = (experience: any) => {
-    setForm({ ...experience });
+    // Ensure meta_data.job_types exists for edit
+    let meta_data = experience.meta_data || {};
+    if (!meta_data.job_types) {
+      // Use external fields for all job_types
+      const extStart = experience.starting_date
+        ? new Date(experience.starting_date).toISOString().slice(0, 10)
+        : "";
+      const extEnd = experience.ending_Date
+        ? new Date(experience.ending_Date).toISOString().slice(0, 10)
+        : "";
+      const extIsContinue = !!experience.working;
+      const extType = experience.type || "";
+      meta_data.job_types = {
+        contract: {
+          start_date: extStart,
+          end_date: extEnd,
+          is_continue: extIsContinue,
+          type: extType,
+        },
+        fulltime: {
+          start_date: extStart,
+          end_date: extEnd,
+          is_continue: extIsContinue,
+          type: extType,
+        },
+        freelance: {
+          start_date: extStart,
+          end_date: extEnd,
+          is_continue: extIsContinue,
+          type: extType,
+        },
+        startup: {
+          start_date: extStart,
+          end_date: extEnd,
+          is_continue: extIsContinue,
+          type: extType,
+        },
+      };
+    }
+    setForm({
+      ...experience,
+      meta_data,
+      expandedJobTypes: {
+        contract: true,
+        fulltime: false,
+        freelance: false,
+        startup: false,
+      },
+    });
     setIsEdit(true);
     setShowForm(true);
   };
@@ -88,7 +136,7 @@ export default function ManageExperiences() {
   const handleDelete = async (id: string) => {
     if (
       !confirm(
-        "Are you sure you want to delete this experience? This action cannot be undone."
+        "Are you sure you want to delete this experience? This action cannot be undone.",
       )
     )
       return;
@@ -139,10 +187,43 @@ export default function ManageExperiences() {
       ? "Are you sure you want to update this experience?"
       : "Are you sure you want to create this experience?";
     if (!confirm(confirmMessage)) return;
+    // Always send meta_data.job_types in payload
+    const payload = {
+      ...form,
+      meta_data: {
+        ...(form.meta_data || {}),
+        job_types: form.meta_data?.job_types || {
+          contract: {
+            start_date: "",
+            end_date: "",
+            is_continue: false,
+            type: "",
+          },
+          fulltime: {
+            start_date: "",
+            end_date: "",
+            is_continue: false,
+            type: "",
+          },
+          freelance: {
+            start_date: "",
+            end_date: "",
+            is_continue: false,
+            type: "",
+          },
+          startup: {
+            start_date: "",
+            end_date: "",
+            is_continue: false,
+            type: "",
+          },
+        },
+      },
+    };
     if (isEdit) {
-      await updateExperience(form, { path: { id: form.id } });
+      await updateExperience(payload, { path: { id: form.id } });
     } else {
-      await createExperience(form);
+      await createExperience(payload);
     }
     setShowForm(false);
     setForm(null);
@@ -168,7 +249,42 @@ export default function ManageExperiences() {
             onClick={() => {
               setShowForm(true);
               setIsEdit(false);
-              setForm({});
+              setForm({
+                meta_data: {
+                  job_types: {
+                    contract: {
+                      start_date: "",
+                      end_date: "",
+                      is_continue: false,
+                      type: "",
+                    },
+                    fulltime: {
+                      start_date: "",
+                      end_date: "",
+                      is_continue: false,
+                      type: "",
+                    },
+                    freelance: {
+                      start_date: "",
+                      end_date: "",
+                      is_continue: false,
+                      type: "",
+                    },
+                    startup: {
+                      start_date: "",
+                      end_date: "",
+                      is_continue: false,
+                      type: "",
+                    },
+                  },
+                },
+                expandedJobTypes: {
+                  contract: true,
+                  fulltime: false,
+                  freelance: false,
+                  startup: false,
+                },
+              });
             }}
           >
             + Create
@@ -220,122 +336,155 @@ export default function ManageExperiences() {
         <div className="grid grid-cols-1 gap-4">
           {[...filteredExperiences]
             .sort((a: any, b: any) => {
-              const aTime = a?.starting_date ? new Date(a.starting_date).getTime() : 0;
-              const bTime = b?.starting_date ? new Date(b.starting_date).getTime() : 0;
+              const aTime = a?.starting_date
+                ? new Date(a.starting_date).getTime()
+                : 0;
+              const bTime = b?.starting_date
+                ? new Date(b.starting_date).getTime()
+                : 0;
               return bTime - aTime;
             })
             .map((e: any) => (
-            <div
-              key={e.id}
-              className="bg-white border-2 border-gray-200 rounded-lg overflow-hidden shadow-md hover:shadow-lg transition hover:border-blue-300 flex"
-            >
-              <button
-                onClick={() =>
-                  e.thumbnail && imageViewer.openViewer([e.thumbnail], 0)
-                }
-                className="shrink-0 w-32 h-32 bg-gray-100 cursor-pointer hover:opacity-80 transition overflow-hidden"
+              <div
+                key={e.id}
+                className="bg-white border-2 border-gray-200 rounded-lg overflow-hidden shadow-md hover:shadow-lg transition hover:border-blue-300 flex"
               >
-                {e.thumbnail ? (
-                  <img
-                    src={e.thumbnail}
-                    alt={e.title}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-gray-200">
-                    <span className="text-gray-400 text-sm">No image</span>
-                  </div>
-                )}
-              </button>
-              <div className="flex-1 p-4 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-bold text-lg text-gray-800">
-                      {e.title}
-                    </h3>
-                    <button
-                      title="Copy ID"
-                      className="ml-1 px-2 py-1 rounded bg-gray-200 hover:bg-blue-200 text-xs font-semibold transition border border-gray-300"
-                      onClick={() => navigator.clipboard.writeText(e.id)}
-                    >
-                      <Copy size={14} />
-                    </button>
-                  </div>
-                  {e.private_title && (
-                    <p className="text-sm text-gray-500 mb-2">
-                      <span className="font-semibold">Private:</span>{" "}
-                      {e.private_title}
-                    </p>
+                <button
+                  onClick={() =>
+                    e.thumbnail && imageViewer.openViewer([e.thumbnail], 0)
+                  }
+                  className="shrink-0 w-32 h-32 bg-gray-100 cursor-pointer hover:opacity-80 transition overflow-hidden"
+                >
+                  {e.thumbnail ? (
+                    <img
+                      src={e.thumbnail}
+                      alt={e.title}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-gray-200">
+                      <span className="text-gray-400 text-sm">No image</span>
+                    </div>
                   )}
-                  {e.company_name && (
-                    <p className="text-sm text-gray-600 mb-2">
-                      <span className="font-semibold">Company:</span>{" "}
-                      {e.company_name}
-                    </p>
-                  )}
-                  {e.type && (
-                    <p className="text-sm text-gray-600 mb-2">
-                      <span className="font-semibold">Type:</span>{" "}
-                      {e.type === "full_time"
-                        ? "Full Time"
-                        : e.type === "contract"
-                          ? "Contract"
-                          : "Freelance"}
-                    </p>
-                  )}
-                  {e.location && (
-                    <p className="text-sm text-gray-600 mb-2">
-                      <span className="font-semibold">Location:</span>{" "}
-                      {e.location}
-                    </p>
-                  )}
-                  {e.company_website && (
-                    <p className="text-sm text-blue-600 mb-2">
-                      <span className="font-semibold">Website:</span>{" "}
-                      <a
-                        href={e.company_website}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="underline"
+                </button>
+                <div className="flex-1 p-4 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-bold text-lg text-gray-800">
+                        {e.title}
+                      </h3>
+                      <button
+                        title="Copy ID"
+                        className="ml-1 px-2 py-1 rounded bg-gray-200 hover:bg-blue-200 text-xs font-semibold transition border border-gray-300"
+                        onClick={() => navigator.clipboard.writeText(e.id)}
                       >
-                        {e.company_website}
-                      </a>
+                        <Copy size={14} />
+                      </button>
+                    </div>
+                    {e.private_title && (
+                      <p className="text-sm text-gray-500 mb-2">
+                        <span className="font-semibold">Private:</span>{" "}
+                        {e.private_title}
+                      </p>
+                    )}
+                    {e.company_name && (
+                      <p className="text-sm text-gray-600 mb-2">
+                        <span className="font-semibold">Company:</span>{" "}
+                        {e.company_name}
+                      </p>
+                    )}
+                    {e.type && (
+                      <p className="text-sm text-gray-600 mb-2">
+                        <span className="font-semibold">Type:</span>{" "}
+                        {e.type === "full_time"
+                          ? "Full Time"
+                          : e.type === "contract"
+                            ? "Contract"
+                            : "Freelance"}
+                      </p>
+                    )}
+                    {e.location && (
+                      <p className="text-sm text-gray-600 mb-2">
+                        <span className="font-semibold">Location:</span>{" "}
+                        {e.location}
+                      </p>
+                    )}
+                    {e.company_website && (
+                      <p className="text-sm text-blue-600 mb-2">
+                        <span className="font-semibold">Website:</span>{" "}
+                        <a
+                          href={e.company_website}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline"
+                        >
+                          {e.company_website}
+                        </a>
+                      </p>
+                    )}
+                    {/* Show all job_types meta_data if present */}
+                    {e.meta_data?.job_types && (
+                      <div className="mt-2">
+                        <div className="font-semibold text-blue-700 text-xs mb-1">
+                          Job Types:
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                          {Object.entries(e.meta_data.job_types).map(
+                            ([jt, jtData]: any) => (
+                              <div
+                                key={jt}
+                                className="border border-blue-200 rounded p-2 bg-blue-50"
+                              >
+                                <div className="font-bold text-blue-800 text-xs capitalize mb-1">
+                                  {jt}
+                                </div>
+                                <div className="text-xs text-gray-700">
+                                  <span className="font-semibold">Start:</span>{" "}
+                                  {jtData.start_date || "-"}
+                                  <br />
+                                  <span className="font-semibold">
+                                    End:
+                                  </span>{" "}
+                                  {jtData.end_date || "-"}
+                                  <br />
+                                  <span className="font-semibold">
+                                    Continue:
+                                  </span>{" "}
+                                  {jtData.is_continue ? "Yes" : "No"}
+                                  <br />
+                                  <span className="font-semibold">
+                                    Type:
+                                  </span>{" "}
+                                  {jtData.type || "-"}
+                                </div>
+                              </div>
+                            ),
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    <p className="text-xs text-gray-600 font-semibold">
+                      <span className="font-semibold">Working:</span>{" "}
+                      {e.working ? "Yes" : "No"}
                     </p>
-                  )}
-                  {formatDateTime(e.starting_date) && (
-                    <p className="text-sm text-gray-600 mb-2">
-                      <span className="font-semibold">Start:</span>{" "}
-                      {formatDateTime(e.starting_date)}
-                    </p>
-                  )}
-                  {formatDateTime(e.ending_Date) && (
-                    <p className="text-sm text-gray-600 mb-2">
-                      <span className="font-semibold">End:</span>{" "}
-                      {formatDateTime(e.ending_Date)}
-                    </p>
-                  )}
-                  <p className="text-xs text-gray-600 font-semibold">
-                    <span className="font-semibold">Working:</span>{" "}
-                    {e.working ? "Yes" : "No"}
-                  </p>
+                  </div>
+                </div>
+                <div className="shrink-0 flex gap-2 p-4 items-center border-l-2 border-gray-200">
+                  <button
+                    className="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700 transition shadow-md"
+                    onClick={() => handleEdit(e)}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    className="bg-red-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-red-700 transition shadow-md"
+                    onClick={() => handleDelete(e.id)}
+                  >
+                    Delete
+                  </button>
                 </div>
               </div>
-              <div className="shrink-0 flex gap-2 p-4 items-center border-l-2 border-gray-200">
-                <button
-                  className="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700 transition shadow-md"
-                  onClick={() => handleEdit(e)}
-                >
-                  Edit
-                </button>
-                <button
-                  className="bg-red-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-red-700 transition shadow-md"
-                  onClick={() => handleDelete(e.id)}
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          ))}
+            ))}
         </div>
       )}
       {showForm && (
@@ -361,7 +510,162 @@ export default function ManageExperiences() {
             </div>
             <div className="flex-1 overflow-y-auto p-6">
               <div className="max-w-4xl mx-auto">
-                <div className="grid grid-cols-2 gap-6 mb-6">
+                {/* Job Types Meta Data Forms */}
+                <div className="mb-8">
+                  <h3 className="font-bold text-lg mb-2 text-blue-700">
+                    Job Types Details
+                  </h3>
+                  {["contract", "fulltime", "freelance", "startup"].map(
+                    (jt) => (
+                      <div
+                        key={jt}
+                        className="mb-4 border rounded-lg border-blue-200 bg-blue-50"
+                      >
+                        <button
+                          type="button"
+                          className="w-full flex justify-between items-center px-4 py-2 font-semibold text-blue-800 hover:bg-blue-100 focus:outline-none"
+                          onClick={() =>
+                            setForm((prev: any) => ({
+                              ...prev,
+                              expandedJobTypes: {
+                                ...(prev.expandedJobTypes || {}),
+                                [jt]: !prev?.expandedJobTypes?.[jt],
+                              },
+                            }))
+                          }
+                        >
+                          <span className="capitalize">{jt}</span>
+                          <span>
+                            {form?.expandedJobTypes?.[jt] ? "▲" : "▼"}
+                          </span>
+                        </button>
+                        {form?.expandedJobTypes?.[jt] && (
+                          <div className="px-4 pb-4 pt-2 grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div>
+                              <label className="block text-gray-700 font-bold mb-1">
+                                Start Date
+                              </label>
+                              <input
+                                type="date"
+                                value={
+                                  form?.meta_data?.job_types?.[jt]
+                                    ?.start_date || ""
+                                }
+                                onChange={(e) =>
+                                  setForm((prev: any) => ({
+                                    ...prev,
+                                    meta_data: {
+                                      ...(prev.meta_data || {}),
+                                      job_types: {
+                                        ...(prev.meta_data?.job_types || {}),
+                                        [jt]: {
+                                          ...(prev.meta_data?.job_types?.[jt] ||
+                                            {}),
+                                          start_date: e.target.value,
+                                        },
+                                      },
+                                    },
+                                  }))
+                                }
+                                className="w-full border-2 border-gray-300 px-2 py-1 rounded-lg"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-gray-700 font-bold mb-1">
+                                End Date
+                              </label>
+                              <input
+                                type="date"
+                                value={
+                                  form?.meta_data?.job_types?.[jt]?.end_date ||
+                                  ""
+                                }
+                                onChange={(e) =>
+                                  setForm((prev: any) => ({
+                                    ...prev,
+                                    meta_data: {
+                                      ...(prev.meta_data || {}),
+                                      job_types: {
+                                        ...(prev.meta_data?.job_types || {}),
+                                        [jt]: {
+                                          ...(prev.meta_data?.job_types?.[jt] ||
+                                            {}),
+                                          end_date: e.target.value,
+                                        },
+                                      },
+                                    },
+                                  }))
+                                }
+                                className="w-full border-2 border-gray-300 px-2 py-1 rounded-lg"
+                              />
+                            </div>
+                            <div className="flex items-center mt-6">
+                              <input
+                                type="checkbox"
+                                checked={
+                                  !!form?.meta_data?.job_types?.[jt]
+                                    ?.is_continue
+                                }
+                                onChange={(e) =>
+                                  setForm((prev: any) => ({
+                                    ...prev,
+                                    meta_data: {
+                                      ...(prev.meta_data || {}),
+                                      job_types: {
+                                        ...(prev.meta_data?.job_types || {}),
+                                        [jt]: {
+                                          ...(prev.meta_data?.job_types?.[jt] ||
+                                            {}),
+                                          is_continue: e.target.checked,
+                                        },
+                                      },
+                                    },
+                                  }))
+                                }
+                                className="mr-2"
+                              />
+                              <label className="text-gray-700 font-bold">
+                                Continue
+                              </label>
+                            </div>
+                            <div>
+                              <label className="block text-gray-700 font-bold mb-1">
+                                Type
+                              </label>
+                              <select
+                                value={
+                                  form?.meta_data?.job_types?.[jt]?.type || ""
+                                }
+                                onChange={(e) =>
+                                  setForm((prev: any) => ({
+                                    ...prev,
+                                    meta_data: {
+                                      ...(prev.meta_data || {}),
+                                      job_types: {
+                                        ...(prev.meta_data?.job_types || {}),
+                                        [jt]: {
+                                          ...(prev.meta_data?.job_types?.[jt] ||
+                                            {}),
+                                          type: e.target.value,
+                                        },
+                                      },
+                                    },
+                                  }))
+                                }
+                                className="w-full border-2 border-gray-300 px-2 py-1 rounded-lg"
+                              >
+                                <option value="">Select Type</option>
+                                <option value="full_time">Full Time</option>
+                                <option value="contract">Contract</option>
+                                <option value="freelance">Freelance</option>
+                              </select>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ),
+                  )}
+
                   <div>
                     <label className="block font-bold text-gray-700 mb-2">
                       Title *
@@ -506,7 +810,9 @@ export default function ManageExperiences() {
                       type="datetime-local"
                       value={
                         form?.ending_Date
-                          ? new Date(form.ending_Date).toISOString().slice(0, 16)
+                          ? new Date(form.ending_Date)
+                              .toISOString()
+                              .slice(0, 16)
                           : ""
                       }
                       onChange={(e) =>

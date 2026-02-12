@@ -99,6 +99,9 @@ export default function CreateDynamicPersonalWebsite({
   // alert(websitePurpose);
   // --- State Initialization (Angular Properties -> React State) ---
   const [jobDescription, setJobDescription] = useState<string>(description);
+  // New state for designation_category
+  const [designationCategoryId, setDesignationCategoryId] = useState(null);
+  const [designationCategories, setDesignationCategories] = useState([]);
   const [matchedCategories, setMatchedCategories] = useState([]);
   const [mainCategoryId, setMainCategoryId] = useState(null);
   const [mainDomain, setMainDomain] = useState<any>({}); // Using 'any' as its shape is complex
@@ -162,7 +165,11 @@ export default function CreateDynamicPersonalWebsite({
   ] = useState<string | null>(null);
   const [hideEarnings, setHideEarnings] = useState<boolean>(false);
   const [upworkShowStatus, setUpworkShowStatus] = useState<string>("show");
-  const [importalSkills, setImportalSkills] = useState<string[]>([]);
+  // Deprecated: importalSkills, kept for API compatibility
+  const [importalSkills, setImportalSkills] = useState<string[]>([]); // always empty
+
+  // New: skills_meta_data state
+  const [skillsMetaData, setSkillsMetaData] = useState<any[]>([]); // [{id, show, show_type, is_important, order, is_learning}]
   const [emailType, setEmailType] = useState<string>("personal");
 
   const deleteSkill = (skillId) => {
@@ -225,9 +232,11 @@ export default function CreateDynamicPersonalWebsite({
         );
         setAllCategories(filtered);
         setAllCategoriesMultiSelect(filtered);
+        setDesignationCategories(filtered); // For designation_category
       } else {
         setAllCategories([]);
         setAllCategoriesMultiSelect([]);
+        setDesignationCategories([]);
       }
     } catch (e) {
       // handle error if needed
@@ -262,15 +271,17 @@ export default function CreateDynamicPersonalWebsite({
       );
       setAllCategories(filtered);
       setAllCategoriesMultiSelect(filtered);
+      setDesignationCategories(filtered);
     } else {
       setAllCategories([]);
       setAllCategoriesMultiSelect([]);
+      setDesignationCategories([]);
     }
   }, [selectedMainProfile, allCategoriesRaw]);
 
   // Update upwork-specific fields based on website purpose
   useEffect(() => {
-    if (selectedWebsitePurpose !== "upwork") {
+    if (selectedWebsitePurpose !== "freelance") {
       setHideEarnings(true);
       setUpworkShowStatus("hide");
     }
@@ -305,6 +316,36 @@ export default function CreateDynamicPersonalWebsite({
       },
     );
     setFormatedSelectedSkills(modifiedSelectedSkills);
+
+    // Sync skillsMetaData with allSelectedSkills
+    setSkillsMetaData((prev) => {
+      // Remove deleted skills
+      let newMeta = prev.filter((meta) =>
+        allSelectedSkills.some((s) => s.id === meta.id),
+      );
+      // Add new skills with default values
+      allSelectedSkills.forEach((skill, idx) => {
+        if (!newMeta.some((meta) => meta.id === skill.id)) {
+          newMeta.push({
+            id: skill.id,
+            show: "all",
+            show_type: "random",
+            is_important: false,
+            is_learning: false,
+            order: idx + 1,
+          });
+        }
+      });
+      // Ensure order is correct
+      newMeta = newMeta
+        .sort((a, b) => {
+          const idxA = allSelectedSkills.findIndex((s) => s.id === a.id);
+          const idxB = allSelectedSkills.findIndex((s) => s.id === b.id);
+          return idxA - idxB;
+        })
+        .map((meta, idx) => ({ ...meta, order: idx + 1 }));
+      return newMeta;
+    });
   }, [allSKillGroups, allSelectedSkills]);
 
   const transformCategories = async (categories, skills) => {
@@ -462,10 +503,21 @@ export default function CreateDynamicPersonalWebsite({
     const category = allCategories.find(
       (category) => category.id === categoryid,
     );
+    // category && setDesignation(category.designation);
+    // category && setTagline(category.tagline);
+    // category && setPrivateTitle(category.designation);
+    setMainCategoryId(categoryid);
+  };
+
+  // New handler for designation_category
+  const changeDesignationCategory = (categoryid) => {
+    const category = designationCategories.find(
+      (category) => category.id === categoryid,
+    );
     category && setDesignation(category.designation);
     category && setTagline(category.tagline);
     category && setPrivateTitle(category.designation);
-    setMainCategoryId(categoryid);
+    setDesignationCategoryId(categoryid);
   };
 
   const deleteSkillFromCategroy = (skillId, categoryId) => {
@@ -504,6 +556,7 @@ export default function CreateDynamicPersonalWebsite({
         const category_id = category.id;
         return { type, category_id, skills: skillsData };
       });
+
     if (
       allSelectedSkills.length < 1 ||
       // matchedCategories.length < 1 ||
@@ -511,9 +564,11 @@ export default function CreateDynamicPersonalWebsite({
       !designation ||
       !tagline ||
       !privateTitle ||
+      !designationCategoryId ||
       !(hourlyRate && hourlyRate > 0) ||
       mainCategoryId == "select" ||
-      selectedMainProfile == "select"
+      selectedMainProfile == "select" ||
+      designationCategoryId == "select"
     ) {
       alert("Please fill all required inputs! Thanks");
       console.log({
@@ -562,6 +617,8 @@ export default function CreateDynamicPersonalWebsite({
       upwork_show_status: upworkShowStatus,
       importal_skills: importalSkills,
       email_type: emailType,
+      designation_category: designationCategoryId,
+      skills_meta_data: skillsMetaData,
     };
 
     try {
@@ -806,27 +863,6 @@ export default function CreateDynamicPersonalWebsite({
         </h3>
 
         <div className="flex gap-2   items-center">
-          <DropdownTableSearch
-            data={mainProfiles}
-            valueKey="id"
-            displayKeys={["name", "domain"]} // Columns to show in the dropdown
-            imageKeys={["profile_photo_1"]} // No images in this case
-            isMultiSelect={false}
-            mainDisplayKey="name" // Text to show in the button after selection
-            initialSelectValue={selectedMainProfile}
-            setInitialSelectValue={setSelectedMainProfile}
-          />
-          <DropdownTableSearch
-            data={allCategories}
-            valueKey="id"
-            displayKeys={["title"]} // Columns to show in the dropdown
-            imageKeys={[]} // No images in this case
-            isMultiSelect={false}
-            mainDisplayKey="title" // Text to show in the button after selection
-            initialSelectValue={mainCategoryId}
-            setInitialSelectValue={changeMaincategory}
-          />
-
           {isCloseOnSelect && selectedWebsite && (
             <button
               className="p-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition duration-150 self-end md:self-auto"
@@ -983,110 +1019,264 @@ export default function CreateDynamicPersonalWebsite({
         <div>
           {/* --- COLUMN 1: Selected Skills (Left) --- */}
 
-          {formatedSelectedSkills.length > 0 && (
+          {
             <ExpandCollapse
               title={`Selected Skills (${formatedSelectedSkills.length})`}
             >
               <div className="lg:col-span-1  bg-white p-5 rounded-xl shadow-lg border border-gray-200">
-                <div className="max-h-96 overflow-y-auto">
+                <div className="max-h-96 overflow-x-auto overflow-y-auto rounded-xl border border-gray-200 shadow-sm">
                   {formatedSelectedSkills.length === 0 ? (
                     <p className="p-4 text-center text-gray-500 italic">
                       Run analysis to see selected skills.
                     </p>
                   ) : (
-                    <ul className="divide-y divide-gray-100">
-                      {formatedSelectedSkills.map((skillItem: any) => (
-                        <li
-                          key={skillItem.id}
-                          className="flex items-center justify-between py-2 group hover:bg-indigo-50 rounded-md pr-2 transition-colors"
-                        >
-                          {/* Skill Title */}
-                          <span className="ml-2 text-sm font-medium text-gray-700 truncate">
-                            {skillItem.title}
-                          </span>
-                          <div className="flex gap-2 items-center">
-                            {!skillItem.isMatchedSkillCategory ? (
-                              <span className="text-red-500 mr-2 text-xs">
-                                No Category
-                              </span>
-                            ) : (
-                              ""
-                            )}
-                            {!skillItem.isMatchedSkillGroup ? (
-                              <button
-                                className={
-                                  "px-2 py-1 text-xs text-white font-bold rounded shadow transition duration-200 bg-green-600 hover:bg-green-700"
-                                }
-                                onClick={() => {
-                                  setOpenAddSkillGroupPopup(true);
-                                  setSelectedSkillToCreateSkillGroup(
-                                    skillItem.id,
-                                  );
-                                  setSelectedSkillToCreateSkillGroupName(
-                                    skillItem.title,
-                                  );
-                                }}
-                              >
-                                Skill Group
-                              </button>
-                            ) : (
-                              ""
-                            )}
-                            {/* Mark Important Button */}
-                            <button
-                              onClick={() => {
-                                if (importalSkills.includes(skillItem.id)) {
-                                  setImportalSkills(
-                                    importalSkills.filter(
-                                      (id) => id !== skillItem.id,
-                                    ),
-                                  );
-                                } else {
-                                  setImportalSkills([
-                                    ...importalSkills,
-                                    skillItem.id,
-                                  ]);
-                                }
-                              }}
-                              className={`px-2 py-1 text-xs font-bold rounded shadow transition duration-200 ${
-                                importalSkills.includes(skillItem.id)
-                                  ? "bg-yellow-500 text-white hover:bg-yellow-600"
-                                  : "bg-gray-300 text-gray-700 hover:bg-gray-400"
-                              }`}
-                              title={`Mark ${skillItem.title} as important`}
+                    <table className="min-w-full text-xs border-separate border-spacing-0">
+                      <thead>
+                        <tr className="bg-indigo-50 sticky top-0 z-10">
+                          <th className="px-3 py-2 font-semibold text-gray-700 text-left rounded-tl-xl">
+                            Order
+                          </th>
+                          <th className="px-3 py-2 font-semibold text-gray-700 text-left">
+                            Skill
+                          </th>
+                          <th className="px-3 py-2 font-semibold text-gray-700 text-left">
+                            Show
+                          </th>
+                          <th className="px-3 py-2 font-semibold text-gray-700 text-left">
+                            Show Type
+                          </th>
+                          <th className="px-3 py-2 font-semibold text-gray-700 text-center">
+                            Important
+                          </th>
+                          <th className="px-3 py-2 font-semibold text-gray-700 text-center">
+                            Learning
+                          </th>
+                          <th className="px-3 py-2 font-semibold text-gray-700 text-center rounded-tr-xl">
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {formatedSelectedSkills
+                          .map((skillItem: any) => {
+                            const meta =
+                              skillsMetaData.find(
+                                (m) => m.id === skillItem.id,
+                              ) || {};
+                            return { ...skillItem, ...meta };
+                          })
+                          .sort((a, b) => (a.order || 0) - (b.order || 0))
+                          .map((skillItem, idx) => (
+                            <tr
+                              key={skillItem.id}
+                              className={
+                                `group transition-colors ${idx % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-indigo-50` +
+                                (idx === 0
+                                  ? " rounded-tl-xl rounded-tr-xl"
+                                  : "")
+                              }
                             >
-                              ★ Important
-                            </button>
-                            {/* Delete Button */}
-                            <button
-                              onClick={() => deleteSkill(skillItem.id)}
-                              className="p-1 rounded-full text-red-500 opacity-0 group-hover:opacity-100 hover:bg-red-100 transition-opacity"
-                              title={`Remove ${skillItem.title}`}
-                            >
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                className="h-4 w-4"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  d="M6 18L18 6M6 6l12 12"
+                              <td className="px-3 py-2 text-center align-middle cursor-move">
+                                <button
+                                  title="Move Up"
+                                  disabled={idx === 0}
+                                  className="mr-1 text-gray-500 hover:text-indigo-600 disabled:opacity-30"
+                                  onClick={() => {
+                                    if (idx === 0) return;
+                                    const newOrder = [...skillsMetaData];
+                                    const i = newOrder.findIndex(
+                                      (m) => m.id === skillItem.id,
+                                    );
+                                    if (i > 0) {
+                                      [newOrder[i - 1], newOrder[i]] = [
+                                        newOrder[i],
+                                        newOrder[i - 1],
+                                      ];
+                                      // Reassign order
+                                      setSkillsMetaData(
+                                        newOrder.map((m, i) => ({
+                                          ...m,
+                                          order: i + 1,
+                                        })),
+                                      );
+                                    }
+                                  }}
+                                >
+                                  ▲
+                                </button>
+                                <button
+                                  title="Move Down"
+                                  disabled={
+                                    idx === formatedSelectedSkills.length - 1
+                                  }
+                                  className="text-gray-500 hover:text-indigo-600 disabled:opacity-30"
+                                  onClick={() => {
+                                    if (
+                                      idx ===
+                                      formatedSelectedSkills.length - 1
+                                    )
+                                      return;
+                                    const newOrder = [...skillsMetaData];
+                                    const i = newOrder.findIndex(
+                                      (m) => m.id === skillItem.id,
+                                    );
+                                    if (i < newOrder.length - 1) {
+                                      [newOrder[i], newOrder[i + 1]] = [
+                                        newOrder[i + 1],
+                                        newOrder[i],
+                                      ];
+                                      setSkillsMetaData(
+                                        newOrder.map((m, i) => ({
+                                          ...m,
+                                          order: i + 1,
+                                        })),
+                                      );
+                                    }
+                                  }}
+                                >
+                                  ▼
+                                </button>
+                                {skillItem.order}
+                              </td>
+                              <td className="px-3 py-2 align-middle">
+                                <span className="ml-2 text-sm font-medium text-gray-700 truncate">
+                                  {skillItem.title}
+                                </span>
+                                {!skillItem.isMatchedSkillCategory && (
+                                  <span className="text-red-500 ml-2 text-xs">
+                                    No Category
+                                  </span>
+                                )}
+                                {!skillItem.isMatchedSkillGroup && (
+                                  <button
+                                    className={
+                                      "ml-2 px-2 py-1 text-xs text-white font-bold rounded shadow transition duration-200 bg-green-600 hover:bg-green-700"
+                                    }
+                                    onClick={() => {
+                                      setOpenAddSkillGroupPopup(true);
+                                      setSelectedSkillToCreateSkillGroup(
+                                        skillItem.id,
+                                      );
+                                      setSelectedSkillToCreateSkillGroupName(
+                                        skillItem.title,
+                                      );
+                                    }}
+                                  >
+                                    Skill Group
+                                  </button>
+                                )}
+                              </td>
+                              <td className="px-3 py-2 align-middle">
+                                <select
+                                  className="border rounded px-1 py-0.5 text-xs"
+                                  value={skillItem.show || "all"}
+                                  onChange={(e) => {
+                                    setSkillsMetaData((prev) =>
+                                      prev.map((meta) =>
+                                        meta.id === skillItem.id
+                                          ? { ...meta, show: e.target.value }
+                                          : meta,
+                                      ),
+                                    );
+                                  }}
+                                >
+                                  <option value="all">all</option>
+                                  {[...Array(10)].map((_, i) => (
+                                    <option key={i + 1} value={String(i + 1)}>
+                                      {i + 1}
+                                    </option>
+                                  ))}
+                                </select>
+                              </td>
+                              <td className="px-3 py-2 align-middle">
+                                <select
+                                  className="border rounded px-1 py-0.5 text-xs"
+                                  value={skillItem.show_type || "random"}
+                                  onChange={(e) => {
+                                    setSkillsMetaData((prev) =>
+                                      prev.map((meta) =>
+                                        meta.id === skillItem.id
+                                          ? {
+                                              ...meta,
+                                              show_type: e.target.value,
+                                            }
+                                          : meta,
+                                      ),
+                                    );
+                                  }}
+                                >
+                                  <option value="random">random</option>
+                                  <option value="first">first</option>
+                                  <option value="last">last</option>
+                                </select>
+                              </td>
+                              <td className="px-3 py-2 text-center align-middle">
+                                <input
+                                  type="checkbox"
+                                  checked={!!skillItem.is_important}
+                                  onChange={(e) => {
+                                    setSkillsMetaData((prev) =>
+                                      prev.map((meta) =>
+                                        meta.id === skillItem.id
+                                          ? {
+                                              ...meta,
+                                              is_important: e.target.checked,
+                                            }
+                                          : meta,
+                                      ),
+                                    );
+                                  }}
                                 />
-                              </svg>
-                            </button>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
+                              </td>
+                              <td className="px-3 py-2 text-center align-middle">
+                                <input
+                                  type="checkbox"
+                                  checked={!!skillItem.is_learning}
+                                  onChange={(e) => {
+                                    setSkillsMetaData((prev) =>
+                                      prev.map((meta) =>
+                                        meta.id === skillItem.id
+                                          ? {
+                                              ...meta,
+                                              is_learning: e.target.checked,
+                                            }
+                                          : meta,
+                                      ),
+                                    );
+                                  }}
+                                />
+                              </td>
+                              <td className="px-3 py-2 text-center align-middle">
+                                <button
+                                  onClick={() => deleteSkill(skillItem.id)}
+                                  className="p-1 rounded-full text-red-500 opacity-0 group-hover:opacity-100 hover:bg-red-100 transition-opacity"
+                                  title={`Remove ${skillItem.title}`}
+                                >
+                                  <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    className="h-4 w-4"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      d="M6 18L18 6M6 6l12 12"
+                                    />
+                                  </svg>
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
                   )}
                 </div>
               </div>
             </ExpandCollapse>
-          )}
+          }
 
           {matchedProfiles.length > 0 && (
             <ExpandCollapse
@@ -1109,7 +1299,7 @@ export default function CreateDynamicPersonalWebsite({
                             key={profile.id}
                             className="flex flex-col sm:flex-row sm:items-center justify-between py-3 px-3 group hover:bg-indigo-50 rounded-lg transition-colors border-b last:border-b-0 border-gray-100"
                           >
-                            <div className="flex-shrink-0 mb-2 sm:mb-0 sm:mr-4 min-w-0">
+                            <div className="shrink-0 mb-2 sm:mb-0 sm:mr-4 min-w-0">
                               <span className="text-sm font-semibold text-gray-800 truncate">
                                 <span className="text-indigo-600 font-extrabold mr-1">
                                   {profile.private_title}
@@ -1123,7 +1313,7 @@ export default function CreateDynamicPersonalWebsite({
                               </span>
                             </div>
 
-                            <div className="flex-grow flex flex-wrap gap-2 items-center min-w-0 mb-2 sm:mb-0">
+                            <div className="grow flex flex-wrap gap-2 items-center min-w-0 mb-2 sm:mb-0">
                               {profile.skills_ids?.length > 0 ? (
                                 [
                                   // 1. Render Matched Skills First (Green pills)
@@ -1176,13 +1366,13 @@ export default function CreateDynamicPersonalWebsite({
                               )}
                             </div>
 
-                            <div className="flex-shrink-0 self-end sm:self-center">
+                            <div className="shrink-0 self-end sm:self-center">
                               <button
                                 onClick={() => {
                                   setSelectWebsite && setSelectWebsite(profile);
                                   setNewlyCreatedProfileLinks(profile);
                                 }}
-                                className="p-1.5 px-3 text-sm rounded-lg text-red-600 border border-red-200 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity transition-colors duration-200"
+                                className="p-1.5 px-3 text-sm rounded-lg text-red-600 border border-red-200 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-colors duration-200"
                                 aria-label={`Select profile ${profile.private_title}`}
                               >
                                 Select
@@ -1196,8 +1386,56 @@ export default function CreateDynamicPersonalWebsite({
               </div>
             </ExpandCollapse>
           )}
-          {mainCategoryId && (
+          {
             <ExpandCollapse title={"Profile Data"}>
+              <div className="flex gap-2">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-0.5">
+                    Main Profile
+                  </label>
+                  <DropdownTableSearch
+                    data={mainProfiles}
+                    valueKey="id"
+                    displayKeys={["name", "domain"]} // Columns to show in the dropdown
+                    imageKeys={["profile_photo_1"]} // No images in this case
+                    isMultiSelect={false}
+                    mainDisplayKey="name" // Text to show in the button after selection
+                    initialSelectValue={selectedMainProfile}
+                    setInitialSelectValue={setSelectedMainProfile}
+                  />
+                </div>{" "}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-0.5">
+                    Profile Designation
+                  </label>
+                  {/* Designation Category Dropdown */}
+                  <DropdownTableSearch
+                    data={designationCategories}
+                    valueKey="id"
+                    displayKeys={["title"]}
+                    imageKeys={[]}
+                    isMultiSelect={false}
+                    mainDisplayKey="title"
+                    initialSelectValue={designationCategoryId}
+                    setInitialSelectValue={changeDesignationCategory}
+                  />
+                </div>{" "}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-0.5">
+                    Portfolio Category
+                  </label>
+                  <DropdownTableSearch
+                    data={allCategories}
+                    valueKey="id"
+                    displayKeys={["title"]} // Columns to show in the dropdown
+                    imageKeys={[]} // No images in this case
+                    isMultiSelect={false}
+                    mainDisplayKey="title" // Text to show in the button after selection
+                    initialSelectValue={mainCategoryId}
+                    setInitialSelectValue={changeMaincategory}
+                  />
+                </div>
+              </div>
               {/* <DropdownTableSearch
               data={allCategories}
               valueKey="id"
@@ -1326,15 +1564,10 @@ export default function CreateDynamicPersonalWebsite({
                         }
                         className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm"
                       >
-                        <option value="upwork">Upwork</option>
-                        <option value="contract">Other Freelance/Remote</option>
-                        <option value="real_office_jobs_remote_hybrid">
-                          Office Jobs Remote/Hybrid
-                        </option>
-                        <option value="startups_clients">
-                          Startups Clients
-                        </option>
-                        <option value="students">Students</option>
+                        <option value="contract">Contract</option>
+                        <option value="fulltime">Full Time</option>
+                        <option value="freelance">Freelance</option>
+                        <option value="startup">Startup</option>
                       </select>
                     </div>
                     <div>
@@ -1469,7 +1702,7 @@ export default function CreateDynamicPersonalWebsite({
                 />
               </div>
             </ExpandCollapse>
-          )}
+          }
           {allCategoriesMultiSelect.length > 0 && (
             <ExpandCollapse
               title={`Select Categories (${allCategoriesMultiSelect.length})`}

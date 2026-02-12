@@ -54,6 +54,7 @@ interface DetailProfile {
   email_type?: string;
   createdAt?: string;
   updatedAt?: string;
+  designation_category?: string;
 }
 
 export default function ManageDetailProfiles() {
@@ -584,95 +585,151 @@ export default function ManageDetailProfiles() {
                             </div>
                           )}
 
-                        {/* Skills */}
+                        {/* Skills with skills_meta_data */}
                         <div>
                           <span className="text-xs font-semibold text-gray-600 uppercase block mb-2">
                             All Skills ({skillTitles.length})
                           </span>
-                          <div className="flex flex-col gap-3">
-                            {/* Profile Skills */}
-                            <div>
-                              <div className="flex flex-wrap gap-1">
-                                {skillTitles.length > 0 ? (
-                                  skillTitles.map((skillTitle, idx) => {
-                                    const profileSkill = getSkillObjects(
-                                      profile.skills_ids,
-                                    )[idx];
-                                    const isMatched = selectedSearchSkills.some(
-                                      (s) => s.id === profileSkill?.id,
-                                    );
-
-                                    return (
-                                      <span
-                                        key={idx}
-                                        className={`inline-block px-2 py-1 text-xs font-semibold rounded-full ${
-                                          isMatched
-                                            ? "bg-green-100 text-green-700 border border-green-300"
-                                            : "bg-indigo-100 text-indigo-700"
-                                        }`}
-                                      >
-                                        {skillTitle}
-                                      </span>
-                                    );
-                                  })
-                                ) : (
-                                  <span className="text-xs text-gray-400">
-                                    No skills
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Selected Skills Not in Profile */}
-                            {selectedSearchSkills.length > 0 && (
-                              <div className="border-t pt-2">
-                                <span className="text-xs font-semibold text-gray-600 uppercase block mb-1">
-                                  Missing from Profile (
-                                  {
-                                    selectedSearchSkills.filter(
-                                      (s) =>
-                                        !getSkillObjects(
-                                          profile.skills_ids,
-                                        ).some((ps) => ps.id === s.id),
-                                    ).length
-                                  }
-                                  )
-                                </span>
-                                <div className="flex flex-wrap gap-1">
-                                  {selectedSearchSkills.filter(
-                                    (s) =>
-                                      !getSkillObjects(profile.skills_ids).some(
-                                        (ps) => ps.id === s.id,
-                                      ),
-                                  ).length > 0 ? (
-                                    selectedSearchSkills
-                                      .filter(
-                                        (s) =>
-                                          !getSkillObjects(
-                                            profile.skills_ids,
-                                          ).some((ps) => ps.id === s.id),
-                                      )
-                                      .map((skill) => (
-                                        <span
-                                          key={skill.id}
-                                          className="inline-block px-2 py-1 bg-orange-100 text-orange-700 text-xs font-semibold rounded-full border border-orange-300"
+                          {Array.isArray((profile as any).skills_meta_data) &&
+                          (profile as any).skills_meta_data.length > 0 ? (
+                            <div className="overflow-x-auto">
+                              <table className="min-w-full text-xs border-separate border-spacing-0 rounded-lg overflow-hidden">
+                                <thead>
+                                  <tr className="bg-indigo-50">
+                                    <th className="px-3 py-2 text-left font-semibold text-gray-700">
+                                      Order
+                                    </th>
+                                    <th className="px-3 py-2 text-left font-semibold text-gray-700">
+                                      Skill
+                                    </th>
+                                    <th className="px-3 py-2 text-left font-semibold text-gray-700">
+                                      Show
+                                    </th>
+                                    <th className="px-3 py-2 text-left font-semibold text-gray-700">
+                                      Show Type
+                                    </th>
+                                    <th className="px-3 py-2 text-center font-semibold text-gray-700">
+                                      Important
+                                    </th>
+                                    <th className="px-3 py-2 text-center font-semibold text-gray-700">
+                                      Learning
+                                    </th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                  {(profile as any).skills_meta_data
+                                    .slice()
+                                    .sort(
+                                      (a, b) => (a.order || 0) - (b.order || 0),
+                                    )
+                                    .map((meta: any, idx: number) => {
+                                      const skill = allSkills.find(
+                                        (s) => String(s.id) === String(meta.id),
+                                      );
+                                      return (
+                                        <tr
+                                          key={meta.id}
+                                          className={
+                                            idx % 2 === 0
+                                              ? "bg-white"
+                                              : "bg-gray-50"
+                                          }
                                         >
-                                          {skill.title}
-                                        </span>
-                                      ))
-                                  ) : (
-                                    <span className="text-xs text-gray-400">
-                                      All selected skills are in profile
+                                          <td className="px-3 py-2 text-center align-middle">
+                                            {meta.order}
+                                          </td>
+                                          <td className="px-3 py-2 align-middle">
+                                            <span className="font-medium text-gray-800">
+                                              {skill?.title || meta.id}
+                                            </span>
+                                          </td>
+                                          <td className="px-3 py-2 align-middle">
+                                            {meta.show}
+                                          </td>
+                                          <td className="px-3 py-2 align-middle">
+                                            {meta.show_type}
+                                          </td>
+                                          <td className="px-3 py-2 text-center align-middle">
+                                            {meta.is_important ? (
+                                              <span className="inline-block px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full font-bold">
+                                                ★
+                                              </span>
+                                            ) : (
+                                              <span className="inline-block px-2 py-1 text-gray-400">
+                                                —
+                                              </span>
+                                            )}
+                                          </td>
+                                          <td className="px-3 py-2 text-center align-middle">
+                                            {meta.is_learning ? (
+                                              <span className="inline-block px-2 py-1 bg-blue-100 text-blue-700 rounded-full font-bold">
+                                                ✔
+                                              </span>
+                                            ) : (
+                                              <span className="inline-block px-2 py-1 text-gray-400">
+                                                —
+                                              </span>
+                                            )}
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                </tbody>
+                              </table>
+                            </div>
+                          ) : (
+                            <div className="flex flex-wrap gap-1">
+                              {skillTitles.length > 0 ? (
+                                skillTitles.map((skillTitle, idx) => {
+                                  const profileSkill = getSkillObjects(
+                                    profile.skills_ids,
+                                  )[idx];
+                                  const isMatched = selectedSearchSkills.some(
+                                    (s) => s.id === profileSkill?.id,
+                                  );
+                                  return (
+                                    <span
+                                      key={idx}
+                                      className={`inline-block px-2 py-1 text-xs font-semibold rounded-full ${
+                                        isMatched
+                                          ? "bg-green-100 text-green-700 border border-green-300"
+                                          : "bg-indigo-100 text-indigo-700"
+                                      }`}
+                                    >
+                                      {skillTitle}
                                     </span>
-                                  )}
-                                </div>
-                              </div>
-                            )}
-                          </div>
+                                  );
+                                })
+                              ) : (
+                                <span className="text-xs text-gray-400">
+                                  No skills
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
 
                         {/* Additional Info */}
                         <div className="grid grid-cols-2 gap-2 text-xs">
+                          {profile.designation_category && (
+                            <div>
+                              <span className="font-semibold text-gray-600">
+                                Designation Category:
+                              </span>
+                              <p className="text-gray-700">
+                                {(() => {
+                                  const cat = categories.find(
+                                    (c) =>
+                                      String(c.id) ===
+                                      String(profile.designation_category),
+                                  );
+                                  return cat
+                                    ? cat.title
+                                    : profile.designation_category;
+                                })()}
+                              </p>
+                            </div>
+                          )}
                           <div>
                             <span className="font-semibold text-gray-600">
                               Private Title:

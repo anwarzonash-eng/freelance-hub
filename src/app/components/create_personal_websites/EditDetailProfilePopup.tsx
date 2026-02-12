@@ -1,6 +1,15 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+// Skill meta data type
+interface SkillMetaData {
+  id: string | number;
+  show: string;
+  show_type: string;
+  is_important: boolean;
+  is_learning: boolean;
+  order: number;
+}
 import { X, Search, Plus, Trash2, Star } from "lucide-react";
 import { updateDetailProfile } from "@/app/api_handlers/api/detail_profiles.api";
 
@@ -40,6 +49,8 @@ interface DetailProfile {
   hide_earnings?: boolean;
   importal_skills?: string[];
   email_type?: string;
+  designation_category?: string;
+  skills_meta_data?: SkillMetaData[];
 }
 
 interface EditDetailProfilePopupProps {
@@ -72,6 +83,7 @@ export default function EditDetailProfilePopup({
     upwork_show_status: profile.upwork_show_status || "show",
     hide_earnings: profile.hide_earnings || false,
     email_type: profile.email_type || "personal",
+    designation_category: (profile as any).designation_category || "",
   });
 
   const [selectedSkills, setSelectedSkills] = useState<Skill[]>(() => {
@@ -85,6 +97,91 @@ export default function EditDetailProfilePopup({
     }
     return [];
   });
+
+  // --- skills_meta_data state ---
+  const [skillsMetaData, setSkillsMetaData] = useState<SkillMetaData[]>(() => {
+    // Try to load from profile, else build from selectedSkills
+    if (
+      (profile as any).skills_meta_data &&
+      Array.isArray((profile as any).skills_meta_data)
+    ) {
+      return (profile as any).skills_meta_data.map(
+        (meta: any, idx: number) => ({
+          id: meta.id,
+          show: meta.show ?? true,
+          show_type: meta.show_type ?? "primary",
+          is_important: meta.is_important ?? false,
+          is_learning: meta.is_learning ?? false,
+          order: meta.order ?? idx + 1,
+        }),
+      );
+    }
+    // fallback: build from selectedSkills
+    return selectedSkills.map((s, idx) => ({
+      id: s.id,
+      show: true,
+      show_type: "primary",
+      is_important: false,
+      is_learning: false,
+      order: idx + 1,
+    }));
+  });
+  // --- Sync skillsMetaData with selectedSkills ---
+  useEffect(() => {
+    setSkillsMetaData((prev) => {
+      // Remove deleted skills
+      let newMeta = prev.filter((meta) =>
+        selectedSkills.some((s) => s.id === meta.id),
+      );
+      // Add new skills with default values
+      selectedSkills.forEach((skill, idx) => {
+        if (!newMeta.some((meta) => meta.id === skill.id)) {
+          newMeta.push({
+            id: skill.id,
+            show: "All",
+            show_type: "start",
+            is_important: false,
+            is_learning: false,
+            order: newMeta.length + 1,
+          });
+        }
+      });
+      // Ensure order is correct
+      newMeta = newMeta
+        .sort((a, b) => {
+          const idxA = selectedSkills.findIndex((s) => s.id === a.id);
+          const idxB = selectedSkills.findIndex((s) => s.id === b.id);
+          return idxA - idxB;
+        })
+        .map((meta, idx) => ({ ...meta, order: idx + 1 }));
+      return newMeta;
+    });
+  }, [selectedSkills]);
+  // --- Handlers for skillsMetaData table ---
+  const handleMetaChange = (
+    id: string | number,
+    field: keyof SkillMetaData,
+    value: any,
+  ) => {
+    setSkillsMetaData((prev) =>
+      prev.map((meta) => (meta.id === id ? { ...meta, [field]: value } : meta)),
+    );
+  };
+
+  const moveSkillMeta = (id: string | number, direction: "up" | "down") => {
+    setSkillsMetaData((prev) => {
+      const idx = prev.findIndex((meta) => meta.id === id);
+      if (idx === -1) return prev;
+      const newMeta = [...prev];
+      if (direction === "up" && idx > 0) {
+        [newMeta[idx - 1], newMeta[idx]] = [newMeta[idx], newMeta[idx - 1]];
+      } else if (direction === "down" && idx < newMeta.length - 1) {
+        [newMeta[idx], newMeta[idx + 1]] = [newMeta[idx + 1], newMeta[idx]];
+      }
+      // Reassign order
+      return newMeta.map((meta, i) => ({ ...meta, order: i + 1 }));
+    });
+  };
 
   const [importantSkillIds, setImportantSkillIds] = useState<
     Set<string | number>
@@ -139,6 +236,7 @@ export default function EditDetailProfilePopup({
     if (!selectedSkills.find((s) => s.id === skill.id)) {
       setSelectedSkills([...selectedSkills, skill]);
       setSkillsSearchQuery("");
+      // skillsMetaData will sync via useEffect
     }
   };
 
@@ -150,6 +248,7 @@ export default function EditDetailProfilePopup({
       updated.delete(skillId);
       return updated;
     });
+    // skillsMetaData will sync via useEffect
   };
 
   // Toggle important skill
@@ -235,6 +334,7 @@ export default function EditDetailProfilePopup({
         },
         services: services.length > 0 ? services : profile.services,
         importal_skills: Array.from(importantSkillIds).map((id) => String(id)),
+        skills_meta_data: skillsMetaData,
       };
 
       // Call update API
@@ -249,6 +349,7 @@ export default function EditDetailProfilePopup({
           skills_ids: payload.skills_ids,
           services: payload.services,
           importal_skills: payload.importal_skills,
+          skills_meta_data: payload.skills_meta_data,
         } as DetailProfile);
         onClose();
       } else {
@@ -316,6 +417,25 @@ export default function EditDetailProfilePopup({
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
               />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Designation Category
+              </label>
+              <select
+                value={formData.designation_category || ""}
+                onChange={(e) =>
+                  handleFieldChange("designation_category", e.target.value)
+                }
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
+              >
+                <option value="">Select Category</option>
+                {allCategories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.title}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Tag Line
@@ -348,9 +468,10 @@ export default function EditDetailProfilePopup({
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
               >
                 <option value="">Select Purpose</option>
-                <option value="upwork">Upwork</option>
-                <option value="remote_job">Remote Job</option>
-                <option value="portfolio">Portfolio</option>
+                <option value="contract">Contract</option>
+                <option value="fulltime">Full Time</option>
+                <option value="freelance">Freelance</option>
+                <option value="startup">Startup</option>
               </select>
             </div>
             <div>
@@ -365,19 +486,20 @@ export default function EditDetailProfilePopup({
                 }
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
               />
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                AI Short Description
-              </label>
-              <textarea
-                value={formData.ai_short_description || ""}
-                onChange={(e) =>
-                  handleFieldChange("ai_short_description", e.target.value)
-                }
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
-              />
+
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  AI Short Description
+                </label>
+                <textarea
+                  value={formData.ai_short_description || ""}
+                  onChange={(e) =>
+                    handleFieldChange("ai_short_description", e.target.value)
+                  }
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
+                />
+              </div>
             </div>
           </div>
         </fieldset>
@@ -542,44 +664,157 @@ export default function EditDetailProfilePopup({
               )}
             </div>
 
-            {/* Selected skills */}
+            {/* Skills Meta Data Table */}
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700">
-                Selected Skills ({selectedSkills.length})
+                Skills Meta Data ({skillsMetaData.length})
               </label>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                {selectedSkills.map((skill) => (
-                  <div
-                    key={skill.id}
-                    className="flex items-center justify-between bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2 group hover:bg-indigo-100 transition"
-                  >
-                    <span className="text-sm font-medium text-gray-800">
-                      {skill.title}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => toggleImportantSkill(skill.id)}
-                        className={`p-1 rounded transition ${
-                          importantSkillIds.has(skill.id)
-                            ? "text-yellow-500 bg-yellow-50"
-                            : "text-gray-400 hover:text-yellow-500"
-                        }`}
-                        title="Mark as important"
-                      >
-                        <Star size={16} fill="currentColor" />
-                      </button>
-                      <button
-                        onClick={() => removeSkill(skill.id)}
-                        className="p-1 rounded text-red-500 hover:bg-red-50 transition"
-                        title="Remove skill"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              {selectedSkills.length === 0 && (
+              {skillsMetaData.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-xs border-separate border-spacing-0 rounded-lg overflow-hidden">
+                    <thead>
+                      <tr className="bg-indigo-50">
+                        <th className="px-2 py-2 text-left font-semibold text-gray-700">
+                          Order
+                        </th>
+                        <th className="px-2 py-2 text-left font-semibold text-gray-700">
+                          Skill
+                        </th>
+                        <th className="px-2 py-2 text-center font-semibold text-gray-700">
+                          Show
+                        </th>
+                        <th className="px-2 py-2 text-center font-semibold text-gray-700">
+                          Show Type
+                        </th>
+                        <th className="px-2 py-2 text-center font-semibold text-gray-700">
+                          Important
+                        </th>
+                        <th className="px-2 py-2 text-center font-semibold text-gray-700">
+                          Learning
+                        </th>
+                        <th className="px-2 py-2 text-center font-semibold text-gray-700">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {skillsMetaData
+                        .slice()
+                        .sort((a, b) => (a.order || 0) - (b.order || 0))
+                        .map((meta, idx) => {
+                          const skill = allSkills.find(
+                            (s) => String(s.id) === String(meta.id),
+                          );
+                          return (
+                            <tr key={meta.id} className="hover:bg-indigo-50">
+                              <td className="px-2 py-1 text-center">
+                                <div className="flex flex-col items-center gap-1">
+                                  <button
+                                    type="button"
+                                    className="text-xs text-gray-400 hover:text-indigo-600"
+                                    disabled={idx === 0}
+                                    onClick={() => moveSkillMeta(meta.id, "up")}
+                                    title="Move up"
+                                  >
+                                    ▲
+                                  </button>
+                                  <span>{meta.order}</span>
+                                  <button
+                                    type="button"
+                                    className="text-xs text-gray-400 hover:text-indigo-600"
+                                    disabled={idx === skillsMetaData.length - 1}
+                                    onClick={() =>
+                                      moveSkillMeta(meta.id, "down")
+                                    }
+                                    title="Move down"
+                                  >
+                                    ▼
+                                  </button>
+                                </div>
+                              </td>
+                              <td className="px-2 py-1 text-left font-medium text-gray-800">
+                                {skill?.title || meta.id}
+                              </td>
+                              <td className="px-2 py-1 text-center">
+                                <select
+                                  value={meta.show}
+                                  onChange={(e) =>
+                                    handleMetaChange(
+                                      meta.id,
+                                      "show",
+                                      e.target.value,
+                                    )
+                                  }
+                                  className="border border-gray-300 rounded px-1 py-0.5 text-xs"
+                                >
+                                  <option value="all">All</option>
+                                  {[...Array(10)].map((_, i) => (
+                                    <option key={i + 1} value={String(i + 1)}>
+                                      {i + 1}
+                                    </option>
+                                  ))}
+                                </select>
+                              </td>
+                              <td className="px-2 py-1 text-center">
+                                <select
+                                  value={meta.show_type}
+                                  onChange={(e) =>
+                                    handleMetaChange(
+                                      meta.id,
+                                      "show_type",
+                                      e.target.value,
+                                    )
+                                  }
+                                  className="border border-gray-300 rounded px-1 py-0.5 text-xs"
+                                >
+                                  <option value="random">Random</option>
+                                  <option value="first">First</option>
+                                  <option value="last">Last</option>
+                                </select>
+                              </td>
+                              <td className="px-2 py-1 text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={meta.is_important}
+                                  onChange={(e) =>
+                                    handleMetaChange(
+                                      meta.id,
+                                      "is_important",
+                                      e.target.checked,
+                                    )
+                                  }
+                                />
+                              </td>
+                              <td className="px-2 py-1 text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={meta.is_learning}
+                                  onChange={(e) =>
+                                    handleMetaChange(
+                                      meta.id,
+                                      "is_learning",
+                                      e.target.checked,
+                                    )
+                                  }
+                                />
+                              </td>
+                              <td className="px-2 py-1 text-center">
+                                <button
+                                  type="button"
+                                  className="p-1 rounded text-red-500 hover:bg-red-50 transition"
+                                  title="Remove skill"
+                                  onClick={() => removeSkill(meta.id)}
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
                 <p className="text-sm text-gray-500 italic">
                   No skills selected
                 </p>

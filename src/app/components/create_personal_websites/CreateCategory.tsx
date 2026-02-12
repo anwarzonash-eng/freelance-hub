@@ -4,6 +4,7 @@ import { Prompts } from "@/utils/global";
 import {
   addCategory,
   addBulkCategories,
+  updateCategoryByID,
 } from "@/app/api_handlers/api/categories.api";
 
 interface CategoryData {
@@ -31,24 +32,47 @@ interface CategoryData {
     intro9?: string;
     intro10?: string;
   };
+
+  experience_titles?: {
+    title1?: string;
+    title2?: string;
+    title3?: string;
+    title4?: string;
+    title5?: string;
+    title6?: string;
+    title7?: string;
+    title8?: string;
+    title9?: string;
+    title10?: string;
+  };
 }
 
+export default CreateCategory;
 interface CreateCategoryProps {
   main_profile_id: string;
   onSuccess?: () => void;
+  preloadData?: Partial<CategoryData>;
 }
 
-export default function CreateCategory({
+function CreateCategory({
   main_profile_id,
   onSuccess,
+  preloadData,
 }: CreateCategoryProps) {
-  const [category_name, setCategoryName] = useState("");
-  const [pasted, setPasted] = useState("");
-  const [verified, setVerified] = useState(false);
-  const [categories, setCategories] = useState<CategoryData[]>([]);
+  // If preloadData is provided, use it to initialize state
+  const initialCategoryName = preloadData?.title || "";
+  const initialPasted = preloadData ? JSON.stringify(preloadData, null, 2) : "";
+  const [categories, setCategories] = useState<CategoryData[]>(
+    preloadData ? [preloadData as CategoryData] : [],
+  );
+  const [verified, setVerified] = useState(!!preloadData);
+  const [category_name, setCategoryName] = useState(initialCategoryName);
+  const [pasted, setPasted] = useState(initialPasted);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [isMultiple, setIsMultiple] = useState(false);
+  // Determine if in edit mode
+  const isEditMode = !!preloadData;
 
   const sampleSingleJSON = `{
   "label": "react-developer",
@@ -109,9 +133,10 @@ export default function CreateCategory({
     });
   };
 
+  // ...existing code...
   return (
-    <div className="max-w-2xl mx-auto flex flex-col gap-4 p-6 bg-white rounded-2xl shadow">
-      <div className="flex flex-col gap-1">
+    <div className="w-full">
+      <div className="flex flex-col gap-1 w-full">
         <span className="text-sm font-medium text-gray-700">Props:</span>
         <div className="text-xs bg-gray-100 p-2 rounded font-mono text-gray-600">
           main_profile_id: {main_profile_id}
@@ -171,8 +196,8 @@ export default function CreateCategory({
           try {
             const parsed = JSON.parse(
               pasted.replace(/"([^"\\]*(\\.[^"\\]*)*)"/g, (match) =>
-                match.replace(/\r?\n/g, "\\n")
-              )
+                match.replace(/\r?\n/g, "\\n"),
+              ),
             );
 
             // Check if it's an array (multiple categories) or object (single category)
@@ -202,14 +227,16 @@ export default function CreateCategory({
                 (cat.short_description === undefined ||
                   typeof cat.short_description === "string") &&
                 (cat.experience_intro === undefined ||
-                  typeof cat.experience_intro === "object");
+                  typeof cat.experience_intro === "object") &&
+                (cat.experience_titles === undefined ||
+                  typeof cat.experience_titles === "object");
 
               if (!ok) {
                 setVerified(false);
                 setMessage(
                   `❌ Invalid structure for ${
                     cat.title || "unknown"
-                  }: check image URL or main_profile_id`
+                  }: check image URL, main_profile_id, or experience_titles`,
                 );
                 return;
               }
@@ -303,8 +330,7 @@ export default function CreateCategory({
                   }}
                 />
               </div>
-
-              <div className="flex flex-col gap-1">
+              <div>
                 <label className="text-sm font-medium text-gray-700">
                   Thumbnail URL
                 </label>
@@ -370,6 +396,45 @@ export default function CreateCategory({
                   ))}
                 </div>
               )}
+
+              {/* Experience Titles Fields */}
+              {cat.experience_titles && (
+                <div className="flex flex-col gap-2 border-t pt-3 mt-2">
+                  <label className="text-sm font-semibold text-gray-700">
+                    Experience Titles (10 sections)
+                  </label>
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                    <div key={num} className="flex flex-col gap-1">
+                      <label className="text-xs font-medium text-gray-600">
+                        Experience Title {num}
+                      </label>
+                      <input
+                        className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm"
+                        value={
+                          cat.experience_titles?.[
+                            `title${num}` as keyof typeof cat.experience_titles
+                          ] || ""
+                        }
+                        onChange={(e) => {
+                          const updated = [...categories];
+                          if (!updated[index].experience_titles) {
+                            updated[index].experience_titles = {};
+                          }
+                          const key = `title${num}`;
+                          (
+                            updated[index].experience_titles as Record<
+                              string,
+                              string
+                            >
+                          )[key] = e.target.value;
+                          setCategories(updated);
+                        }}
+                        placeholder={`Experience title ${num}...`}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
 
@@ -381,7 +446,21 @@ export default function CreateCategory({
               setMessage("");
               try {
                 let response;
-                if (isMultiple) {
+                if (isEditMode) {
+                  // Edit mode: always update one
+                  const id =
+                    (preloadData as any)?.id || (categories[0] as any)?.id;
+                  if (!id) {
+                    setMessage("❌ No category ID found for update");
+                    setBusy(false);
+                    return;
+                  }
+                  // Pass only the updated payload (excluding id if present)
+                  const { id: _id, ...payload } = categories[0] as any;
+                  response = await updateCategoryByID(payload, {
+                    path: { id },
+                  });
+                } else if (isMultiple) {
                   response = await addBulkCategories(categories);
                 } else {
                   response = await addCategory(categories[0]);
@@ -389,7 +468,9 @@ export default function CreateCategory({
 
                 if (response && response.APIStatus === "success") {
                   setMessage(
-                    `✅ Successfully created ${categories.length} category(ies)`
+                    isEditMode
+                      ? `✅ Successfully updated category`
+                      : `✅ Successfully created ${categories.length} category(ies)`,
                   );
                   setCategoryName("");
                   setPasted("");
@@ -404,7 +485,7 @@ export default function CreateCategory({
                   }
                 } else {
                   setMessage(
-                    `❌ Error: ${response?.message || "Failed to create"}`
+                    `❌ Error: ${response?.message || (isEditMode ? "Failed to update" : "Failed to create")}`,
                   );
                 }
               } catch (error) {
@@ -414,7 +495,11 @@ export default function CreateCategory({
               }
             }}
           >
-            {busy ? "Saving..." : `Save ${categories.length} Category(ies)`}
+            {busy
+              ? "Saving..."
+              : isEditMode
+                ? "Update Category"
+                : `Save ${categories.length} Category(ies)`}
           </button>
         </div>
       )}

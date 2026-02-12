@@ -25,6 +25,7 @@ export async function updateCategoryByID(payload: any, params: IApiParams) {
     return await apiClient(CategoriesAPIRoutes.UPDATE, ApiMethod.PUT, payload, params, undefined, true, true)
 }
 
+
 export async function deleteCategoryByID(params: IApiParams) {
     return await apiClient(CategoriesAPIRoutes.DELETE, ApiMethod.DELETE, undefined, params, undefined, true, true)
 }
