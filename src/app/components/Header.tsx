@@ -229,19 +229,37 @@ const filterNavItems = (list: NavItem[], allowedPaths: string[]): NavItem[] => {
 export function getAllNavRoles(
   items = navItems,
 ): { label: string; value: string }[] {
-  const roles: { label: string; value: string }[] = [];
-  function traverse(list: NavItem[], isFirst: boolean = true) {
-    for (const item of list) {
-      if (item.href && !isFirst) {
-        roles.push({ label: item.title, value: item.href });
-      }
-      if (item.children) {
-        traverse(item.children, false);
-      }
-    }
-  }
-  traverse(items);
-  return roles;
+  return [
+    { label: "All", value: "*" },
+    { label: "Leads", value: "/leads" },
+    { label: "Upwork Jobs", value: "/upwork-jobs" },
+    { label: "Manage Detail Profiles", value: "/manage-detail-profiles" },
+    { label: "Manage Educations", value: "/manage-educations" },
+    { label: "Manage Portfolios", value: "/manage-portfolios" },
+    { label: "Main Profiles", value: "/main-profiles" },
+    { label: "Experiences", value: "/experiences" },
+    { label: "Media Upload", value: "/media-upload" },
+    { label: "Manage Testimonials", value: "/manage-testimonials" },
+    { label: "Manage Skills", value: "/manage-skills" },
+    { label: "Manage Skill Groups", value: "/manage-skill-groups" },
+    { label: "FAQ", value: "/faq" },
+    { label: "Manage Categories", value: "/manage-categories" },
+    { label: "Auth", value: "/auth" },
+    { label: "Best Match", value: "/best-match" },
+  ];
+  // const roles: { label: string; value: string }[] = [];
+  // function traverse(list: NavItem[], isFirst: boolean = true) {
+  //   for (const item of list) {
+  //     if (item.href && !isFirst) {
+  //       roles.push({ label: item.title, value: item.href });
+  //     }
+  //     if (item.children) {
+  //       traverse(item.children, false);
+  //     }
+  //   }
+  // }
+  // traverse(items);
+  // return roles;
 }
 /**
  * Recursively searches navItems for a matching href and returns the title.

@@ -13,8 +13,6 @@ const NAV_ROLES = getAllNavRoles();
 const emptyForm = {
   userid: "",
   password: "",
-  upwork_access_token: "",
-  upwork_referesh_token: "",
   roles: [],
 };
 
@@ -40,11 +38,34 @@ export default function AuthCrudPage() {
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
+  // Select-all logic for roles
   const handleRoleChange = (role: string) => {
     setForm((prev) => {
-      const roles = prev.roles.includes(role)
-        ? prev.roles.filter((r: string) => r !== role)
-        : [...prev.roles, role];
+      let roles = prev.roles;
+      if (role === "*") {
+        if (roles.includes("*")) {
+          // Unselect all
+          roles = [];
+        } else {
+          // Select all
+          roles = NAV_ROLES.map((r) => r.value);
+        }
+      } else {
+        if (roles.includes(role)) {
+          roles = roles.filter((r: string) => r !== role);
+        } else {
+          roles = [...roles, role];
+        }
+        // If all roles except * are selected, add *
+        const allRoleValues = NAV_ROLES.map((r) => r.value);
+        const nonStarRoles = allRoleValues.filter((v) => v !== "*");
+        const selectedNonStar = roles.filter((r) => r !== "*");
+        if (selectedNonStar.length === nonStarRoles.length) {
+          if (!roles.includes("*")) roles = [...roles, "*"];
+        } else {
+          roles = roles.filter((r) => r !== "*");
+        }
+      }
       return { ...prev, roles };
     });
   };
@@ -65,8 +86,6 @@ export default function AuthCrudPage() {
     setForm({
       userid: user.userid || "",
       password: user.password || "",
-      upwork_access_token: user.upwork_access_token || "",
-      upwork_referesh_token: user.upwork_referesh_token || "",
       roles: Array.isArray(user.roles) ? user.roles : [],
     });
     setEditId(user.id);
@@ -108,37 +127,14 @@ export default function AuthCrudPage() {
             />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          <div>
-            <label className="block font-semibold mb-1">
-              Upwork Access Token
-            </label>
-            <input
-              name="upwork_access_token"
-              value={form.upwork_access_token}
-              onChange={handleChange}
-              className="w-full border px-3 py-2 rounded"
-            />
-          </div>
-          <div>
-            <label className="block font-semibold mb-1">
-              Upwork Refresh Token
-            </label>
-            <input
-              name="upwork_referesh_token"
-              value={form.upwork_referesh_token}
-              onChange={handleChange}
-              className="w-full border px-3 py-2 rounded"
-            />
-          </div>
-        </div>
+        {/* Upwork token fields removed */}
         <div className="mb-4">
           <label className="block font-semibold mb-1">Roles</label>
-          <div className="flex gap-4 flex-wrap max-h-40 overflow-y-auto">
+          <div className="flex flex-col gap-2 max-h-60 overflow-y-auto">
             {NAV_ROLES.map((role) => (
               <label
                 key={role.value}
-                className="flex items-center gap-1 min-w-[180px]"
+                className="flex items-center gap-2"
               >
                 <input
                   type="checkbox"
