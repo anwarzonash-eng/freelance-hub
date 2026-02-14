@@ -1075,67 +1075,63 @@ export default function CreateDynamicPersonalWebsite({
                                   ? " rounded-tl-xl rounded-tr-xl"
                                   : "")
                               }
+                              draggable
+                              onDragStart={(e) => {
+                                e.dataTransfer.setData(
+                                  "text/plain",
+                                  idx.toString(),
+                                );
+                                e.currentTarget.classList.add("dragging");
+                              }}
+                              onDragEnd={(e) => {
+                                e.currentTarget.classList.remove("dragging");
+                              }}
+                              onDragOver={(e) => {
+                                e.preventDefault();
+                                e.currentTarget.classList.add("drag-over");
+                              }}
+                              onDragLeave={(e) => {
+                                e.currentTarget.classList.remove("drag-over");
+                              }}
+                              onDrop={(e) => {
+                                e.preventDefault();
+                                e.currentTarget.classList.remove("drag-over");
+                                const fromIdx = Number(
+                                  e.dataTransfer.getData("text/plain"),
+                                );
+                                const toIdx = idx;
+                                if (fromIdx === toIdx) return;
+                                // Reorder
+                                const ordered = formatedSelectedSkills
+                                  .map((skillItem: any) => {
+                                    const meta =
+                                      skillsMetaData.find(
+                                        (m) => m.id === skillItem.id,
+                                      ) || {};
+                                    return { ...skillItem, ...meta };
+                                  })
+                                  .sort(
+                                    (a, b) => (a.order || 0) - (b.order || 0),
+                                  );
+                                const moved = [...ordered];
+                                const [dragged] = moved.splice(fromIdx, 1);
+                                moved.splice(toIdx, 0, dragged);
+                                // Update skillsMetaData order
+                                setSkillsMetaData(
+                                  moved.map((m, i) => ({
+                                    ...m,
+                                    order: i + 1,
+                                  })),
+                                );
+                              }}
                             >
                               <td className="px-3 py-2 text-center align-middle cursor-move">
-                                <button
-                                  title="Move Up"
-                                  disabled={idx === 0}
-                                  className="mr-1 text-gray-500 hover:text-indigo-600 disabled:opacity-30"
-                                  onClick={() => {
-                                    if (idx === 0) return;
-                                    const newOrder = [...skillsMetaData];
-                                    const i = newOrder.findIndex(
-                                      (m) => m.id === skillItem.id,
-                                    );
-                                    if (i > 0) {
-                                      [newOrder[i - 1], newOrder[i]] = [
-                                        newOrder[i],
-                                        newOrder[i - 1],
-                                      ];
-                                      // Reassign order
-                                      setSkillsMetaData(
-                                        newOrder.map((m, i) => ({
-                                          ...m,
-                                          order: i + 1,
-                                        })),
-                                      );
-                                    }
-                                  }}
+                                <span
+                                  title="Drag to reorder"
+                                  style={{ cursor: "grab" }}
                                 >
-                                  ▲
-                                </button>
-                                <button
-                                  title="Move Down"
-                                  disabled={
-                                    idx === formatedSelectedSkills.length - 1
-                                  }
-                                  className="text-gray-500 hover:text-indigo-600 disabled:opacity-30"
-                                  onClick={() => {
-                                    if (
-                                      idx ===
-                                      formatedSelectedSkills.length - 1
-                                    )
-                                      return;
-                                    const newOrder = [...skillsMetaData];
-                                    const i = newOrder.findIndex(
-                                      (m) => m.id === skillItem.id,
-                                    );
-                                    if (i < newOrder.length - 1) {
-                                      [newOrder[i], newOrder[i + 1]] = [
-                                        newOrder[i + 1],
-                                        newOrder[i],
-                                      ];
-                                      setSkillsMetaData(
-                                        newOrder.map((m, i) => ({
-                                          ...m,
-                                          order: i + 1,
-                                        })),
-                                      );
-                                    }
-                                  }}
-                                >
-                                  ▼
-                                </button>
+                                  ☰
+                                </span>
                                 {skillItem.order}
                               </td>
                               <td className="px-3 py-2 align-middle">

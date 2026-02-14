@@ -86,77 +86,33 @@ export default function EditDetailProfilePopup({
     designation_category: (profile as any).designation_category || "",
   });
 
-  const [selectedSkills, setSelectedSkills] = useState<Skill[]>(() => {
-    if (
-      profile.skills_ids?.skills_ids &&
-      Array.isArray(profile.skills_ids.skills_ids)
-    ) {
-      return profile.skills_ids.skills_ids
+
+  const [selectedSkills, setSelectedSkills] = useState<Skill[]>([]);
+  const [skillsMetaData, setSkillsMetaData] = useState<SkillMetaData[]>([]);
+
+  // On open, set selectedSkills and skillsMetaData only from profile
+  useEffect(() => {
+    let initialSelectedSkills: Skill[] = [];
+    if (profile.skills_ids?.skills_ids && Array.isArray(profile.skills_ids.skills_ids)) {
+      initialSelectedSkills = profile.skills_ids.skills_ids
         .map((id: string) => allSkills.find((s) => String(s.id) === String(id)))
         .filter(Boolean) as Skill[];
     }
-    return [];
-  });
+    setSelectedSkills(initialSelectedSkills);
 
-  // --- skills_meta_data state ---
-  const [skillsMetaData, setSkillsMetaData] = useState<SkillMetaData[]>(() => {
-    // Try to load from profile, else build from selectedSkills
-    if (
-      (profile as any).skills_meta_data &&
-      Array.isArray((profile as any).skills_meta_data)
-    ) {
-      return (profile as any).skills_meta_data.map(
-        (meta: any, idx: number) => ({
-          id: meta.id,
-          show: meta.show ?? true,
-          show_type: meta.show_type ?? "primary",
-          is_important: meta.is_important ?? false,
-          is_learning: meta.is_learning ?? false,
-          order: meta.order ?? idx + 1,
-        }),
-      );
+    if (profile.skills_meta_data && Array.isArray(profile.skills_meta_data)) {
+      setSkillsMetaData(profile.skills_meta_data.map((meta: any) => ({
+        id: meta.id,
+        show: meta.show ?? true,
+        show_type: meta.show_type ?? "primary",
+        is_important: meta.is_important ?? false,
+        is_learning: meta.is_learning ?? false,
+        order: meta.order ?? 1,
+      })));
+    } else {
+      setSkillsMetaData([]);
     }
-    // fallback: build from selectedSkills
-    return selectedSkills.map((s, idx) => ({
-      id: s.id,
-      show: true,
-      show_type: "primary",
-      is_important: false,
-      is_learning: false,
-      order: idx + 1,
-    }));
-  });
-  // --- Sync skillsMetaData with selectedSkills ---
-  useEffect(() => {
-    setSkillsMetaData((prev) => {
-      // Remove deleted skills
-      let newMeta = prev.filter((meta) =>
-        selectedSkills.some((s) => s.id === meta.id),
-      );
-      // Add new skills with default values
-      selectedSkills.forEach((skill, idx) => {
-        if (!newMeta.some((meta) => meta.id === skill.id)) {
-          newMeta.push({
-            id: skill.id,
-            show: "All",
-            show_type: "start",
-            is_important: false,
-            is_learning: false,
-            order: newMeta.length + 1,
-          });
-        }
-      });
-      // Ensure order is correct
-      newMeta = newMeta
-        .sort((a, b) => {
-          const idxA = selectedSkills.findIndex((s) => s.id === a.id);
-          const idxB = selectedSkills.findIndex((s) => s.id === b.id);
-          return idxA - idxB;
-        })
-        .map((meta, idx) => ({ ...meta, order: idx + 1 }));
-      return newMeta;
-    });
-  }, [selectedSkills]);
+  }, [profile, allSkills]);
   // --- Handlers for skillsMetaData table ---
   const handleMetaChange = (
     id: string | number,

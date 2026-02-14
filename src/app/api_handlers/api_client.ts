@@ -8,6 +8,7 @@ const BASE_API_URL = process.env.NEXT_PUBLIC_API_PATH;
 const BASE_API_URL_PERSONAL_SITES = process.env.NEXT_PUBLIC_PERSONAL_SITES_API_DOMAIN;
 
 
+const publicUrls: string[] = ['/login']
 
 
 
@@ -96,12 +97,25 @@ export const apiClient = async <T = any, P = any>(
             localStorage.removeItem('authToken');
             window.location.href = '/login';
             console.log("Unauthorized access - 401");
+            return null;
         }
 
         if (!response.ok || jsonResponse.APIStatus === 'error') {
             const errorMessage = jsonResponse.message || 'An unknown API error occurred.';
             showErrorMessage && showAppNotification('error', 'API Request Failed', errorMessage);
             return null;
+        }
+
+        // const roles: String[] = jsonResponse.userInfo?.roles || jsonResponse.data.user.roles || ['*'];
+        console.log(publicUrls.includes(window.location.pathname))
+
+        if (!publicUrls.includes(window.location.pathname)) {
+            console.log('check role')
+            if (jsonResponse.userInfo && !jsonResponse.userInfo?.roles.some((route) => route === window.location.pathname)) {
+
+                window.location.href = '/404';
+                return null;
+            }
         }
         showSuccessMessage && showAppNotification('success', 'Operation Complete', jsonResponse.message);
 

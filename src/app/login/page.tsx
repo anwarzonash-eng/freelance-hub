@@ -24,6 +24,8 @@ export default function LoginPage() {
       if (res) {
         console.log("login success", res);
         localStorage.setItem("authToken", res.data.user.access_token);
+        localStorage.setItem("roles", JSON.stringify(res.data.user.roles));
+
         router.push("/");
         // window.location.reload();
         // Successful login:

@@ -86,13 +86,8 @@ const iconMap: { [key: string]: LucideIcon } = {
 // --- 2. Flat Menu Data Structure ---
 const navItems: NavItem[] = [
   {
-    title: "Dashboard",
-    href: "/",
-    icon: "Dashboard",
-  },
-  {
     title: "Leads",
-    href: "/leads",
+
     icon: "UpworkJobs",
     children: [
       {
@@ -105,29 +100,29 @@ const navItems: NavItem[] = [
         href: "/upwork-jobs?type=all",
         icon: "Contact",
       },
-      {
-        title: "Upwork Submitted Proposals",
-        href: "/upwork-jobs?type=submitted",
-        icon: "SubmittedProposals",
-      },
+      // {
+      //   title: "Upwork Submitted Proposals",
+      //   href: "/upwork-jobs?type=submitted",
+      //   icon: "SubmittedProposals",
+      // },
     ],
   },
-  {
-    title: "Campaigns",
-    icon: "Campaigns",
-    children: [
-      {
-        title: "Campaigns",
-        href: "/campaigns",
-        icon: "Campaigns",
-      },
-      {
-        title: "News Letters",
-        href: "/newsletters",
-        icon: "NewsLetters",
-      },
-    ],
-  },
+  // {
+  //   title: "Campaigns",
+  //   icon: "Campaigns",
+  //   children: [
+  //     {
+  //       title: "Campaigns",
+  //       href: "/campaigns",
+  //       icon: "Campaigns",
+  //     },
+  //     {
+  //       title: "News Letters",
+  //       href: "/newsletters",
+  //       icon: "NewsLetters",
+  //     },
+  //   ],
+  // },
   {
     title: "Personal Websites",
     icon: "PersonalWebsites",
@@ -189,6 +184,19 @@ const navItems: NavItem[] = [
       },
     ],
   },
+  {
+    title: "Auth",
+    href: "/auth",
+    icon: "Users",
+
+    children: [
+      {
+        title: "Auth Users",
+        href: "/auth",
+        icon: "Users",
+      },
+    ],
+  },
 ];
 // ...existing code...
 // ------------------------------------------
@@ -208,21 +216,33 @@ const normalizePath = (path: string | undefined): string | null => {
 /**
  * Filters the flat navigation items based on allowed roles (paths).
  */
-const filterNavItems = (
-  items: NavItem[],
-  allowedPaths: string[],
-): NavItem[] => {
-  return items.filter((item) => {
-    if (item.href) {
-      const normalizedHref = normalizePath(item.href);
-      // Check if the normalized href is in the list of allowed paths
-      return normalizedHref && allowedPaths.includes(normalizedHref);
-    }
-    // Since the structure is flat, any item without an href should be excluded
-    return false;
+const filterNavItems = (list: NavItem[], allowedPaths: string[]): NavItem[] => {
+  return list.map((nav) => {
+    nav.children = nav.children?.filter((child) =>
+      allowedPaths.includes(child.href || "/"),
+    );
+    return nav;
   });
 };
 
+// Helper to flatten navItems (including nested children)
+export function getAllNavRoles(
+  items = navItems,
+): { label: string; value: string }[] {
+  const roles: { label: string; value: string }[] = [];
+  function traverse(list: NavItem[], isFirst: boolean = true) {
+    for (const item of list) {
+      if (item.href && !isFirst) {
+        roles.push({ label: item.title, value: item.href });
+      }
+      if (item.children) {
+        traverse(item.children, false);
+      }
+    }
+  }
+  traverse(items);
+  return roles;
+}
 /**
  * Recursively searches navItems for a matching href and returns the title.
  */
@@ -468,7 +488,7 @@ const Header: React.FC<HeaderProps> = ({
   const [popoverMenuTitle, setPopoverMenuTitle] = useState<string | null>(null);
   const pathname = usePathname();
 
-  const roles = ["*"];
+  const roles = JSON.parse(localStorage.getItem("roles")) || ["*"];
 
   // --- FILTERING LOGIC IMPLEMENTED HERE ---
 
@@ -480,7 +500,7 @@ const Header: React.FC<HeaderProps> = ({
   // 2. Filter the navigation items
   const filteredNavItems = roles.includes("*")
     ? navItems
-    : filterNavItems(navItems, allowedPaths);
+    : filterNavItems(navItems, roles);
 
   // --- END FILTERING LOGIC ---
 

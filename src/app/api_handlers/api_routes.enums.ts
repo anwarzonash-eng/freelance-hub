@@ -47,7 +47,11 @@ export enum DetailProfilesAPIRoutes {
 }
 
 export enum AuthAPIRoutes {
-    LOGIN = 'auth/login'
+    LOGIN = 'auth/login',
+    LIST = 'auth/list',
+    ADD = 'auth/add',
+    UPDATE = 'auth/update/:id',
+    DELETE = 'auth/delete/:id',
 }
 
 export enum CategoriesAPIRoutes {

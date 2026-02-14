@@ -11,5 +11,6 @@ export interface IApiResponse<T = any> {
     message: string;
     APIStatus: 'success' | 'error';
     data: T;
+    userInfo: any;
 }
 
