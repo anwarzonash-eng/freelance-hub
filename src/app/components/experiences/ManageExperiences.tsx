@@ -98,24 +98,32 @@ export default function ManageExperiences() {
           end_date: extEnd,
           is_continue: extIsContinue,
           type: extType,
+          is_show: true,
+          job_nature: "Onsite",
         },
         fulltime: {
           start_date: extStart,
           end_date: extEnd,
           is_continue: extIsContinue,
           type: extType,
+          is_show: true,
+          job_nature: "Onsite",
         },
         freelance: {
           start_date: extStart,
           end_date: extEnd,
           is_continue: extIsContinue,
           type: extType,
+          is_show: true,
+          job_nature: "Onsite",
         },
         startup: {
           start_date: extStart,
           end_date: extEnd,
           is_continue: extIsContinue,
           type: extType,
+          is_show: true,
+          job_nature: "Onsite",
         },
       };
     }
@@ -188,36 +196,30 @@ export default function ManageExperiences() {
       : "Are you sure you want to create this experience?";
     if (!confirm(confirmMessage)) return;
     // Always send meta_data.job_types in payload
+    // Ensure all job_types have is_show and job_nature
+    const defaultJobType = {
+      start_date: "",
+      end_date: "",
+      is_continue: false,
+      type: "",
+      is_show: true,
+      job_nature: "Onsite",
+    };
+    const jobTypes = ["contract", "fulltime", "freelance", "startup"].reduce((acc, jt) => {
+      const jtData = form.meta_data?.job_types?.[jt] || {};
+      acc[jt] = {
+        ...defaultJobType,
+        ...jtData,
+        is_show: typeof jtData.is_show === "boolean" ? jtData.is_show : true,
+        job_nature: jtData.job_nature || "Onsite",
+      };
+      return acc;
+    }, {} as any);
     const payload = {
       ...form,
       meta_data: {
         ...(form.meta_data || {}),
-        job_types: form.meta_data?.job_types || {
-          contract: {
-            start_date: "",
-            end_date: "",
-            is_continue: false,
-            type: "",
-          },
-          fulltime: {
-            start_date: "",
-            end_date: "",
-            is_continue: false,
-            type: "",
-          },
-          freelance: {
-            start_date: "",
-            end_date: "",
-            is_continue: false,
-            type: "",
-          },
-          startup: {
-            start_date: "",
-            end_date: "",
-            is_continue: false,
-            type: "",
-          },
-        },
+        job_types: jobTypes,
       },
     };
     if (isEdit) {
@@ -257,24 +259,32 @@ export default function ManageExperiences() {
                       end_date: "",
                       is_continue: false,
                       type: "",
+                      is_show: true,
+                      job_nature: "Onsite",
                     },
                     fulltime: {
                       start_date: "",
                       end_date: "",
                       is_continue: false,
                       type: "",
+                      is_show: true,
+                      job_nature: "Onsite",
                     },
                     freelance: {
                       start_date: "",
                       end_date: "",
                       is_continue: false,
                       type: "",
+                      is_show: true,
+                      job_nature: "Onsite",
                     },
                     startup: {
                       start_date: "",
                       end_date: "",
                       is_continue: false,
                       type: "",
+                      is_show: true,
+                      job_nature: "Onsite",
                     },
                   },
                 },
@@ -439,23 +449,17 @@ export default function ManageExperiences() {
                                   {jt}
                                 </div>
                                 <div className="text-xs text-gray-700">
-                                  <span className="font-semibold">Start:</span>{" "}
-                                  {jtData.start_date || "-"}
+                                  <span className="font-semibold">Start:</span> {jtData.start_date || "-"}
                                   <br />
-                                  <span className="font-semibold">
-                                    End:
-                                  </span>{" "}
-                                  {jtData.end_date || "-"}
+                                  <span className="font-semibold">End:</span> {jtData.end_date || "-"}
                                   <br />
-                                  <span className="font-semibold">
-                                    Continue:
-                                  </span>{" "}
-                                  {jtData.is_continue ? "Yes" : "No"}
+                                  <span className="font-semibold">Continue:</span> {jtData.is_continue ? "Yes" : "No"}
                                   <br />
-                                  <span className="font-semibold">
-                                    Type:
-                                  </span>{" "}
-                                  {jtData.type || "-"}
+                                  <span className="font-semibold">Type:</span> {jtData.type || "-"}
+                                  <br />
+                                  <span className="font-semibold">Show:</span> {typeof jtData.is_show === "boolean" ? (jtData.is_show ? "Yes" : "No") : "-"}
+                                  <br />
+                                  <span className="font-semibold">Job Nature:</span> {jtData.job_nature || "-"}
                                 </div>
                               </div>
                             ),
@@ -540,7 +544,7 @@ export default function ManageExperiences() {
                           </span>
                         </button>
                         {form?.expandedJobTypes?.[jt] && (
-                          <div className="px-4 pb-4 pt-2 grid grid-cols-1 md:grid-cols-4 gap-4">
+                          <div className="px-4 pb-4 pt-2 grid grid-cols-1 md:grid-cols-6 gap-4">
                             <div>
                               <label className="block text-gray-700 font-bold mb-1">
                                 Start Date
@@ -548,8 +552,7 @@ export default function ManageExperiences() {
                               <input
                                 type="date"
                                 value={
-                                  form?.meta_data?.job_types?.[jt]
-                                    ?.start_date || ""
+                                  form?.meta_data?.job_types?.[jt]?.start_date || ""
                                 }
                                 onChange={(e) =>
                                   setForm((prev: any) => ({
@@ -559,8 +562,7 @@ export default function ManageExperiences() {
                                       job_types: {
                                         ...(prev.meta_data?.job_types || {}),
                                         [jt]: {
-                                          ...(prev.meta_data?.job_types?.[jt] ||
-                                            {}),
+                                          ...(prev.meta_data?.job_types?.[jt] || {}),
                                           start_date: e.target.value,
                                         },
                                       },
@@ -577,8 +579,7 @@ export default function ManageExperiences() {
                               <input
                                 type="date"
                                 value={
-                                  form?.meta_data?.job_types?.[jt]?.end_date ||
-                                  ""
+                                  form?.meta_data?.job_types?.[jt]?.end_date || ""
                                 }
                                 onChange={(e) =>
                                   setForm((prev: any) => ({
@@ -588,8 +589,7 @@ export default function ManageExperiences() {
                                       job_types: {
                                         ...(prev.meta_data?.job_types || {}),
                                         [jt]: {
-                                          ...(prev.meta_data?.job_types?.[jt] ||
-                                            {}),
+                                          ...(prev.meta_data?.job_types?.[jt] || {}),
                                           end_date: e.target.value,
                                         },
                                       },
@@ -602,10 +602,7 @@ export default function ManageExperiences() {
                             <div className="flex items-center mt-6">
                               <input
                                 type="checkbox"
-                                checked={
-                                  !!form?.meta_data?.job_types?.[jt]
-                                    ?.is_continue
-                                }
+                                checked={!!form?.meta_data?.job_types?.[jt]?.is_continue}
                                 onChange={(e) =>
                                   setForm((prev: any) => ({
                                     ...prev,
@@ -614,8 +611,7 @@ export default function ManageExperiences() {
                                       job_types: {
                                         ...(prev.meta_data?.job_types || {}),
                                         [jt]: {
-                                          ...(prev.meta_data?.job_types?.[jt] ||
-                                            {}),
+                                          ...(prev.meta_data?.job_types?.[jt] || {}),
                                           is_continue: e.target.checked,
                                         },
                                       },
@@ -633,9 +629,7 @@ export default function ManageExperiences() {
                                 Type
                               </label>
                               <select
-                                value={
-                                  form?.meta_data?.job_types?.[jt]?.type || ""
-                                }
+                                value={form?.meta_data?.job_types?.[jt]?.type || ""}
                                 onChange={(e) =>
                                   setForm((prev: any) => ({
                                     ...prev,
@@ -644,8 +638,7 @@ export default function ManageExperiences() {
                                       job_types: {
                                         ...(prev.meta_data?.job_types || {}),
                                         [jt]: {
-                                          ...(prev.meta_data?.job_types?.[jt] ||
-                                            {}),
+                                          ...(prev.meta_data?.job_types?.[jt] || {}),
                                           type: e.target.value,
                                         },
                                       },
@@ -658,6 +651,59 @@ export default function ManageExperiences() {
                                 <option value="full_time">Full Time</option>
                                 <option value="contract">Contract</option>
                                 <option value="freelance">Freelance</option>
+                              </select>
+                            </div>
+                            <div className="flex items-center mt-6">
+                              <input
+                                type="checkbox"
+                                checked={!!form?.meta_data?.job_types?.[jt]?.is_show}
+                                onChange={(e) =>
+                                  setForm((prev: any) => ({
+                                    ...prev,
+                                    meta_data: {
+                                      ...(prev.meta_data || {}),
+                                      job_types: {
+                                        ...(prev.meta_data?.job_types || {}),
+                                        [jt]: {
+                                          ...(prev.meta_data?.job_types?.[jt] || {}),
+                                          is_show: e.target.checked,
+                                        },
+                                      },
+                                    },
+                                  }))
+                                }
+                                className="mr-2"
+                              />
+                              <label className="text-gray-700 font-bold">
+                                Show
+                              </label>
+                            </div>
+                            <div>
+                              <label className="block text-gray-700 font-bold mb-1">
+                                Job Nature
+                              </label>
+                              <select
+                                value={form?.meta_data?.job_types?.[jt]?.job_nature || "Onsite"}
+                                onChange={(e) =>
+                                  setForm((prev: any) => ({
+                                    ...prev,
+                                    meta_data: {
+                                      ...(prev.meta_data || {}),
+                                      job_types: {
+                                        ...(prev.meta_data?.job_types || {}),
+                                        [jt]: {
+                                          ...(prev.meta_data?.job_types?.[jt] || {}),
+                                          job_nature: e.target.value,
+                                        },
+                                      },
+                                    },
+                                  }))
+                                }
+                                className="w-full border-2 border-gray-300 px-2 py-1 rounded-lg"
+                              >
+                                <option value="Onsite">Onsite</option>
+                                <option value="Hybrid">Hybrid</option>
+                                <option value="Remote">Remote</option>
                               </select>
                             </div>
                           </div>
