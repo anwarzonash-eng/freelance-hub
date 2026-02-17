@@ -110,7 +110,7 @@ export default function CreateDynamicPersonalWebsite({
   const [privateTitle, setPrivateTitle] = useState<string>("");
   const [hourlyRate, sethourlyRate] = useState(16);
   const [selectedWebsitePurpose, setSelectedWebsitePurpose] =
-    useState<string>("upwork");
+    useState<string>("freelance");
   const [websiteCreatedFor, setWebsiteCreatedFor] =
     useState<string>(CreatedFor);
 
