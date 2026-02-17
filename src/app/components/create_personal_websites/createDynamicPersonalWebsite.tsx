@@ -745,6 +745,8 @@ export default function CreateDynamicPersonalWebsite({
     navigator.clipboard.writeText(textToCopy);
     alert(`Copied ${type.toUpperCase()} link to clipboard!`); // Simple confirmation
   };
+  const [isAddYearsOfExperieceInPrompt, setIsAddYearsOfExperieceInPrompt] =
+    useState(false);
   const handleCopy = (e, linkText) => {
     e.preventDefault();
     e.stopPropagation();
@@ -777,6 +779,12 @@ export default function CreateDynamicPersonalWebsite({
     prompt = prompt.replace(
       "{years_of_experience}",
       experienceYears.toString(),
+    );
+
+    prompt = prompt.replace("{job_type}", selectedWebsitePurpose.toString());
+    prompt = prompt.replace(
+      "{Yes/No}",
+      isAddYearsOfExperieceInPrompt ? "Yes" : "No",
     );
     navigator.clipboard
       .writeText(prompt)
@@ -910,6 +918,18 @@ export default function CreateDynamicPersonalWebsite({
               >
                 Summary Description Prompt
               </button>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={isAddYearsOfExperieceInPrompt}
+                  onChange={() =>
+                    setIsAddYearsOfExperieceInPrompt(
+                      !isAddYearsOfExperieceInPrompt,
+                    )
+                  }
+                />{" "}
+                Add Years of Experience in CV Summary
+              </label>
             </div>
           </div>
           <div className="flex flex-col gap-1 ">

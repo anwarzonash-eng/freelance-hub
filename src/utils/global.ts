@@ -273,27 +273,42 @@ Suggested Tech Stack
 Suggested Soft Skills
 (List the most valuable traits based on the job context, e.g., "Fast Delivery" or "Self-Management")
 `,
-  GENERATE_SUMMARY_DESCRIPTION_SKILLS = `Role: You are a specialized Technical Career Strategist for high-end Software Contractors.
+  GENERATE_SUMMARY_DESCRIPTION_SKILLS = `Role: You are a specialized Technical Career Strategist for high-end Software Professionals.
 
-Goal: Generate a 3-sentence "Professional Summary" for a CV that is specifically tailored to a Contract Position.
-
-Input Data: 
-Job Details(Title, Description, Employer listed skills): {job_description}
+--- CONFIGURATION ---
+Job Type: {job_type}
+Include Years of Experience: {Yes/No}
 Years of Experience: {years_of_experience}
+---------------------
 
+Goal: 
+- Generate a 3-sentence "Professional Summary" for a CV.
+- Generate a 3-4 word "Designation."
+- Generate a 10-15 word "tagline."
+
+--- Input Data ---
+Job Details(Title, Description, Skills Listed by Employer): 
+
+{job_description}
+
+---------------------
 
 
 Writing Rules (Strict):
 
-Contract Focus: Emphasize "immediate impact," "end-to-end delivery," and "hitting the ground running."
+1. The Experience Rule: 
+   - If "Include Years of Experience" is Yes: Sentence 1 MUST start with "I am a [Job Title] with [X] years of experience..."
+   - If "Include Years of Experience" is No: Sentence 1 MUST focus on "Expertise" or "Specialization" without mentioning a number.
 
-Simplicity: Use plain, direct English. No "fluff" or complex buzzwords.
+2. Job-Type Logic (Apply based on Configuration):
+   - IF CONTRACT: Focus on "immediate impact," "hitting the ground running," and "technical execution." Use a "Service Provider" tone.
+   - IF FREELANCE: Focus on "end-to-end delivery," "ownership," and "business outcomes." Use a "Technical Partner" tone.
+   - IF FULL-TIME: Focus on "long-term scalability," "team collaboration," and "contributing to the product roadmap." Use a "Company Member" tone.
 
-The Connection: The first sentence must link my years of experience to the job title. The second sentence must highlight how my stack solves their specific technical needs. The third sentence must mention a soft skill (like client communication or meeting tight deadlines).
+3. Structure: 
+   - Sentence 1: Connection to the Job Title/Years.
+   - Sentence 2: Mention the specific Tech Stack and how it solves the JD's hardest technical problem.
+   - Sentence 3: Soft Skill (Contract/Freelance = Communication/Deadlines | Full-time = Mentorship/Collaboration).
 
-Formatting: Return only the summary text. No intro, no outro.
-
-Example Tone: "I am a Full Stack Developer with 10 years of experience specializing in Next.js and NestJS. I have a proven track record of jumping into complex projects and delivering secure, scalable APIs and frontends quickly. I communicate directly with stakeholders to ensure the technical solution matches the business goal perfectly."
-
-`
+Formatting: Return only the summary text, Designation, and tagline. No intro/outro.`
 }

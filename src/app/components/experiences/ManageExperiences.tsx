@@ -205,16 +205,19 @@ export default function ManageExperiences() {
       is_show: true,
       job_nature: "Onsite",
     };
-    const jobTypes = ["contract", "fulltime", "freelance", "startup"].reduce((acc, jt) => {
-      const jtData = form.meta_data?.job_types?.[jt] || {};
-      acc[jt] = {
-        ...defaultJobType,
-        ...jtData,
-        is_show: typeof jtData.is_show === "boolean" ? jtData.is_show : true,
-        job_nature: jtData.job_nature || "Onsite",
-      };
-      return acc;
-    }, {} as any);
+    const jobTypes = ["contract", "fulltime", "freelance", "startup"].reduce(
+      (acc, jt) => {
+        const jtData = form.meta_data?.job_types?.[jt] || {};
+        acc[jt] = {
+          ...defaultJobType,
+          ...jtData,
+          is_show: typeof jtData.is_show === "boolean" ? jtData.is_show : true,
+          job_nature: jtData.job_nature || "Onsite",
+        };
+        return acc;
+      },
+      {} as any,
+    );
     const payload = {
       ...form,
       meta_data: {
@@ -449,17 +452,37 @@ export default function ManageExperiences() {
                                   {jt}
                                 </div>
                                 <div className="text-xs text-gray-700">
-                                  <span className="font-semibold">Start:</span> {jtData.start_date || "-"}
+                                  <span className="font-semibold">Start:</span>{" "}
+                                  {jtData.start_date || "-"}
                                   <br />
-                                  <span className="font-semibold">End:</span> {jtData.end_date || "-"}
+                                  <span className="font-semibold">
+                                    End:
+                                  </span>{" "}
+                                  {jtData.end_date || "-"}
                                   <br />
-                                  <span className="font-semibold">Continue:</span> {jtData.is_continue ? "Yes" : "No"}
+                                  <span className="font-semibold">
+                                    Continue:
+                                  </span>{" "}
+                                  {jtData.is_continue ? "Yes" : "No"}
                                   <br />
-                                  <span className="font-semibold">Type:</span> {jtData.type || "-"}
+                                  <span className="font-semibold">
+                                    Type:
+                                  </span>{" "}
+                                  {jtData.type || "-"}
                                   <br />
-                                  <span className="font-semibold">Show:</span> {typeof jtData.is_show === "boolean" ? (jtData.is_show ? "Yes" : "No") : "-"}
+                                  <span className="font-semibold">
+                                    Show:
+                                  </span>{" "}
+                                  {typeof jtData.is_show === "boolean"
+                                    ? jtData.is_show
+                                      ? "Yes"
+                                      : "No"
+                                    : "-"}
                                   <br />
-                                  <span className="font-semibold">Job Nature:</span> {jtData.job_nature || "-"}
+                                  <span className="font-semibold">
+                                    Job Nature:
+                                  </span>{" "}
+                                  {jtData.job_nature || "-"}
                                 </div>
                               </div>
                             ),
@@ -552,7 +575,8 @@ export default function ManageExperiences() {
                               <input
                                 type="date"
                                 value={
-                                  form?.meta_data?.job_types?.[jt]?.start_date || ""
+                                  form?.meta_data?.job_types?.[jt]
+                                    ?.start_date || ""
                                 }
                                 onChange={(e) =>
                                   setForm((prev: any) => ({
@@ -562,7 +586,8 @@ export default function ManageExperiences() {
                                       job_types: {
                                         ...(prev.meta_data?.job_types || {}),
                                         [jt]: {
-                                          ...(prev.meta_data?.job_types?.[jt] || {}),
+                                          ...(prev.meta_data?.job_types?.[jt] ||
+                                            {}),
                                           start_date: e.target.value,
                                         },
                                       },
@@ -579,7 +604,8 @@ export default function ManageExperiences() {
                               <input
                                 type="date"
                                 value={
-                                  form?.meta_data?.job_types?.[jt]?.end_date || ""
+                                  form?.meta_data?.job_types?.[jt]?.end_date ||
+                                  ""
                                 }
                                 onChange={(e) =>
                                   setForm((prev: any) => ({
@@ -589,7 +615,8 @@ export default function ManageExperiences() {
                                       job_types: {
                                         ...(prev.meta_data?.job_types || {}),
                                         [jt]: {
-                                          ...(prev.meta_data?.job_types?.[jt] || {}),
+                                          ...(prev.meta_data?.job_types?.[jt] ||
+                                            {}),
                                           end_date: e.target.value,
                                         },
                                       },
@@ -602,7 +629,10 @@ export default function ManageExperiences() {
                             <div className="flex items-center mt-6">
                               <input
                                 type="checkbox"
-                                checked={!!form?.meta_data?.job_types?.[jt]?.is_continue}
+                                checked={
+                                  !!form?.meta_data?.job_types?.[jt]
+                                    ?.is_continue
+                                }
                                 onChange={(e) =>
                                   setForm((prev: any) => ({
                                     ...prev,
@@ -611,7 +641,8 @@ export default function ManageExperiences() {
                                       job_types: {
                                         ...(prev.meta_data?.job_types || {}),
                                         [jt]: {
-                                          ...(prev.meta_data?.job_types?.[jt] || {}),
+                                          ...(prev.meta_data?.job_types?.[jt] ||
+                                            {}),
                                           is_continue: e.target.checked,
                                         },
                                       },
@@ -629,7 +660,9 @@ export default function ManageExperiences() {
                                 Type
                               </label>
                               <select
-                                value={form?.meta_data?.job_types?.[jt]?.type || ""}
+                                value={
+                                  form?.meta_data?.job_types?.[jt]?.type || ""
+                                }
                                 onChange={(e) =>
                                   setForm((prev: any) => ({
                                     ...prev,
@@ -638,7 +671,8 @@ export default function ManageExperiences() {
                                       job_types: {
                                         ...(prev.meta_data?.job_types || {}),
                                         [jt]: {
-                                          ...(prev.meta_data?.job_types?.[jt] || {}),
+                                          ...(prev.meta_data?.job_types?.[jt] ||
+                                            {}),
                                           type: e.target.value,
                                         },
                                       },
@@ -656,7 +690,9 @@ export default function ManageExperiences() {
                             <div className="flex items-center mt-6">
                               <input
                                 type="checkbox"
-                                checked={!!form?.meta_data?.job_types?.[jt]?.is_show}
+                                checked={
+                                  !!form?.meta_data?.job_types?.[jt]?.is_show
+                                }
                                 onChange={(e) =>
                                   setForm((prev: any) => ({
                                     ...prev,
@@ -665,7 +701,8 @@ export default function ManageExperiences() {
                                       job_types: {
                                         ...(prev.meta_data?.job_types || {}),
                                         [jt]: {
-                                          ...(prev.meta_data?.job_types?.[jt] || {}),
+                                          ...(prev.meta_data?.job_types?.[jt] ||
+                                            {}),
                                           is_show: e.target.checked,
                                         },
                                       },
@@ -683,7 +720,10 @@ export default function ManageExperiences() {
                                 Job Nature
                               </label>
                               <select
-                                value={form?.meta_data?.job_types?.[jt]?.job_nature || "Onsite"}
+                                value={
+                                  form?.meta_data?.job_types?.[jt]
+                                    ?.job_nature || "Onsite"
+                                }
                                 onChange={(e) =>
                                   setForm((prev: any) => ({
                                     ...prev,
@@ -692,7 +732,8 @@ export default function ManageExperiences() {
                                       job_types: {
                                         ...(prev.meta_data?.job_types || {}),
                                         [jt]: {
-                                          ...(prev.meta_data?.job_types?.[jt] || {}),
+                                          ...(prev.meta_data?.job_types?.[jt] ||
+                                            {}),
                                           job_nature: e.target.value,
                                         },
                                       },

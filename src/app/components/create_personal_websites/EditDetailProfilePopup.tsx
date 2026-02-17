@@ -190,21 +190,31 @@ export default function EditDetailProfilePopup({
   // Add skill
   const addSkill = (skill: Skill) => {
     if (!selectedSkills.find((s) => s.id === skill.id)) {
-      setSelectedSkills([...selectedSkills, skill]);
+      setSelectedSkills((prev) => [...prev, skill]);
+      setSkillsMetaData((prev) => [
+        ...prev,
+        {
+          id: skill.id,
+          show: "all",
+          show_type: "primary",
+          is_important: false,
+          is_learning: false,
+          order: prev.length + 1,
+        },
+      ]);
       setSkillsSearchQuery("");
-      // skillsMetaData will sync via useEffect
     }
   };
 
   // Remove skill
   const removeSkill = (skillId: string | number) => {
-    setSelectedSkills(selectedSkills.filter((s) => s.id !== skillId));
+    setSelectedSkills((prev) => prev.filter((s) => s.id !== skillId));
+    setSkillsMetaData((prev) => prev.filter((meta) => meta.id !== skillId));
     setImportantSkillIds((prev) => {
       const updated = new Set(prev);
       updated.delete(skillId);
       return updated;
     });
-    // skillsMetaData will sync via useEffect
   };
 
   // Toggle important skill
