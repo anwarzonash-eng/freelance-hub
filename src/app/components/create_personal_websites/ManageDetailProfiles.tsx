@@ -84,31 +84,29 @@ export default function ManageDetailProfiles() {
       prev.map((p) => (p.id === updatedProfile.id ? updatedProfile : p)),
     );
   };
+  const loadInitialData = async () => {
+    setIsLoading(true);
+    try {
+      const [profilesRes, mainProfilesRes, categoriesRes, skillsRes] =
+        await Promise.all([
+          getAllDetailProfiles(),
+          getALLMainProfiles(),
+          getAllCategories(),
+          getAllSkills(),
+        ]);
 
+      if (profilesRes?.data) setAllProfiles(profilesRes.data);
+      if (mainProfilesRes?.data) setMainProfiles(mainProfilesRes.data);
+      if (categoriesRes?.data) setCategories(categoriesRes.data);
+      if (skillsRes?.data) setAllSkills(skillsRes.data);
+    } catch (error) {
+      console.error("Failed to load initial data:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
   // Fetch initial data
   useEffect(() => {
-    const loadInitialData = async () => {
-      setIsLoading(true);
-      try {
-        const [profilesRes, mainProfilesRes, categoriesRes, skillsRes] =
-          await Promise.all([
-            getAllDetailProfiles(),
-            getALLMainProfiles(),
-            getAllCategories(),
-            getAllSkills(),
-          ]);
-
-        if (profilesRes?.data) setAllProfiles(profilesRes.data);
-        if (mainProfilesRes?.data) setMainProfiles(mainProfilesRes.data);
-        if (categoriesRes?.data) setCategories(categoriesRes.data);
-        if (skillsRes?.data) setAllSkills(skillsRes.data);
-      } catch (error) {
-        console.error("Failed to load initial data:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     loadInitialData();
   }, []);
 
@@ -297,7 +295,9 @@ export default function ManageDetailProfiles() {
             </h1>
             <div className="flex gap-2">
               <button
-                onClick={() => window.location.reload()}
+                onClick={() => {
+                  loadInitialData();
+                }}
                 className="px-4 py-2 bg-gray-600 text-white font-semibold rounded-lg shadow hover:bg-gray-700 transition"
                 title="Refresh data"
               >
@@ -767,6 +767,16 @@ export default function ManageDetailProfiles() {
                                 {(
                                   (profile as any).website_purpose || ""
                                 ).replace(/_/g, " ")}
+                              </p>
+                            </div>
+                          )}
+                          {(profile as any).createdBy && (
+                            <div>
+                              <span className="font-semibold text-gray-600">
+                                Created By:
+                              </span>
+                              <p className="text-gray-700">
+                                {(profile as any).createdBy || ""}
                               </p>
                             </div>
                           )}
