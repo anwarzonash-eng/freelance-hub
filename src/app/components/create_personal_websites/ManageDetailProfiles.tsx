@@ -115,7 +115,8 @@ export default function ManageDetailProfiles() {
 
   useEffect(() => {
     if (!openCreatePopup) {
-      getAllDetailProfiles();
+      const param = { query: { limit: limit } };
+      getAllDetailProfiles(param);
     }
   }, [openCreatePopup]);
 
