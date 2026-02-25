@@ -6,8 +6,8 @@ import { apiClient } from "../api_client"
 import { ApiMethod } from "../api_methods.enum"
 import { DetailProfilesAPIRoutes } from "../api_routes.enums"
 
-export async function getAllDetailProfiles() {
-    return await apiClient(DetailProfilesAPIRoutes.GET_ALL, ApiMethod.GET, undefined, undefined, undefined, true, false, process.env.NEXT_PUBLIC_API_PATH)
+export async function getAllDetailProfiles(params: IApiParams) {
+    return await apiClient(DetailProfilesAPIRoutes.GET_ALL, ApiMethod.GET, undefined, params, undefined, true, false, process.env.NEXT_PUBLIC_API_PATH)
 }
 
 export async function getDetailProfileByID(params: IApiParams) {

@@ -247,18 +247,12 @@ export default function JobMatcher() {
             setOpenCloseWebsiteCreatePopUP={setOpenCloseWebsiteCreatePopUP}
             setSelectWebsite={setSelectedWebsite}
             selectedWebsite={selectedWebsite}
-            description={
-              "Job Title: " +
-              title +
-              "\r\n \r\n" +
-              "Job Description: " +
-              "\r\n  \r\n" +
-              description.trim() +
-              "\r\n  \r\n" +
-              "Skills Listed by Employer: " +
-              "\r\n  \r\n" +
-              skills.trim()
-            }
+            description={{
+              title,
+              description,
+
+              skills,
+            }}
             websitePurpose="personal_website"
             CreatedFor={jobURl}
           />

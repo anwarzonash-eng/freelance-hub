@@ -20,7 +20,7 @@ import CreateSkillGroup from "./CreateSkillGroup";
 import CreateCategory from "./CreateCategory";
 import { generateProfile } from "@/app/api_handlers/api/detail_profiles.api";
 import { Prompts } from "@/utils/global";
-
+import CopyPromptComponent from "./CopyPromptComponent";
 const environment = {
   apiDomain:
     process.env.NEXT_PUBLIC_PERSONAL_SITES_API_DOMAIN ||
@@ -93,12 +93,28 @@ export default function CreateDynamicPersonalWebsite({
   description = null,
   isCloseOnSelect = false,
   setOpenCloseWebsiteCreatePopUP = null,
-  websitePurpose = "remote_job",
+  websitePurpose = "freelance",
   CreatedFor = "",
 }) {
   // alert(websitePurpose);
   // --- State Initialization (Angular Properties -> React State) ---
-  const [jobDescription, setJobDescription] = useState<string>(description);
+  const [jobDescription, setJobDescription] = useState<string>(
+    description
+      ? "Job Title: " +
+          description.title +
+          "\r\n \r\n" +
+          "Job Description: " +
+          "\r\n  \r\n" +
+          description.description.trim() +
+          "\r\n  \r\n" +
+          "Skills Listed by Employer: " +
+          "\r\n  \r\n" +
+          description.skills.trim()
+      : "Job Title: " + "\r\n \r\n" + "Job Description: " + "\r\n  \r\n",
+  );
+  const [jobDescriptionRaw, setJobDescriptionRaw] =
+    useState<string>(description);
+
   // New state for designation_category
   const [designationCategoryId, setDesignationCategoryId] = useState(null);
   const [designationCategories, setDesignationCategories] = useState([]);
@@ -149,7 +165,7 @@ export default function CreateDynamicPersonalWebsite({
   const [isCreateShortURLs, setIsCreateShortURLs] = useState(true);
   const [salaryType, setSalaryType] = useState<string>("per_hour");
   const [jobCountry, setJobCountry] = useState<string>("uk");
-  const [experienceYears, setExperienceYears] = useState<number>(10);
+  const [experienceYears, setExperienceYears] = useState<number>(5);
   const [taxArea, setTaxArea] = useState<string>("");
   const [openAddSkillPopup, setOpenAddSkillPopup] = useState(false);
   const [openAddSkillGroupPopup, setOpenAddSkillGroupPopup] = useState(false);
@@ -171,6 +187,9 @@ export default function CreateDynamicPersonalWebsite({
   // New: skills_meta_data state
   const [skillsMetaData, setSkillsMetaData] = useState<any[]>([]); // [{id, show, show_type, is_important, order, is_learning}]
   const [emailType, setEmailType] = useState<string>("personal");
+
+  // CV4 Content state
+  const [cv4Content, setCV4Content] = useState<any>(null);
 
   const deleteSkill = (skillId) => {
     // Filter out the skill that matches the given ID
@@ -568,7 +587,9 @@ export default function CreateDynamicPersonalWebsite({
       !(hourlyRate && hourlyRate > 0) ||
       mainCategoryId == "select" ||
       selectedMainProfile == "select" ||
-      designationCategoryId == "select"
+      designationCategoryId == "select" ||
+      !cv4Content ||
+      !taxArea
     ) {
       alert("Please fill all required inputs! Thanks");
       console.log({
@@ -578,6 +599,8 @@ export default function CreateDynamicPersonalWebsite({
         tagline: !tagline,
         mainCategoryId,
         selectedMainProfile,
+        cv4Content,
+        taxArea,
       });
       return;
     }
@@ -619,6 +642,7 @@ export default function CreateDynamicPersonalWebsite({
       email_type: emailType,
       designation_category: designationCategoryId,
       skills_meta_data: skillsMetaData,
+      cv4_content: cv4Content,
     };
 
     try {
@@ -1732,6 +1756,16 @@ export default function CreateDynamicPersonalWebsite({
               />
             </ExpandCollapse>
           )}
+          <ExpandCollapse title={"CV4 Content"}>
+            <CopyPromptComponent
+              jobDescriptionRaw={
+                jobDescriptionRaw ? jobDescriptionRaw : jobDescription
+              }
+              selectedSkills={allSelectedSkills}
+              setCV4Content={setCV4Content}
+              yearsOfExperience={experienceYears}
+            />
+          </ExpandCollapse>
           {/* <ExpandCollapse title={"Matched Categories & Add Skill"}>
             <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-lg border border-gray-200 h-full">
               <h2 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">
@@ -1859,6 +1893,8 @@ export default function CreateDynamicPersonalWebsite({
 
         {/* --- COLUMN 2: Matched Categories & Add Skill Controls (Middle) --- */}
       </div>
+
+      {/* CV4 Content Section */}
     </div>
   );
 }

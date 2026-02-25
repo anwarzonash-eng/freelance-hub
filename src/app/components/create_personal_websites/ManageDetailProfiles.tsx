@@ -58,6 +58,8 @@ interface DetailProfile {
 }
 
 export default function ManageDetailProfiles() {
+  const [limit, setLimit] = useState("100");
+
   const [allProfiles, setAllProfiles] = useState<DetailProfile[]>([]);
   const [mainProfiles, setMainProfiles] = useState<MainProfile[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -87,9 +89,10 @@ export default function ManageDetailProfiles() {
   const loadInitialData = async () => {
     setIsLoading(true);
     try {
+      const param = { query: { limit: limit } };
       const [profilesRes, mainProfilesRes, categoriesRes, skillsRes] =
         await Promise.all([
-          getAllDetailProfiles(),
+          getAllDetailProfiles(param),
           getALLMainProfiles(),
           getAllCategories(),
           getAllSkills(),
@@ -115,6 +118,12 @@ export default function ManageDetailProfiles() {
       getAllDetailProfiles();
     }
   }, [openCreatePopup]);
+
+  // Reload profiles when limit changes
+  useEffect(() => {
+    loadInitialData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [limit]);
 
   // Filter categories based on selected main profile
   const getFilteredCategories = () => {
@@ -364,6 +373,27 @@ export default function ManageDetailProfiles() {
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
                 />
               </div>
+            </div>
+
+            {/* Limit Dropdown */}
+            <div className="flex items-center">
+              <label className="block text-xs font-medium text-gray-700 mb-0.5 mr-2">
+                Limit
+              </label>
+              <select
+                value={limit}
+                onChange={(e) => setLimit(e.target.value)}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 min-w-[100px]"
+              >
+                <option value="all">All</option>
+                {[100, 200, 300, 400, 500, 600, 700, 800, 900, 1000].map(
+                  (val) => (
+                    <option key={val} value={val}>
+                      {val}
+                    </option>
+                  ),
+                )}
+              </select>
             </div>
 
             {/* Main Profile Filter */}

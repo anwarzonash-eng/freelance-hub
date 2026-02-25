@@ -273,42 +273,235 @@ Suggested Tech Stack
 Suggested Soft Skills
 (List the most valuable traits based on the job context, e.g., "Fast Delivery" or "Self-Management")
 `,
-  GENERATE_SUMMARY_DESCRIPTION_SKILLS = `Role: You are a specialized Technical Career Strategist for high-end Software Professionals.
+  GENERATE_SUMMARY_DESCRIPTION_SKILLS = `I am applying for the following job:
 
---- CONFIGURATION ---
-Job Type: {job_type}
-Include Years of Experience: {Yes/No}
-Years of Experience: {years_of_experience}
----------------------
+{job_description}
+Number of experiences to generate: {years_of_experience}
 
-Goal: 
-- Generate a 3-sentence "Professional Summary" for a CV.
-- Generate a 3-4 word "Designation."
-- Generate a 10-15 word "tagline."
+Skills I selected for this CV:
+{selected_skills}
 
---- Input Data ---
-Job Details(Title, Description, Skills Listed by Employer): 
+Your Task:
+
+Generate structured CV content optimized for ATS and recruiter review.
+
+PART 1 — CV SUMMARY
+
+Generate a 2–4 line professional CV summary.
+
+Requirements:
+
+Use the exact Job Title provided above as my professional designation.
+
+Naturally integrate critical keywords from the Job Description (e.g., ERP, EDI, Payment Systems, Security, Microservices, CI/CD, Compliance, etc.).
+
+Ensure all selected skills are meaningfully represented either directly or contextually.
+
+Position me at a senior, ownership-driven level.
+
+Emphasize architecture, scalability, performance, reliability, system design.
+
+Mention cloud, DevOps, distributed systems where relevant.
+
+Align with domain context (B2B SaaS, FinTech, ERP, AI, Healthcare, etc.) when applicable.
+
+Keep it concise but impactful.
+
+Avoid buzzwords and generic filler statements.
+
+Do not exaggerate beyond my total years of experience.
+
+Tone should feel human, confident, and natural (English is strong but not overly polished or corporate).
+
+PART 2 — EXPERIENCE FOCUS TITLES (STRICT FORMAT)
+
+For each experience:
+
+Generate a short specialization label to appear in parentheses next to the official job title.
+
+Rules:
+
+Maximum 3 words.
+
+Do NOT repeat the main job title.
+
+Do NOT include seniority terms (Senior, Lead, Architect).
+
+Do NOT include generic phrases like “Full Stack Development”.
+
+Must reflect a specific technical focus aligned with the target job.
+
+Keep it clean, concise, and professional.
+
+Avoid marketing language.
+
+No buzzwords.
+
+Examples of acceptable format:
+
+(Frontend Performance)
+
+(API Development)
+
+(Microservices)
+
+(Cloud Infrastructure)
+
+(ERP Integration)
+
+(Data Modeling)
+
+(Security Compliance)
+
+(AI Integration)
+
+(Payment Systems)
+
+(System Scalability)
+
+Distribute different specialization themes across experiences.
+Modern technologies (AI, LLM, etc.) should appear only in recent roles.
+
+Return in JSON format:
+
+{
+"summary": "Generated CV summary here",
+"experience_titles": {
+"experience1": "2–3 word focus",
+"experience2": "2–3 word focus",
+"experience3": "2–3 word focus"
+}
+}`,
+
+  GENERATE_CV4_EXPERIENCES_CONTENT = `You are an expert resume writer specialized in ATS-optimized and recruiter-optimized technical resumes for full stack developers.
+
+I will provide:
+1) A Job Description
+2) Total number of past experiences (integer)
+3) A list of my selected skills (these must ALL appear at least once in the output)
+
+Your task:
+
+Generate exactly 3 bullet points per experience.
+
+Return output strictly in valid JSON with this structure:
+
+{
+  "experience1": [
+    {"point": "bullet 1"},
+    {"point": "bullet 2"},
+    {"point": "bullet 3"}
+  ],
+  "experience2": [
+    {"point": "bullet 1"},
+    {"point": "bullet 2"},
+    {"point": "bullet 3"}
+  ]
+}
+
+(Continue pattern based on number of experiences provided.)
+
+===========================
+CORE REQUIREMENTS
+===========================
+
+1) Every skill from my provided skills list MUST appear at least once across all experiences.
+2) Extract important technical AND domain-specific keywords from the Job Description.
+   Examples:
+   - ERP systems
+   - Payment gateways
+   - Security standards (OAuth, JWT, PCI-DSS, SOC2)
+   - Microservices architecture
+   - CI/CD pipelines
+   - Cloud-native applications
+   - Data pipelines
+   - Compliance requirements
+3) These extracted JD keywords MUST be naturally integrated into the bullets.
+4) Combine my skills with JD-specific concepts in realistic ways.
+   Example:
+   - If JD mentions ERP → show building modules, integrations, reporting, workflows.
+   - If JD mentions payment methods → include payment gateway integration, transaction security, fraud handling.
+   - If JD mentions security → include authentication, authorization, encryption, compliance.
+5) Do NOT create artificial or irrelevant usage of keywords.
+6) Do NOT fabricate unrealistic business metrics.
+
+===========================
+RECRUITER OPTIMIZATION RULES
+===========================
+
+Each bullet MUST:
+
+• Focus on measurable impact, not responsibilities.
+• Show business or system outcome.
+• Clearly describe scope (scale, users, services, modules, transactions, etc.).
+• Include performance, reliability, scalability, security, or efficiency improvements when realistic.
+• Demonstrate ownership or contribution level.
+
+===========================
+WRITING STYLE RULES
+===========================
+
+• Write in natural, human tone.
+• Sound like I am explaining my work to a recruiter in conversation.
+• English should be professional but slightly non-native — clear and direct.
+• Avoid corporate buzzwords and marketing language.
+• Vary sentence structure.
+• Avoid repetitive formatting.
+• Keep technical phrasing clean and precise.
+
+===========================
+VALIDATION REQUIREMENTS
+===========================
+
+Before producing output, internally verify:
+
+• All provided skills appear at least once.
+• Critical JD keywords are represented.
+• Each experience has exactly 3 bullets.
+• Bullets are achievement-focused.
+• Skills and JD keywords are logically connected.
+• Output is strictly valid JSON.
+• No explanations.
+• No markdown.
+• No extra text.
+
+
+==================================================
+TEMPORAL REALISM RULES
+==================================================
+
+Assume experiences are ordered chronologically:
+- experience1 = most recent role
+- experience2 = second most recent
+- experience3 = older
+- and so on.
+
+1) Emerging or recent technologies (LLM integration, AI assistants, GitHub Copilot, generative AI, advanced cloud-native tools) should ONLY appear in:
+   - experience1
+   - optionally experience2
+
+2) Older experiences should focus on:
+   - Core stack technologies (JavaScript, React, Node.js, SQL, REST APIs, etc.)
+   - Architecture, backend systems, performance, testing
+   - Traditional DevOps and cloud usage
+   - NOT modern AI integrations unless clearly justified in the Job Description
+
+3) Show natural career progression:
+   - Early roles → implementation and feature development
+   - Mid roles → system design and optimization
+   - Recent roles → architecture, scalability, modern tooling, AI where relevant
+
+4) Do NOT place cutting-edge AI achievements in early-career roles unless explicitly required by JD.
+
+
+Here's Input
 
 {job_description}
 
----------------------
+My Selected Skills:
+{selected_skills}
 
 
-Writing Rules (Strict):
+Number Of Past Experiences: {years_of_experience}`
 
-1. The Experience Rule: 
-   - If "Include Years of Experience" is Yes: Sentence 1 MUST start with "I am a [Job Title] with [X] years of experience..."
-   - If "Include Years of Experience" is No: Sentence 1 MUST focus on "Expertise" or "Specialization" without mentioning a number.
-
-2. Job-Type Logic (Apply based on Configuration):
-   - IF CONTRACT: Focus on "immediate impact," "hitting the ground running," and "technical execution." Use a "Service Provider" tone.
-   - IF FREELANCE: Focus on "end-to-end delivery," "ownership," and "business outcomes." Use a "Technical Partner" tone.
-   - IF FULL-TIME: Focus on "long-term scalability," "team collaboration," and "contributing to the product roadmap." Use a "Company Member" tone.
-
-3. Structure: 
-   - Sentence 1: Connection to the Job Title/Years.
-   - Sentence 2: Mention the specific Tech Stack and how it solves the JD's hardest technical problem.
-   - Sentence 3: Soft Skill (Contract/Freelance = Communication/Deadlines | Full-time = Mentorship/Collaboration).
-
-Formatting: Return only the summary text, Designation, and tagline. No intro/outro.`
 }
