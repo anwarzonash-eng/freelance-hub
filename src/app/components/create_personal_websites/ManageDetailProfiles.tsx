@@ -387,13 +387,32 @@ export default function ManageDetailProfiles() {
                 className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 min-w-[100px]"
               >
                 <option value="all">All</option>
-                {[100, 200, 300, 400, 500, 600, 700, 800, 900, 1000].map(
-                  (val) => (
-                    <option key={val} value={val}>
-                      {val}
-                    </option>
-                  ),
-                )}
+                {[
+                  100,
+                  200,
+                  300,
+                  400,
+                  500,
+                  600,
+                  700,
+                  800,
+                  900,
+                  ,
+                  1100,
+                  1200,
+                  1300,
+                  1400,
+                  1500,
+                  1600,
+                  1700,
+                  1800,
+                  1900,
+                  2000,
+                ].map((val) => (
+                  <option key={val} value={val}>
+                    {val}
+                  </option>
+                ))}
               </select>
             </div>
 

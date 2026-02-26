@@ -1668,18 +1668,6 @@ export default function CreateDynamicPersonalWebsite({
                         className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm"
                       />
                     </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-0.5">
-                        AI CV Description
-                      </label>
-                      <textarea
-                        value={taxArea}
-                        onChange={(e) => setTaxArea(e.target.value)}
-                        rows={3}
-                        placeholder="Enter your CV description..."
-                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm resize-none"
-                      />
-                    </div>
                   </div>
                 </div>
 
@@ -1764,6 +1752,8 @@ export default function CreateDynamicPersonalWebsite({
               selectedSkills={allSelectedSkills}
               setCV4Content={setCV4Content}
               yearsOfExperience={experienceYears}
+              setTextArea={setTaxArea}
+              textArea={taxArea}
             />
           </ExpandCollapse>
           {/* <ExpandCollapse title={"Matched Categories & Add Skill"}>

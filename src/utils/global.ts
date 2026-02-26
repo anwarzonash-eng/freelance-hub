@@ -287,7 +287,7 @@ Generate structured CV content optimized for ATS and recruiter review.
 
 PART 1 — CV SUMMARY
 
-Generate a 2–4 line professional CV summary.
+Generate a max 250-300 characters of professional CV summary.
 
 Requirements:
 
@@ -431,6 +431,8 @@ RECRUITER OPTIMIZATION RULES
 
 Each bullet MUST:
 
+• Focus on measurable impact, not responsibilities.
+• Must not excel 180 characters.
 • Focus on measurable impact, not responsibilities.
 • Show business or system outcome.
 • Clearly describe scope (scale, users, services, modules, transactions, etc.).

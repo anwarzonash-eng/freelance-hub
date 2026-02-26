@@ -7,6 +7,8 @@ interface CopyPromptComponentProps {
   selectedSkills: string[];
   setCV4Content: (content: any) => void;
   yearsOfExperience: number;
+  setTextArea: (content: any) => void;
+  textArea: string;
 }
 const experienceYearsMap: any = {
   1: 1,
@@ -23,9 +25,14 @@ const CopyPromptComponent: React.FC<CopyPromptComponentProps> = ({
   selectedSkills,
   setCV4Content,
   yearsOfExperience,
+  setTextArea,
+  textArea,
 }) => {
   const [input, setInput] = useState("");
+
+  const [inputSummary, setInputSummary] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [errorSummary, setErrorSummary] = useState<string | null>(null);
   const [form, setForm] = useState<any | null>(null);
 
   const validateJson = (json: any) => {
@@ -74,6 +81,38 @@ const CopyPromptComponent: React.FC<CopyPromptComponentProps> = ({
       setError(err.message);
       setCV4Content(null);
       setForm(null);
+    }
+  };
+
+  const handleInputChangeSummary = (
+    e: React.ChangeEvent<HTMLTextAreaElement>,
+  ) => {
+    setInputSummary(e.target.value);
+    setErrorSummary(null);
+  };
+
+  const validateJsonSummary = (json: any) => {
+    if (!json.summary) return "Summary Doesn't Exist!";
+
+    return null;
+  };
+
+  const handleBlurSummary = () => {
+    try {
+      const parsed = JSON.parse(inputSummary);
+      const validationError = validateJsonSummary(parsed);
+      if (validationError) {
+        setErrorSummary(validationError);
+        setTextArea(null);
+        return;
+      }
+
+      setTextArea(parsed.summary);
+      setErrorSummary(null);
+    } catch (err) {
+      console.error(err);
+      setErrorSummary(err.message);
+      setTextArea(null);
     }
   };
 
@@ -212,46 +251,28 @@ Job Description:
           id="cv4-json-input"
           rows={16}
           className="w-full p-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 text-sm font-mono bg-gray-50 resize-y transition"
-          value={input}
-          onChange={handleInputChange}
-          onBlur={handleBlur}
+          value={inputSummary}
+          onChange={handleInputChangeSummary}
+          onBlur={handleBlurSummary}
           placeholder="Paste your JSON here..."
         />
-        {error && (
+        {errorSummary && (
           <div className="mt-2 text-red-600 font-medium text-sm border border-red-200 bg-red-50 rounded p-2">
-            {error}
+            {errorSummary}
           </div>
         )}
-
-        {/* Render dynamic form if JSON is valid */}
-        {form && !error && (
-          <form className="mt-8 space-y-8">
-            {Object.keys(form).map((expKey, expIdx) => (
-              <div key={expKey} className="mb-6">
-                <h4 className="text-lg font-semibold text-indigo-700 mb-2">
-                  {expKey.replace("experience", "Experience ")}
-                </h4>
-                <div className="space-y-4">
-                  {form[expKey].map((item: any, idx: number) => (
-                    <div key={idx} className="flex items-start gap-2">
-                      <label className="text-gray-600 font-medium mt-2">
-                        Point {idx + 1}:
-                      </label>
-                      <textarea
-                        className="flex-1 p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 text-sm font-mono bg-gray-50 resize-y transition"
-                        rows={2}
-                        value={item.point}
-                        onChange={(e) =>
-                          handleFormChange(expKey, idx, e.target.value)
-                        }
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </form>
-        )}
+        <div>
+          <label className="block text-xs font-medium text-gray-700 mb-0.5">
+            AI CV Description
+          </label>
+          <textarea
+            value={textArea}
+            onChange={(e) => setTextArea(e.target.value)}
+            rows={3}
+            placeholder="Enter your CV description..."
+            className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm resize-none"
+          />
+        </div>
       </div>
     </div>
   );
