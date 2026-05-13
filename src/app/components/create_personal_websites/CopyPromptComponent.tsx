@@ -45,8 +45,12 @@ const CopyPromptComponent: React.FC<CopyPromptComponentProps> = ({
       );
     for (let i = 1; i <= experienceYearsMap[yearsOfExperience]; i++) {
       const key = `experience${i}`;
-      if (!json[key] || !Array.isArray(json[key]) || json[key].length !== 3) {
-        return `Each experience must have exactly 3 points. Issue with ${key}`;
+      if (
+        !json[key] ||
+        !Array.isArray(json[key]) ||
+        (json[key].length !== 3 && json[key].length !== 4)
+      ) {
+        return `Each experience must have exactly 3 or 4 points. Issue with ${key}`;
       }
       for (const item of json[key]) {
         if (!item.point || typeof item.point !== "string") {

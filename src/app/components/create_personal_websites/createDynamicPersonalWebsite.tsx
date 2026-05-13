@@ -188,6 +188,12 @@ export default function CreateDynamicPersonalWebsite({
   const [skillsMetaData, setSkillsMetaData] = useState<any[]>([]); // [{id, show, show_type, is_important, order, is_learning}]
   const [emailType, setEmailType] = useState<string>("personal");
 
+  // New: create full website toggle and textareas
+  const [isCreateFullWebsite, setIsCreateFullWebsite] = useState(true);
+  const [techStackSkills, setTechStackSkills] = useState("");
+  const [softSkills, setSoftSkills] = useState("");
+  const [responsibilities, setResponsibilities] = useState("");
+
   // CV4 Content state
   const [cv4Content, setCV4Content] = useState<any>(null);
 
@@ -417,6 +423,12 @@ export default function CreateDynamicPersonalWebsite({
       };
       const response = await findSkills(data);
       setAllSelectedSkills(response.data.selectedSkills);
+      // If not full website creation, set techStackSkills to selected skills titles
+      if (!isCreateFullWebsite && Array.isArray(response.data.selectedSkills)) {
+        setTechStackSkills(
+          response.data.selectedSkills.map((s) => s.title).join(", "),
+        );
+      }
       const matchedSkills = await transformCategories(
         allCategories,
         response.data.selectedSkills,
@@ -565,6 +577,7 @@ export default function CreateDynamicPersonalWebsite({
   // }, [allSelectedSkills]);
 
   const createProfile = async () => {
+    let data;
     let skillsData = allSelectedSkills.map((item) => item.id);
     const detailServices = allCategoriesMultiSelect
       .filter((skill: any) => {
@@ -576,10 +589,25 @@ export default function CreateDynamicPersonalWebsite({
         return { type, category_id, skills: skillsData };
       });
 
+    // Validation
+    // Only check allSelectedSkills for full website, rest are required for both
+    if (isCreateFullWebsite) {
+      if (allSelectedSkills.length < 1 || detailServices.length < 1) {
+        alert("Please select at least one skill and category!");
+        return;
+      }
+    } else {
+      if (
+        !techStackSkills.trim() &&
+        !softSkills.trim() &&
+        !responsibilities.trim()
+      ) {
+        alert("Please fill at least one skills/responsibilities field!");
+        return;
+      }
+    }
+    // Common required fields for both cases
     if (
-      allSelectedSkills.length < 1 ||
-      // matchedCategories.length < 1 ||
-      detailServices.length < 1 ||
       !designation ||
       !tagline ||
       !privateTitle ||
@@ -589,40 +617,31 @@ export default function CreateDynamicPersonalWebsite({
       selectedMainProfile == "select" ||
       designationCategoryId == "select" ||
       !cv4Content ||
-      !taxArea
+      !taxArea ||
+      !jobDescription
     ) {
       alert("Please fill all required inputs! Thanks");
-      console.log({
-        allSelectedSkillslength: allSelectedSkills.length,
-        matchedCategorieslength: matchedCategories.length,
-        designation: !designation,
-        tagline: !tagline,
-        mainCategoryId,
-        selectedMainProfile,
-        cv4Content,
-        taxArea,
-      });
       return;
     }
     setIsLoading(true);
     const mainService = {
       type: "main",
       category_id: mainCategoryId,
-      skills: skillsData,
+      skills: isCreateFullWebsite ? skillsData : [],
     };
-    // const detailServices = matchedCategories.map((category) => {
-    //   const type = "detail";
-    //   const category_id = category.id;
-    //   const skillsData = category.matchedSkills.map((item) => item.id);
-    //   return { type, category_id, skills: skillsData };
-    // });
     const selectedDomain = mainProfiles.find(
       (options) => options.id === selectedMainProfile,
     )?.domain;
-    const services = [mainService, ...detailServices];
-    const data = {
-      skills: skillsData,
-      services: services,
+    // Compose raw_skills if not full website
+    let rawSkills = null;
+    if (!isCreateFullWebsite) {
+      rawSkills = [techStackSkills, softSkills, responsibilities]
+        .filter(Boolean)
+        .join(",");
+    }
+    data = {
+      skills: isCreateFullWebsite ? skillsData : [],
+      services: isCreateFullWebsite ? [mainService, ...detailServices] : [],
       designation: designation,
       tag_line: tagline,
       main_id: selectedMainProfile,
@@ -641,34 +660,20 @@ export default function CreateDynamicPersonalWebsite({
       importal_skills: importalSkills,
       email_type: emailType,
       designation_category: designationCategoryId,
-      skills_meta_data: skillsMetaData,
+      skills_meta_data: isCreateFullWebsite ? skillsMetaData : [],
       cv4_content: cv4Content,
+      jobDetails: jobDescription || "no description",
+      raw_skills: rawSkills || null,
     };
 
     try {
-      // const options: RequestInit = {
-      //   method: "POST",
-      //   headers: {
-      //     "Content-Type": "application/json",
-      //   },
-      //   body: data ? JSON.stringify(data) : undefined,
-      // };
-      // const response: any = await fetch(
-      //   `${process.env.NEXT_PUBLIC_PERSONAL_SITES_API_DOMAIN}dynamic_Profile/create`,
-      //   options
-      // );
-
       const response: any = await generateProfile(data);
       console.log("create profile response", response);
       if (response.data) {
-        // const data = await response.json();
-        // setSelectedUniqueID(data.data.unique_id);
         setUniqueID(response.data.unique_id);
-
         setNewlyCreatedProfileLinks(response.data);
         isCloseOnSelect && setSelectWebsite && setSelectWebsite(response.data);
       }
-
       setIsCreatingProfile(false);
       setIsLoading(false);
     } catch (error: any) {
@@ -1060,10 +1065,25 @@ export default function CreateDynamicPersonalWebsite({
       </div>
       {/* Main Content Area: Divided into 3 Columns on large screens */}
       <div className="flex flex-col w-full">
+        {/* Create Full Website Toggle */}
+        <div className="mb-4 flex items-center gap-3">
+          <input
+            id="createFullWebsiteCheckbox"
+            type="checkbox"
+            checked={isCreateFullWebsite}
+            onChange={() => setIsCreateFullWebsite((v) => !v)}
+            className="w-4 h-4"
+          />
+          <label
+            htmlFor="createFullWebsiteCheckbox"
+            className="text-sm font-medium text-gray-700"
+          >
+            Create Full Website (with skills selection)
+          </label>
+        </div>
         <div>
-          {/* --- COLUMN 1: Selected Skills (Left) --- */}
-
-          {
+          {/* --- COLUMN 1: Selected Skills (Left) or Textareas --- */}
+          {isCreateFullWebsite ? (
             <ExpandCollapse
               title={`Selected Skills (${formatedSelectedSkills.length})`}
             >
@@ -1074,7 +1094,9 @@ export default function CreateDynamicPersonalWebsite({
                       Run analysis to see selected skills.
                     </p>
                   ) : (
+                    // ...existing code for skills table...
                     <table className="min-w-full text-xs border-separate border-spacing-0">
+                      {/* ...existing code... */}
                       <thead>
                         <tr className="bg-indigo-50 sticky top-0 z-10">
                           <th className="px-3 py-2 font-semibold text-gray-700 text-left rounded-tl-xl">
@@ -1111,6 +1133,7 @@ export default function CreateDynamicPersonalWebsite({
                           })
                           .sort((a, b) => (a.order || 0) - (b.order || 0))
                           .map((skillItem, idx) => (
+                            // ...existing code for each row...
                             <tr
                               key={skillItem.id}
                               className={
@@ -1169,6 +1192,7 @@ export default function CreateDynamicPersonalWebsite({
                                 );
                               }}
                             >
+                              {/* ...existing code for table cells... */}
                               <td className="px-3 py-2 text-center align-middle cursor-move">
                                 <span
                                   title="Drag to reorder"
@@ -1316,7 +1340,52 @@ export default function CreateDynamicPersonalWebsite({
                 </div>
               </div>
             </ExpandCollapse>
-          }
+          ) : (
+            <ExpandCollapse title="Skills & Responsibilities (Quick)">
+              <div className="bg-white p-5 rounded-xl shadow-lg border border-gray-200 flex flex-col gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Tech Stack Skills
+                  </label>
+                  <textarea
+                    className="w-full border border-gray-300 rounded-lg p-2 text-gray-800 focus:ring-indigo-500 focus:border-indigo-500 transition shadow-inner"
+                    rows={3}
+                    value={techStackSkills}
+                    onChange={(e) => setTechStackSkills(e.target.value)}
+                    placeholder="e.g. React, Node.js, PostgreSQL"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Soft Skills
+                  </label>
+                  <textarea
+                    className="w-full border border-gray-300 rounded-lg p-2 text-gray-800 focus:ring-indigo-500 focus:border-indigo-500 transition shadow-inner"
+                    rows={3}
+                    value={softSkills}
+                    onChange={(e) => setSoftSkills(e.target.value)}
+                    placeholder="e.g. Communication, Teamwork, Problem-solving"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Responsibilities
+                  </label>
+                  <textarea
+                    className="w-full border border-gray-300 rounded-lg p-2 text-gray-800 focus:ring-indigo-500 focus:border-indigo-500 transition shadow-inner"
+                    rows={3}
+                    value={responsibilities}
+                    onChange={(e) => setResponsibilities(e.target.value)}
+                    placeholder="e.g. Led frontend team, managed deployments, client communication"
+                  />
+                </div>
+                <div className="text-xs text-gray-500 mt-2">
+                  These fields will be joined and sent as <b>raw_skills</b> in
+                  the API payload. Skills and skills_meta_data will be empty.
+                </div>
+              </div>
+            </ExpandCollapse>
+          )}
 
           {matchedProfiles.length > 0 && (
             <ExpandCollapse
@@ -1731,7 +1800,7 @@ export default function CreateDynamicPersonalWebsite({
               </div>
             </ExpandCollapse>
           }
-          {allCategoriesMultiSelect.length > 0 && (
+          {isCreateFullWebsite && allCategoriesMultiSelect.length > 0 && (
             <ExpandCollapse
               title={`Select Categories (${allCategoriesMultiSelect.length})`}
             >
@@ -1749,7 +1818,30 @@ export default function CreateDynamicPersonalWebsite({
               jobDescriptionRaw={
                 jobDescriptionRaw ? jobDescriptionRaw : jobDescription
               }
-              selectedSkills={allSelectedSkills}
+              selectedSkills={
+                isCreateFullWebsite
+                  ? allSelectedSkills
+                  : [
+                      ...(techStackSkills
+                        ? techStackSkills
+                            .split(/,|\n/)
+                            .map((s) => ({ title: s.trim() }))
+                            .filter((s) => s.title)
+                        : []),
+                      ...(softSkills
+                        ? softSkills
+                            .split(/,|\n/)
+                            .map((s) => ({ title: s.trim() }))
+                            .filter((s) => s.title)
+                        : []),
+                      ...(responsibilities
+                        ? responsibilities
+                            .split(/,|\n/)
+                            .map((s) => ({ title: s.trim() }))
+                            .filter((s) => s.title)
+                        : []),
+                    ]
+              }
               setCV4Content={setCV4Content}
               yearsOfExperience={experienceYears}
               setTextArea={setTaxArea}

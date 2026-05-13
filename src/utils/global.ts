@@ -382,7 +382,7 @@ I will provide:
 
 Your task:
 
-Generate exactly 3 bullet points per experience.
+Generate exactly 3 bullet points per experience on if Total number of past experiences is greater than 3. if Total number of past experiences is equal or less than 3 then create exactly 4 bullet points 
 
 Return output strictly in valid JSON with this structure:
 
@@ -390,12 +390,14 @@ Return output strictly in valid JSON with this structure:
   "experience1": [
     {"point": "bullet 1"},
     {"point": "bullet 2"},
-    {"point": "bullet 3"}
+    {"point": "bullet 3"},
+    {"point": "bullet 4"} // only if Total number of past experiences is equal or less than 3 
   ],
   "experience2": [
     {"point": "bullet 1"},
     {"point": "bullet 2"},
-    {"point": "bullet 3"}
+    {"point": "bullet 3"},
+    {"point": "bullet 3"} // only if Total number of past experiences is equal or less than 3
   ]
 }
 

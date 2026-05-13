@@ -79,6 +79,7 @@ export default function ManageDetailProfiles() {
     useState<DetailProfile | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [showJobDetailsId, setShowJobDetailsId] = useState<string | null>(null);
   const [selectedSearchSkills, setSelectedSearchSkills] = useState<Skill[]>([]);
 
   const updateProfileData = (updatedProfile: DetailProfile) => {
@@ -806,6 +807,33 @@ export default function ManageDetailProfiles() {
                               <p className="text-gray-700 whitespace-pre-wrap overflow-wrap">
                                 {(profile as any).ai_short_description}
                               </p>
+                              {/* Show Job Details Button */}
+                              <button
+                                className="ml-2 px-2 py-1 bg-blue-500 text-white rounded text-xs"
+                                onClick={() =>
+                                  setShowJobDetailsId(
+                                    showJobDetailsId === profile.id
+                                      ? null
+                                      : profile.id,
+                                  )
+                                }
+                              >
+                                {showJobDetailsId === profile.id
+                                  ? "Hide Job Details"
+                                  : "Show Job Details"}
+                              </button>
+                              {/* Job Details Display */}
+                              {showJobDetailsId === profile.id && (
+                                <div className="mt-2 p-2 bg-gray-100 rounded">
+                                  <span className="font-semibold text-gray-600">
+                                    Job Details:
+                                  </span>
+                                  <pre className="text-gray-700 whitespace-pre-wrap overflow-x-auto">
+                                    {(profile as any).jobDetails ||
+                                      "No job details available."}
+                                  </pre>
+                                </div>
+                              )}
                             </div>
                           )}
                           {(profile as any).website_purpose && (
