@@ -27,6 +27,7 @@ import {
   File,
   KeyboardMusic,
   UserCheck,
+  Handshake,
 } from "lucide-react";
 import LogoutButton from "./auth/LogoutButton";
 import { GlobalConstants } from "@/utils/global";
@@ -83,6 +84,7 @@ const iconMap: { [key: string]: LucideIcon } = {
   Icon5: File,
   Icon6: KeyboardMusic,
   Professionals: UserCheck,
+  Clients: Handshake,
 };
 
 // --- 2. Flat Menu Data Structure ---
@@ -195,6 +197,11 @@ const navItems: NavItem[] = [
         href: "/professionals",
         icon: "Professionals",
       },
+      {
+        title: "Clients",
+        href: "/clients",
+        icon: "Clients",
+      },
     ],
   },
   {
@@ -260,6 +267,7 @@ export function getAllNavRoles(
     { label: "Auth", value: "/auth" },
     { label: "Best Match", value: "/best-match" },
     { label: "Professionals", value: "/professionals" },
+    { label: "Clients", value: "/clients" },
   ];
   // const roles: { label: string; value: string }[] = [];
   // function traverse(list: NavItem[], isFirst: boolean = true) {

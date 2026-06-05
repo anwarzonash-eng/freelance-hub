@@ -111,6 +111,15 @@ export enum TestimonialsAPIRoutes {
     UPLOAD_SINGLE = 'testimonials/upload-single',
 }
 
+export enum ClientsAPIRoutes {
+    GET_ALL = 'clients',
+    GET_BY_ID = 'clients/:id',
+    CREATE = 'clients',
+    UPDATE = 'clients/:id',
+    DELETE = 'clients/:id',
+    LOG_FOLLOWUP = 'clients/:id/log-followup',
+}
+
 export enum ProfessionalsAPIRoutes {
     GET_ALL = 'professionals',
     GET_BY_ID = 'professionals/:id',
