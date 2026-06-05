@@ -26,6 +26,7 @@ import {
   CircleDashed,
   File,
   KeyboardMusic,
+  UserCheck,
 } from "lucide-react";
 import LogoutButton from "./auth/LogoutButton";
 import { GlobalConstants } from "@/utils/global";
@@ -81,6 +82,7 @@ const iconMap: { [key: string]: LucideIcon } = {
   Icon4: CircleDashed,
   Icon5: File,
   Icon6: KeyboardMusic,
+  Professionals: UserCheck,
 };
 
 // --- 2. Flat Menu Data Structure ---
@@ -185,6 +187,17 @@ const navItems: NavItem[] = [
     ],
   },
   {
+    title: "Professionals",
+    icon: "Professionals",
+    children: [
+      {
+        title: "All Professionals",
+        href: "/professionals",
+        icon: "Professionals",
+      },
+    ],
+  },
+  {
     title: "Auth",
     href: "/auth",
     icon: "Users",
@@ -246,6 +259,7 @@ export function getAllNavRoles(
     { label: "Manage Categories", value: "/manage-categories" },
     { label: "Auth", value: "/auth" },
     { label: "Best Match", value: "/best-match" },
+    { label: "Professionals", value: "/professionals" },
   ];
   // const roles: { label: string; value: string }[] = [];
   // function traverse(list: NavItem[], isFirst: boolean = true) {

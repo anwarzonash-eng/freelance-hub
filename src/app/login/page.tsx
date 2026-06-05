@@ -25,6 +25,7 @@ export default function LoginPage() {
         console.log("login success", res);
         localStorage.setItem("authToken", res.data.user.access_token);
         localStorage.setItem("roles", JSON.stringify(res.data.user.roles));
+        localStorage.setItem("userRole", res.data.user.role || "user");
 
         router.push("/");
         // window.location.reload();

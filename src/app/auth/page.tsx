@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import { getAllNavRoles } from "../components/Header";
 import {
   listAuthUsers,
@@ -14,6 +15,7 @@ const emptyForm = {
   userid: "",
   password: "",
   roles: [],
+  role: "user",
 };
 
 export default function AuthCrudPage() {
@@ -21,6 +23,16 @@ export default function AuthCrudPage() {
   const [form, setForm] = useState({ ...emptyForm });
   const [editId, setEditId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showFormPassword, setShowFormPassword] = useState(false);
+  const [revealedIds, setRevealedIds] = useState<Set<string>>(new Set());
+
+  const toggleReveal = (id: string) => {
+    setRevealedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -87,6 +99,7 @@ export default function AuthCrudPage() {
       userid: user.userid || "",
       password: user.password || "",
       roles: Array.isArray(user.roles) ? user.roles : [],
+      role: user.role || "user",
     });
     setEditId(user.id);
   };
@@ -117,15 +130,36 @@ export default function AuthCrudPage() {
           </div>
           <div>
             <label className="block font-semibold mb-1">Password</label>
-            <input
-              name="password"
-              type="password"
-              value={form.password}
-              onChange={handleChange}
-              className="w-full border px-3 py-2 rounded"
-              required
-            />
+            <div className="relative">
+              <input
+                name="password"
+                type={showFormPassword ? "text" : "password"}
+                value={form.password}
+                onChange={handleChange}
+                className="w-full border px-3 py-2 rounded pr-9"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowFormPassword((v) => !v)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
+              >
+                {showFormPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
           </div>
+        </div>
+        <div className="mb-4">
+          <label className="block font-semibold mb-1">Role</label>
+          <select
+            name="role"
+            value={form.role}
+            onChange={handleChange}
+            className="w-full border px-3 py-2 rounded"
+          >
+            <option value="user">User</option>
+            <option value="admin">Admin</option>
+          </select>
         </div>
         {/* Upwork token fields removed */}
         <div className="mb-4">
@@ -178,6 +212,8 @@ export default function AuthCrudPage() {
             <thead>
               <tr className="bg-gray-100">
                 <th className="p-2 text-left">User ID</th>
+                <th className="p-2 text-left">Password</th>
+                <th className="p-2 text-left">Role</th>
                 <th className="p-2 text-left">Roles</th>
                 <th className="p-2 text-left">Actions</th>
               </tr>
@@ -191,6 +227,25 @@ export default function AuthCrudPage() {
                 .map((user: any) => (
                   <tr key={user.id} className="border-b">
                     <td className="p-2">{user.userid}</td>
+                    <td className="p-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-sm">
+                          {revealedIds.has(user.id) ? user.password : "••••••••"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => toggleReveal(user.id)}
+                          className="text-gray-400 hover:text-gray-700"
+                        >
+                          {revealedIds.has(user.id) ? <EyeOff size={14} /> : <Eye size={14} />}
+                        </button>
+                      </div>
+                    </td>
+                    <td className="p-2">
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${user.role === "admin" ? "bg-purple-100 text-purple-700" : "bg-gray-100 text-gray-600"}`}>
+                        {user.role || "user"}
+                      </span>
+                    </td>
                     <td className="p-2">
                       {Array.isArray(user.roles) ? user.roles.join(", ") : ""}
                     </td>
