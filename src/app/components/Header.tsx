@@ -28,6 +28,7 @@ import {
   KeyboardMusic,
   UserCheck,
   Handshake,
+  Link2,
 } from "lucide-react";
 import LogoutButton from "./auth/LogoutButton";
 import { GlobalConstants } from "@/utils/global";
@@ -85,6 +86,9 @@ const iconMap: { [key: string]: LucideIcon } = {
   Icon6: KeyboardMusic,
   Professionals: UserCheck,
   Clients: Handshake,
+  SettingsIcon: Settings,
+  EmailGateway: Mail,
+  ReferralSettings: Link2,
 };
 
 // --- 2. Flat Menu Data Structure ---
@@ -205,6 +209,22 @@ const navItems: NavItem[] = [
     ],
   },
   {
+    title: "Settings",
+    icon: "SettingsIcon",
+    children: [
+      {
+        title: "Email Gateways",
+        href: "/settings/email-gateways",
+        icon: "EmailGateway",
+      },
+      {
+        title: "Referral Settings",
+        href: "/settings/referral",
+        icon: "ReferralSettings",
+      },
+    ],
+  },
+  {
     title: "Auth",
     href: "/auth",
     icon: "Users",
@@ -268,6 +288,8 @@ export function getAllNavRoles(
     { label: "Best Match", value: "/best-match" },
     { label: "Professionals", value: "/professionals" },
     { label: "Clients", value: "/clients" },
+    { label: "Email Gateways", value: "/settings/email-gateways" },
+    { label: "Referral Settings", value: "/settings/referral" },
   ];
   // const roles: { label: string; value: string }[] = [];
   // function traverse(list: NavItem[], isFirst: boolean = true) {

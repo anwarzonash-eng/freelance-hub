@@ -111,6 +111,17 @@ export enum TestimonialsAPIRoutes {
     UPLOAD_SINGLE = 'testimonials/upload-single',
 }
 
+export enum GmailGatewaysAPIRoutes {
+    GET_ALL = 'gmail-gateways',
+    CREATE = 'gmail-gateways',
+    UPDATE = 'gmail-gateways/:id',
+    DELETE = 'gmail-gateways/:id',
+    GET_AUTH_URL = 'gmail-gateways/:id/auth-url',
+    TEST = 'gmail-gateways/:id/test',
+    SEND = 'gmail-gateways/:id/send',
+    INBOX = 'gmail-gateways/:id/inbox',
+}
+
 export enum ClientsAPIRoutes {
     GET_ALL = 'clients',
     GET_BY_ID = 'clients/:id',
@@ -118,6 +129,11 @@ export enum ClientsAPIRoutes {
     UPDATE = 'clients/:id',
     DELETE = 'clients/:id',
     LOG_FOLLOWUP = 'clients/:id/log-followup',
+}
+
+export enum ReferralSettingsAPIRoutes {
+    GET = 'referral-settings',
+    UPSERT = 'referral-settings',
 }
 
 export enum ProfessionalsAPIRoutes {
