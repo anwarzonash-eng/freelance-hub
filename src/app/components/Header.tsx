@@ -29,6 +29,7 @@ import {
   UserCheck,
   Handshake,
   Link2,
+  BriefcaseBusiness,
 } from "lucide-react";
 import LogoutButton from "./auth/LogoutButton";
 import { GlobalConstants } from "@/utils/global";
@@ -89,6 +90,7 @@ const iconMap: { [key: string]: LucideIcon } = {
   SettingsIcon: Settings,
   EmailGateway: Mail,
   ReferralSettings: Link2,
+  Jobs: BriefcaseBusiness,
 };
 
 // --- 2. Flat Menu Data Structure ---
@@ -193,6 +195,17 @@ const navItems: NavItem[] = [
     ],
   },
   {
+    title: "Jobs",
+    icon: "Jobs",
+    children: [
+      {
+        title: "AI Jobs",
+        href: "/jobs/ai-jobs",
+        icon: "Jobs",
+      },
+    ],
+  },
+  {
     title: "Professionals",
     icon: "Professionals",
     children: [
@@ -286,6 +299,7 @@ export function getAllNavRoles(
     { label: "Manage Categories", value: "/manage-categories" },
     { label: "Auth", value: "/auth" },
     { label: "Best Match", value: "/best-match" },
+    { label: "AI Jobs", value: "/jobs/ai-jobs" },
     { label: "Professionals", value: "/professionals" },
     { label: "Clients", value: "/clients" },
     { label: "Email Gateways", value: "/settings/email-gateways" },

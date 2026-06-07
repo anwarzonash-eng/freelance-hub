@@ -136,6 +136,16 @@ export enum ReferralSettingsAPIRoutes {
     UPSERT = 'referral-settings',
 }
 
+export enum AiJobsAPIRoutes {
+    GET_ALL = 'ai-jobs',
+    GET_BY_ID = 'ai-jobs/:id',
+    CREATE = 'ai-jobs',
+    UPDATE = 'ai-jobs/:id',
+    DELETE = 'ai-jobs/:id',
+    IMPORT_MERCOR = 'ai-jobs/import/mercor',
+    IMPORT_ALIGNER = 'ai-jobs/import/aligner',
+}
+
 export enum ProfessionalsAPIRoutes {
     GET_ALL = 'professionals',
     GET_BY_ID = 'professionals/:id',
