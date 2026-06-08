@@ -3,12 +3,12 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
     Copy, Pencil, Trash2, Plus, Upload, ChevronDown, ChevronUp,
-    ExternalLink, Code2, RotateCcw, Check, Link2
+    ExternalLink, Code2, RotateCcw, Check, Link2, RefreshCw,
 } from "lucide-react";
 import { showAppNotification } from "@/utils/notificationService";
 import {
     getAllAiJobs, createAiJob, updateAiJob, deleteAiJob,
-    importMercorJobs, importAlignerJobs,
+    importMercorJobs, importAlignerJobs, syncMercorReferrals,
 } from "@/app/api_handlers/api/ai-jobs.api";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -273,6 +273,81 @@ function ImportModal({ source, onClose, onDone }: { source: "mercor" | "aligner"
     );
 }
 
+// ─── Sync Mercor Referrals Modal ──────────────────────────────────────────────
+
+function SyncMercorModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+    const [token, setToken] = useState("");
+    const [loading, setLoading] = useState(false);
+    const [result, setResult] = useState<any>(null);
+    const [error, setError] = useState("");
+
+    const handleSync = async () => {
+        if (!token.trim()) { setError("Please paste your Mercor bearer token."); return; }
+        setError("");
+        setLoading(true);
+        const res = await syncMercorReferrals(token.trim());
+        setLoading(false);
+        if (res) { setResult(res); onDone(); }
+        else setError("Sync failed — check server logs or verify the token.");
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded border border-gray-200 w-full max-w-lg shadow-xl">
+                <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200">
+                    <span className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
+                        <RefreshCw size={12} className="text-violet-500" /> Sync Mercor Referral Links
+                    </span>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xs">✕</button>
+                </div>
+                <div className="p-3 flex flex-col gap-2">
+                    {result ? (
+                        <div className="rounded border border-green-200 bg-green-50 p-3 text-xs space-y-1">
+                            <div className="font-semibold text-green-700 flex items-center gap-1"><Check size={12} /> Sync Complete</div>
+                            <div className="text-gray-700">
+                                Jobs without link: <b>{result.data?.total}</b> · Updated: <b>{result.data?.updated}</b> · Failed: <b>{result.data?.failed}</b>
+                            </div>
+                            {result.data?.errors?.length > 0 && (
+                                <div className="mt-1 text-red-600 max-h-48 overflow-y-auto text-[10px] space-y-1 bg-red-50 border border-red-100 rounded p-1.5">
+                                    {result.data.errors.map((e: string, i: number) => (
+                                        <div key={i} className="break-all font-mono">{e}</div>
+                                    ))}
+                                </div>
+                            )}
+                            <button onClick={onClose} className="mt-2 px-3 py-1 text-xs bg-gray-800 text-white rounded hover:bg-gray-700">Close</button>
+                        </div>
+                    ) : (
+                        <>
+                            <p className="text-[11px] text-gray-500">
+                                This will call the Mercor API for every Mercor job that doesn't have a referral link yet and save the returned link.
+                                The token is sent directly to the Mercor API and is <b>never stored</b> in the database.
+                            </p>
+                            <div className="flex flex-col gap-0.5">
+                                <label className="text-[10px] text-gray-500 font-medium uppercase tracking-wide">Bearer Token</label>
+                                <textarea
+                                    value={token}
+                                    onChange={(e) => setToken(e.target.value)}
+                                    rows={4}
+                                    placeholder="Paste your Mercor bearer token here…"
+                                    className="border border-gray-300 rounded px-2 py-1.5 text-[11px] font-mono focus:outline-none focus:border-violet-400 w-full resize-none"
+                                />
+                            </div>
+                            {error && <div className="text-[11px] text-red-600 bg-red-50 border border-red-200 rounded p-2">{error}</div>}
+                            <div className="flex justify-end gap-2 pt-1 border-t border-gray-100">
+                                <button onClick={onClose} className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50">Cancel</button>
+                                <button onClick={handleSync} disabled={loading || !token.trim()}
+                                    className="px-3 py-1 text-xs bg-violet-700 text-white rounded hover:bg-violet-800 disabled:opacity-50 flex items-center gap-1">
+                                    {loading ? <><RefreshCw size={10} className="animate-spin" /> Syncing…</> : <><RefreshCw size={10} /> Sync</>}
+                                </button>
+                            </div>
+                        </>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 // ─── Job Form Modal ───────────────────────────────────────────────────────────
 
 function JobFormModal({ editing, onClose, onSaved }: { editing: any | null; onClose: () => void; onSaved: () => void }) {
@@ -527,7 +602,11 @@ function JobCard({ job, isAdmin, onEdit, onDelete, onViewJson }: {
                     {job.description && <p className="text-gray-600 leading-relaxed whitespace-pre-wrap line-clamp-8">{job.description}</p>}
                     {job.listing_domain && <div><span className="text-gray-400 text-[10px]">Domain: </span><span className="text-gray-700">{job.listing_domain}</span></div>}
                     {job.notes && <div><span className="text-gray-400 text-[10px] block">Notes</span><p className="text-gray-700 whitespace-pre-wrap">{job.notes}</p></div>}
-                    <div className="text-[10px] text-gray-400">Added {formatDate(job.createdAt)} · Source ID: <span className="font-mono">{job.source_job_id}</span></div>
+                    <div className="flex items-center gap-1 text-[10px] text-gray-400">
+                        Added {formatDate(job.createdAt)} · Source ID:
+                        <span className="font-mono">{job.source_job_id}</span>
+                        <button onClick={() => copyText(job.source_job_id, "Source ID copied")} className="text-gray-400 hover:text-gray-700 shrink-0"><Copy size={9} /></button>
+                    </div>
                 </div>
             )}
 
@@ -667,6 +746,7 @@ export default function AiJobsTable() {
     const [editing, setEditing] = useState<any | null>(null);
     const [jsonJob, setJsonJob] = useState<any | null>(null);
     const [importSource, setImportSource] = useState<"mercor" | "aligner" | null>(null);
+    const [showSyncMercor, setShowSyncMercor] = useState(false);
 
     useEffect(() => { setIsAdmin(getAdminRole()); }, []);
 
@@ -715,6 +795,10 @@ export default function AiJobsTable() {
                     <button onClick={() => setImportSource("mercor")}
                         className="flex items-center gap-1 text-xs border border-violet-300 text-violet-700 bg-violet-50 px-2 py-1 rounded hover:bg-violet-100">
                         <Upload size={11} /> Import Mercor Jobs
+                    </button>
+                    <button onClick={() => setShowSyncMercor(true)}
+                        className="flex items-center gap-1 text-xs border border-violet-400 text-violet-800 bg-violet-100 px-2 py-1 rounded hover:bg-violet-200">
+                        <RefreshCw size={11} /> Sync Mercor Referral
                     </button>
                     <button onClick={() => setImportSource("aligner")}
                         className="flex items-center gap-1 text-xs border border-teal-300 text-teal-700 bg-teal-50 px-2 py-1 rounded hover:bg-teal-100">
@@ -787,6 +871,9 @@ export default function AiJobsTable() {
             {jsonJob && <JsonModal job={jsonJob} onClose={() => setJsonJob(null)} />}
             {importSource && (
                 <ImportModal source={importSource} onClose={() => setImportSource(null)} onDone={handleSaved} />
+            )}
+            {showSyncMercor && (
+                <SyncMercorModal onClose={() => setShowSyncMercor(false)} onDone={handleSaved} />
             )}
         </div>
     );

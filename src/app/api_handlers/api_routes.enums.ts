@@ -144,6 +144,7 @@ export enum AiJobsAPIRoutes {
     DELETE = 'ai-jobs/:id',
     IMPORT_MERCOR = 'ai-jobs/import/mercor',
     IMPORT_ALIGNER = 'ai-jobs/import/aligner',
+    SYNC_MERCOR = 'ai-jobs/sync-mercor-referrals',
 }
 
 export enum ProfessionalsAPIRoutes {
