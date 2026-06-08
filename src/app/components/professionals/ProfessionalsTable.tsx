@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Copy, Pencil, Trash2, ChevronDown, ChevronRight, ExternalLink, Plus, MessageCircle, X, ShieldCheck } from "lucide-react";
+import { Copy, Pencil, Trash2, ChevronDown, ChevronRight, ExternalLink, Plus, MessageCircle, X, ShieldCheck, Star } from "lucide-react";
 import { showAppNotification } from "@/utils/notificationService";
 import {
     getAllProfessionals,
@@ -14,6 +14,11 @@ import { getCountries, getCountryName } from "@/utils/countries";
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const DESIGNATIONS = ["IT", "Accountant", "Medical", "Business", "Marketing", "Gamers", "Law"];
+const JOB_MATCH_STATUSES = ["Not Matched", "Matched Jobs"];
+const JOB_MATCH_COLORS: Record<string, string> = {
+    "Matched Jobs": "bg-emerald-100 text-emerald-700",
+    "Not Matched": "bg-gray-100 text-gray-500",
+};
 const QUALIFICATIONS = ["Graduation", "Master", "MPhil", "PHD"];
 const STATUSES = ["Email Sent", "Positive Response", "Negative Response", "Hate Response", "Joined"];
 const LIMIT_OPTIONS = [50, 100, 150];
@@ -61,6 +66,8 @@ const EMPTY_FORM = {
     qualification: "",
     status: "",
     country: "",
+    short_listed: false,
+    job_match_status: "Not Matched",
     email_text: "",
     email_subject: "",
 };
@@ -73,13 +80,23 @@ const EMPTY_FILTERS = {
     qualification: "",
     status: "",
     country: "",
+    short_listed: "",
+    job_match_status: "",
     is_email_verified: "",
+    email_verification_status: "",
     date_filter: "",
     date_from: "",
     date_to: "",
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function emailStatusColor(status: string) {
+    if (status === "Deliverable") return "bg-green-100 text-green-700";
+    if (status === "Undeliverable") return "bg-red-100 text-red-600";
+    if (status === "Risky") return "bg-yellow-100 text-yellow-700";
+    return "bg-gray-100 text-gray-500";
+}
 
 function copyText(text: string) {
     navigator.clipboard.writeText(text);
@@ -304,6 +321,9 @@ function ProfessionalFormModal({ editing, onClose, onSaved }: { editing: any | n
                         <CSelect label="Designation" name="designation" value={form.designation} onChange={handleChange} options={DESIGNATIONS} />
                         <CSelect label="Qualification" name="qualification" value={form.qualification} onChange={handleChange} options={QUALIFICATIONS} />
                         <CSelect label="Status" name="status" value={form.status} onChange={handleChange} options={STATUSES} />
+                        <CSelect label="Job Match Status" name="job_match_status" value={form.job_match_status} onChange={handleChange} options={JOB_MATCH_STATUSES} />
+                    </div>
+                    <div className="grid grid-cols-4 gap-2">
                         <div className="flex flex-col gap-0.5">
                             <label className="text-[10px] text-gray-500 font-medium uppercase tracking-wide">Country</label>
                             <select name="country" value={form.country} onChange={handleChange}
@@ -319,6 +339,15 @@ function ProfessionalFormModal({ editing, onClose, onSaved }: { editing: any | n
                     <CTextarea label="Overall LinkedIn Context" name="linkedin_context" value={form.linkedin_context} onChange={handleChange} rows={3} />
                     <CInput label="Email Subject" name="email_subject" value={form.email_subject} onChange={handleChange} />
                     <CTextarea label="Email Text (HTML)" name="email_text" value={form.email_text} onChange={handleChange} rows={6} />
+
+                    <label className="flex items-center gap-2 cursor-pointer select-none w-fit">
+                        <input type="checkbox" checked={!!form.short_listed}
+                            onChange={(e) => setForm((p) => ({ ...p, short_listed: e.target.checked }))}
+                            className="w-3.5 h-3.5" />
+                        <span className="text-xs text-gray-700 flex items-center gap-1">
+                            <Star size={11} className="text-yellow-400" /> Short Listed
+                        </span>
+                    </label>
 
                     <div className="flex justify-end gap-2 pt-1 border-t border-gray-100 mt-1">
                         <button type="button" onClick={onClose} className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50">Cancel</button>
@@ -541,7 +570,7 @@ function VerifyEmailsModal({
 
             setProgress(`Saving ${verificationResults.length} result${verificationResults.length !== 1 ? "s" : ""} to database…`);
             for (const r of verificationResults) {
-                await updateProfessional({ is_email_verified: r.verified }, r.proId);
+                await updateProfessional({ is_email_verified: r.verified, email_verification_status: r.classification }, r.proId);
             }
 
             setResults(verificationResults);
@@ -551,13 +580,6 @@ function VerifyEmailsModal({
             setError(err.message || "Unknown error occurred.");
             setPhase("error");
         }
-    };
-
-    const classificationColor = (c: string) => {
-        if (c === "Deliverable") return "bg-green-100 text-green-700";
-        if (c === "Undeliverable") return "bg-red-100 text-red-600";
-        if (c === "Risky") return "bg-yellow-100 text-yellow-700";
-        return "bg-gray-100 text-gray-500";
     };
 
     return (
@@ -622,7 +644,7 @@ function VerifyEmailsModal({
                                             <div className="font-medium text-gray-800">{r.name}</div>
                                             <div className="text-gray-400 text-[10px]">{r.email}</div>
                                         </div>
-                                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${classificationColor(r.classification)}`}>
+                                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${emailStatusColor(r.classification)}`}>
                                             {r.classification}
                                         </span>
                                     </div>
@@ -727,6 +749,21 @@ export default function ProfessionalsTable() {
 
     const selectedProfessionals = data.filter((p) => selectedIds.has(p.id));
 
+    const handleToggleShortlist = async (pro: any) => {
+        await updateProfessional({ short_listed: !pro.short_listed }, pro.id);
+        load(page, limit, appliedFilters);
+    };
+
+    const handleBulkDelete = async () => {
+        const count = selectedIds.size;
+        if (!confirm(`Delete ${count} professional${count !== 1 ? "s" : ""}? This cannot be undone.`)) return;
+        for (const id of [...selectedIds]) {
+            await deleteProfessional(id);
+        }
+        setSelectedIds(new Set());
+        load(page, limit, appliedFilters);
+    };
+
     const COL_SPAN = 12;
 
     return (
@@ -742,6 +779,12 @@ export default function ProfessionalsTable() {
                                 className="flex items-center gap-1 text-xs bg-green-700 text-white px-2 py-1 rounded hover:bg-green-600">
                                 <ShieldCheck size={12} /> Verify Emails
                             </button>
+                            {isAdmin && (
+                                <button onClick={handleBulkDelete}
+                                    className="flex items-center gap-1 text-xs bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700">
+                                    <Trash2 size={12} /> Delete Selected
+                                </button>
+                            )}
                             <button onClick={() => setSelectedIds(new Set())}
                                 className="text-xs text-gray-400 hover:text-gray-600 underline">Clear</button>
                         </div>
@@ -807,6 +850,23 @@ export default function ProfessionalsTable() {
                         </div>
                     ))}
                     <div className="flex flex-col gap-0.5">
+                        <label className="text-[10px] text-gray-400 uppercase">Short Listed</label>
+                        <select name="short_listed" value={filters.short_listed} onChange={handleFilterChange}
+                            className="border border-gray-300 rounded px-1.5 py-0.5 text-xs focus:outline-none focus:border-gray-500 bg-white">
+                            <option value="">All</option>
+                            <option value="true">Shortlisted</option>
+                            <option value="false">Not Shortlisted</option>
+                        </select>
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                        <label className="text-[10px] text-gray-400 uppercase">Job Match</label>
+                        <select name="job_match_status" value={filters.job_match_status} onChange={handleFilterChange}
+                            className="border border-gray-300 rounded px-1.5 py-0.5 text-xs focus:outline-none focus:border-gray-500 bg-white">
+                            <option value="">All</option>
+                            {JOB_MATCH_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                    </div>
+                    <div className="flex flex-col gap-0.5">
                         <label className="text-[10px] text-gray-400 uppercase">Country</label>
                         <select name="country" value={filters.country} onChange={handleFilterChange}
                             className="border border-gray-300 rounded px-1.5 py-0.5 text-xs focus:outline-none focus:border-gray-500 bg-white">
@@ -817,12 +877,15 @@ export default function ProfessionalsTable() {
                         </select>
                     </div>
                     <div className="flex flex-col gap-0.5">
-                        <label className="text-[10px] text-gray-400 uppercase">Email Verified</label>
-                        <select name="is_email_verified" value={filters.is_email_verified} onChange={handleFilterChange}
+                        <label className="text-[10px] text-gray-400 uppercase">Email Status</label>
+                        <select name="email_verification_status" value={filters.email_verification_status} onChange={handleFilterChange}
                             className="border border-gray-300 rounded px-1.5 py-0.5 text-xs focus:outline-none focus:border-gray-500 bg-white">
                             <option value="">All</option>
-                            <option value="true">Verified</option>
-                            <option value="false">Not Verified</option>
+                            <option value="Deliverable">Deliverable</option>
+                            <option value="Undeliverable">Undeliverable</option>
+                            <option value="Risky">Risky</option>
+                            <option value="Unknown">Unknown</option>
+                            <option value="not_checked">Not Checked</option>
                         </select>
                     </div>
                     <button onClick={applyFilters} className="px-3 py-0.5 text-xs bg-gray-800 text-white rounded hover:bg-gray-700 mt-auto">Filter</button>
@@ -884,7 +947,10 @@ export default function ProfessionalsTable() {
                                             </button>
                                         </td>
                                         <td className="px-2 py-1 border-r border-gray-100 whitespace-nowrap font-medium text-gray-800">
-                                            {pro.first_name} {pro.last_name}
+                                            <div className="flex items-center gap-1">
+                                                {pro.short_listed && <Star size={11} className="text-yellow-400 fill-yellow-400 shrink-0" />}
+                                                {pro.first_name} {pro.last_name}
+                                            </div>
                                         </td>
                                         {/* Email — show first, indicate more */}
                                         <td className="px-2 py-1 border-r border-gray-100 max-w-[180px]">
@@ -894,9 +960,10 @@ export default function ProfessionalsTable() {
                                                     {firstEmail.is_bounced && <span className="text-[9px] bg-red-100 text-red-500 rounded px-0.5">!</span>}
                                                     <button onClick={() => copyText(firstEmail.email)} className="shrink-0 text-gray-400 hover:text-gray-600"><Copy size={10} /></button>
                                                     {emails.length > 1 && <span className="text-[9px] text-gray-400">+{emails.length - 1}</span>}
-                                                    {pro.is_email_verified && (
-                                                        <span className="inline-flex items-center gap-0.5 text-[9px] bg-green-100 text-green-700 rounded px-1 py-0.5 font-medium whitespace-nowrap">
-                                                            <ShieldCheck size={9} /> verified
+                                                    {pro.email_verification_status && (
+                                                        <span className={`inline-flex items-center gap-0.5 text-[9px] rounded px-1 py-0.5 font-medium whitespace-nowrap ${emailStatusColor(pro.email_verification_status)}`}>
+                                                            {pro.is_email_verified && <ShieldCheck size={9} />}
+                                                            {pro.email_verification_status}
                                                         </span>
                                                     )}
                                                 </div>
@@ -919,9 +986,16 @@ export default function ProfessionalsTable() {
                                         <td className="px-2 py-1 border-r border-gray-100 text-gray-700">{pro.designation || "—"}</td>
                                         <td className="px-2 py-1 border-r border-gray-100 text-gray-700 whitespace-nowrap">{pro.qualification || "—"}</td>
                                         <td className="px-2 py-1 border-r border-gray-100">
-                                            {pro.status
-                                                ? <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${STATUS_COLORS[pro.status] || "bg-gray-100 text-gray-600"}`}>{pro.status}</span>
-                                                : <span className="text-gray-400">—</span>}
+                                            <div className="flex flex-col gap-0.5">
+                                                {pro.status
+                                                    ? <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${STATUS_COLORS[pro.status] || "bg-gray-100 text-gray-600"}`}>{pro.status}</span>
+                                                    : <span className="text-gray-400">—</span>}
+                                                {pro.job_match_status && pro.job_match_status !== "Not Matched" && (
+                                                    <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${JOB_MATCH_COLORS[pro.job_match_status] || "bg-gray-100 text-gray-500"}`}>
+                                                        {pro.job_match_status}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="px-2 py-1 border-r border-gray-100 text-gray-700 whitespace-nowrap">
                                             {pro.country ? (
@@ -934,6 +1008,10 @@ export default function ProfessionalsTable() {
                                         <td className="px-2 py-1 border-r border-gray-100 text-gray-500 whitespace-nowrap">{formatDate(pro.createdAt)}</td>
                                         <td className="px-2 py-1">
                                             <div className="flex items-center gap-1.5">
+                                                <button onClick={() => handleToggleShortlist(pro)} title={pro.short_listed ? "Remove from shortlist" : "Add to shortlist"}
+                                                    className={pro.short_listed ? "text-yellow-400 hover:text-yellow-500" : "text-gray-300 hover:text-yellow-400"}>
+                                                    <Star size={11} className={pro.short_listed ? "fill-yellow-400" : ""} />
+                                                </button>
                                                 <button onClick={() => handleEdit(pro)} className="text-gray-500 hover:text-gray-800"><Pencil size={11} /></button>
                                                 {isAdmin && (
                                                     <button onClick={() => handleDelete(pro.id, `${pro.first_name} ${pro.last_name}`)} className="text-red-400 hover:text-red-600">

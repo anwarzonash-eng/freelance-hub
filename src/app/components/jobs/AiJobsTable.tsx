@@ -530,13 +530,25 @@ function JobCard({ job, isAdmin, onEdit, onDelete, onViewJson }: {
             </div>
 
             {/* Meta */}
-            <div className="flex flex-wrap gap-x-3 gap-y-0.5 px-2.5 pb-1.5 text-[10px] text-gray-600">
+            <div className="flex flex-wrap gap-x-3 gap-y-0.5 px-2.5 pb-1 text-[10px] text-gray-600">
                 {rate && <span className="font-medium text-gray-800">{rate}</span>}
                 {job.work_arrangement && <span>{job.work_arrangement}</span>}
                 {job.commitment && <span>{job.commitment}</span>}
-                {(job.location || locations.length > 0) && <span>{job.location || locations.join(", ")}</span>}
+                {job.location && <span>{job.location}</span>}
                 {job.remaining_slots != null && <span>{job.remaining_slots} slots</span>}
             </div>
+
+            {/* Eligibility locations */}
+            {locations.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1 px-2.5 pb-1.5">
+                    <span className="text-[9px] text-gray-400 shrink-0">Eligible:</span>
+                    {locations.map((loc, i) => (
+                        <span key={i} className="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 border border-gray-200 font-medium">
+                            {loc}
+                        </span>
+                    ))}
+                </div>
+            )}
 
             {/* Mercor referral link */}
             {isMercor && job.referral_enabled && job.mercor_referral_link && (

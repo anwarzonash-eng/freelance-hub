@@ -10,7 +10,7 @@ export async function getAllProfessionals(filters?: any) {
 
     if (filters) {
         params.query = {}
-        const keys = ['search_name', 'search_email', 'search_phone', 'designation', 'qualification', 'status', 'country', 'is_email_verified', 'page', 'limit']
+        const keys = ['search_name', 'search_email', 'search_phone', 'designation', 'qualification', 'status', 'country', 'short_listed', 'job_match_status', 'is_email_verified', 'email_verification_status', 'page', 'limit']
         keys.forEach((k) => {
             if (filters[k] !== undefined && filters[k] !== null && filters[k] !== '') {
                 params.query![k] = filters[k]
