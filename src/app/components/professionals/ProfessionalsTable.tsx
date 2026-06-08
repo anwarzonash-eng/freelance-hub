@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Copy, Pencil, Trash2, ChevronDown, ChevronRight, ExternalLink, Plus, MessageCircle, X } from "lucide-react";
+import { Copy, Pencil, Trash2, ChevronDown, ChevronRight, ExternalLink, Plus, MessageCircle, X, ShieldCheck } from "lucide-react";
 import { showAppNotification } from "@/utils/notificationService";
 import {
     getAllProfessionals,
@@ -73,6 +73,7 @@ const EMPTY_FILTERS = {
     qualification: "",
     status: "",
     country: "",
+    is_email_verified: "",
     date_filter: "",
     date_from: "",
     date_to: "",
@@ -433,6 +434,211 @@ function ExpandedRow({ pro, colSpan, onViewEmail }: { pro: any; colSpan: number;
     );
 }
 
+// ─── Verify Emails Modal ──────────────────────────────────────────────────────
+
+function VerifyEmailsModal({
+    selectedProfessionals,
+    onClose,
+    onComplete,
+}: {
+    selectedProfessionals: any[];
+    onClose: () => void;
+    onComplete: () => void;
+}) {
+    const [phase, setPhase] = useState<"setup" | "verifying" | "done" | "error">("setup");
+    const [progress, setProgress] = useState("");
+    const [results, setResults] = useState<{ proId: string; name: string; email: string; classification: string; verified: boolean }[]>([]);
+    const [error, setError] = useState("");
+
+    const verifaliaSid = process.env.NEXT_PUBLIC_VERIFALIA_SID ?? "";
+    const verifaliaPassword = process.env.NEXT_PUBLIC_VERIFALIA_PASSWORD ?? "";
+
+    const eligible = selectedProfessionals.filter((p) => {
+        const emails = Array.isArray(p.emails) ? p.emails : [];
+        return emails.length > 0 && emails[0]?.email;
+    });
+    const skipped = selectedProfessionals.length - eligible.length;
+
+    const handleVerify = async () => {
+        if (!verifaliaSid || !verifaliaPassword) {
+            setError("Verifalia credentials are not configured. Set NEXT_PUBLIC_VERIFALIA_SID and NEXT_PUBLIC_VERIFALIA_PASSWORD in .env and restart the dev server.");
+            return;
+        }
+        if (eligible.length === 0) {
+            setError("No selected professionals have email addresses.");
+            return;
+        }
+        setPhase("verifying");
+        setError("");
+
+        try {
+            const emailToPro = new Map<string, { id: string; name: string }>();
+            for (const pro of eligible) {
+                const emails = Array.isArray(pro.emails) ? pro.emails : [];
+                if (emails[0]?.email) {
+                    emailToPro.set(emails[0].email, { id: pro.id, name: `${pro.first_name} ${pro.last_name}` });
+                }
+            }
+
+            const emailList = [...emailToPro.keys()];
+            setProgress(`Submitting ${emailList.length} email${emailList.length !== 1 ? "s" : ""} to Verifalia…`);
+
+            const authHeader = "Basic " + btoa(`${verifaliaSid}:${verifaliaPassword}`);
+
+            const submitRes = await fetch("https://api.verifalia.com/v2.5/email-validations", {
+                method: "POST",
+                headers: {
+                    Authorization: authHeader,
+                    "Content-Type": "application/json",
+                    Accept: "application/json",
+                },
+                body: JSON.stringify({
+                    entries: emailList.map((e) => ({ inputData: e })),
+                    quality: "Standard",
+                }),
+            });
+
+            if (!submitRes.ok) {
+                const errText = await submitRes.text();
+                throw new Error(`Verifalia returned ${submitRes.status}: ${errText.slice(0, 300)}`);
+            }
+
+            let jobData = await submitRes.json();
+            const jobId: string = jobData.overview?.id;
+            if (!jobId) throw new Error("No job ID returned from Verifalia.");
+
+            let attempts = 0;
+            while (jobData.overview?.status !== "Completed") {
+                if (attempts > 60) throw new Error("Timed out after 3 minutes waiting for Verifalia.");
+                attempts++;
+                setProgress(`Waiting for results… (${jobData.overview?.status ?? "InProgress"})`);
+                await new Promise((r) => setTimeout(r, 3000));
+                const pollRes = await fetch(`https://api.verifalia.com/v2.5/email-validations/${jobId}`, {
+                    headers: { Authorization: authHeader, Accept: "application/json" },
+                });
+                if (!pollRes.ok) {
+                    const errText = await pollRes.text();
+                    throw new Error(`Poll failed ${pollRes.status}: ${errText.slice(0, 200)}`);
+                }
+                jobData = await pollRes.json();
+            }
+
+            const entries: any[] = jobData.entries?.data ?? [];
+            const verificationResults: typeof results = [];
+
+            for (const entry of entries) {
+                const pro = emailToPro.get(entry.inputData);
+                if (pro) {
+                    verificationResults.push({
+                        proId: pro.id,
+                        name: pro.name,
+                        email: entry.inputData,
+                        classification: entry.classification ?? "Unknown",
+                        verified: entry.classification === "Deliverable",
+                    });
+                }
+            }
+
+            setProgress(`Saving ${verificationResults.length} result${verificationResults.length !== 1 ? "s" : ""} to database…`);
+            for (const r of verificationResults) {
+                await updateProfessional({ is_email_verified: r.verified }, r.proId);
+            }
+
+            setResults(verificationResults);
+            setPhase("done");
+            onComplete();
+        } catch (err: any) {
+            setError(err.message || "Unknown error occurred.");
+            setPhase("error");
+        }
+    };
+
+    const classificationColor = (c: string) => {
+        if (c === "Deliverable") return "bg-green-100 text-green-700";
+        if (c === "Undeliverable") return "bg-red-100 text-red-600";
+        if (c === "Risky") return "bg-yellow-100 text-yellow-700";
+        return "bg-gray-100 text-gray-500";
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded border border-gray-200 w-full max-w-lg shadow-lg max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200">
+                    <span className="text-xs font-semibold text-gray-700">Verify Emails via Verifalia</span>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xs">✕</button>
+                </div>
+
+                <div className="p-3 space-y-3">
+                    <div className="text-xs text-gray-600 bg-blue-50 border border-blue-200 rounded p-2 space-y-0.5">
+                        <p><span className="font-medium">{eligible.length}</span> professional{eligible.length !== 1 ? "s" : ""} with emails will be verified.</p>
+                        {skipped > 0 && <p className="text-gray-400">{skipped} skipped — no email address on record.</p>}
+                    </div>
+
+                    {phase === "setup" && (
+                        <>
+                            {(!verifaliaSid || !verifaliaPassword) && (
+                                <div className="text-[10px] text-red-700 bg-red-50 border border-red-200 rounded p-2">
+                                    <p className="font-medium mb-0.5">Credentials not configured</p>
+                                    <p>Set <span className="font-mono">NEXT_PUBLIC_VERIFALIA_SID</span> and <span className="font-mono">NEXT_PUBLIC_VERIFALIA_PASSWORD</span> in your <span className="font-mono">.env</span> file and restart the dev server.</p>
+                                </div>
+                            )}
+                            {error && <p className="text-xs text-red-500">{error}</p>}
+                            <div className="flex justify-end gap-2 pt-1">
+                                <button onClick={onClose} className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50">Cancel</button>
+                                <button onClick={handleVerify} disabled={eligible.length === 0 || !verifaliaSid || !verifaliaPassword}
+                                    className="px-3 py-1 text-xs bg-green-700 text-white rounded hover:bg-green-600 disabled:opacity-50">
+                                    Start Verification
+                                </button>
+                            </div>
+                        </>
+                    )}
+
+                    {phase === "verifying" && (
+                        <div className="text-center py-6 space-y-2">
+                            <div className="text-xs text-gray-600 animate-pulse">{progress}</div>
+                            <div className="text-[10px] text-gray-400">Do not close this window…</div>
+                        </div>
+                    )}
+
+                    {phase === "error" && (
+                        <div className="space-y-2">
+                            <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded p-2 whitespace-pre-wrap break-all">{error}</div>
+                            <div className="flex justify-end gap-2">
+                                <button onClick={() => { setPhase("setup"); setError(""); }} className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50">Try Again</button>
+                                <button onClick={onClose} className="px-3 py-1 text-xs bg-gray-800 text-white rounded hover:bg-gray-700">Close</button>
+                            </div>
+                        </div>
+                    )}
+
+                    {phase === "done" && (
+                        <div className="space-y-2">
+                            <div className="text-xs font-medium text-gray-700">
+                                {results.filter((r) => r.verified).length} verified · {results.filter((r) => !r.verified).length} not verified
+                            </div>
+                            <div className="border border-gray-200 rounded divide-y divide-gray-100 max-h-64 overflow-y-auto">
+                                {results.map((r, i) => (
+                                    <div key={i} className="flex items-center justify-between px-2 py-1.5 text-xs">
+                                        <div>
+                                            <div className="font-medium text-gray-800">{r.name}</div>
+                                            <div className="text-gray-400 text-[10px]">{r.email}</div>
+                                        </div>
+                                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${classificationColor(r.classification)}`}>
+                                            {r.classification}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="flex justify-end">
+                                <button onClick={onClose} className="px-3 py-1 text-xs bg-gray-800 text-white rounded hover:bg-gray-700">Close</button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function ProfessionalsTable() {
@@ -451,6 +657,8 @@ export default function ProfessionalsTable() {
     const [editing, setEditing] = useState<any | null>(null);
     const [expandedId, setExpandedId] = useState<string | null>(null);
     const [emailPreviewPro, setEmailPreviewPro] = useState<any | null>(null);
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [showVerifyModal, setShowVerifyModal] = useState(false);
 
     useEffect(() => { setIsAdmin(getAdminRole()); }, []);
 
@@ -489,13 +697,56 @@ export default function ProfessionalsTable() {
     const handleSaved = () => { load(page, limit, appliedFilters); };
     const toggleExpand = (id: string) => setExpandedId((prev) => (prev === id ? null : id));
 
-    const COL_SPAN = 11;
+    const handleSelectOne = (id: string) => {
+        setSelectedIds((prev) => {
+            const next = new Set(prev);
+            next.has(id) ? next.delete(id) : next.add(id);
+            return next;
+        });
+    };
+
+    const allPageIds = data.map((p) => p.id);
+    const allPageSelected = allPageIds.length > 0 && allPageIds.every((id) => selectedIds.has(id));
+    const somePageSelected = allPageIds.some((id) => selectedIds.has(id));
+
+    const handleSelectAll = () => {
+        if (allPageSelected) {
+            setSelectedIds((prev) => {
+                const next = new Set(prev);
+                allPageIds.forEach((id) => next.delete(id));
+                return next;
+            });
+        } else {
+            setSelectedIds((prev) => {
+                const next = new Set(prev);
+                allPageIds.forEach((id) => next.add(id));
+                return next;
+            });
+        }
+    };
+
+    const selectedProfessionals = data.filter((p) => selectedIds.has(p.id));
+
+    const COL_SPAN = 12;
 
     return (
         <div className="p-3 bg-white min-h-screen">
             {/* Header */}
             <div className="flex items-center justify-between mb-2">
-                <h1 className="text-sm font-semibold text-gray-800">Professionals</h1>
+                <div className="flex items-center gap-3">
+                    <h1 className="text-sm font-semibold text-gray-800">Professionals</h1>
+                    {selectedIds.size > 0 && (
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-xs text-gray-500">{selectedIds.size} selected</span>
+                            <button onClick={() => setShowVerifyModal(true)}
+                                className="flex items-center gap-1 text-xs bg-green-700 text-white px-2 py-1 rounded hover:bg-green-600">
+                                <ShieldCheck size={12} /> Verify Emails
+                            </button>
+                            <button onClick={() => setSelectedIds(new Set())}
+                                className="text-xs text-gray-400 hover:text-gray-600 underline">Clear</button>
+                        </div>
+                    )}
+                </div>
                 <button onClick={handleAdd} className="flex items-center gap-1 text-xs bg-gray-800 text-white px-2 py-1 rounded hover:bg-gray-700">
                     <Plus size={12} /> Add
                 </button>
@@ -565,6 +816,15 @@ export default function ProfessionalsTable() {
                             ))}
                         </select>
                     </div>
+                    <div className="flex flex-col gap-0.5">
+                        <label className="text-[10px] text-gray-400 uppercase">Email Verified</label>
+                        <select name="is_email_verified" value={filters.is_email_verified} onChange={handleFilterChange}
+                            className="border border-gray-300 rounded px-1.5 py-0.5 text-xs focus:outline-none focus:border-gray-500 bg-white">
+                            <option value="">All</option>
+                            <option value="true">Verified</option>
+                            <option value="false">Not Verified</option>
+                        </select>
+                    </div>
                     <button onClick={applyFilters} className="px-3 py-0.5 text-xs bg-gray-800 text-white rounded hover:bg-gray-700 mt-auto">Filter</button>
                     <button onClick={clearFilters} className="px-3 py-0.5 text-xs border border-gray-300 rounded hover:bg-white mt-auto">Clear</button>
                 </div>
@@ -575,6 +835,15 @@ export default function ProfessionalsTable() {
                 <table className="w-full text-xs border-collapse">
                     <thead>
                         <tr className="bg-gray-100 border-b border-gray-300">
+                            <th className="w-6 px-1 py-1 text-center border-r border-gray-200">
+                                <input
+                                    type="checkbox"
+                                    checked={allPageSelected}
+                                    ref={(el) => { if (el) el.indeterminate = somePageSelected && !allPageSelected; }}
+                                    onChange={handleSelectAll}
+                                    className="w-3 h-3 cursor-pointer"
+                                />
+                            </th>
                             <th className="w-6 px-1 py-1 text-left font-medium text-gray-500 border-r border-gray-200">#</th>
                             <th className="w-4 px-1 py-1 border-r border-gray-200"></th>
                             <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Name</th>
@@ -604,7 +873,10 @@ export default function ProfessionalsTable() {
                             const firstPhone = phones[0];
                             return (
                                 <>
-                                    <tr key={pro.id} className={`border-b border-gray-100 hover:bg-gray-50 ${isExpanded ? "bg-blue-50" : ""}`}>
+                                    <tr key={pro.id} className={`border-b border-gray-100 hover:bg-gray-50 ${isExpanded ? "bg-blue-50" : ""} ${selectedIds.has(pro.id) ? "bg-green-50" : ""}`}>
+                                        <td className="px-1 py-1 border-r border-gray-100 text-center">
+                                            <input type="checkbox" checked={selectedIds.has(pro.id)} onChange={() => handleSelectOne(pro.id)} className="w-3 h-3 cursor-pointer" />
+                                        </td>
                                         <td className="px-1 py-1 text-gray-400 border-r border-gray-100 text-center">{rowNum}</td>
                                         <td className="px-1 py-1 border-r border-gray-100 text-center">
                                             <button onClick={() => toggleExpand(pro.id)} className="text-gray-400 hover:text-gray-700">
@@ -615,13 +887,18 @@ export default function ProfessionalsTable() {
                                             {pro.first_name} {pro.last_name}
                                         </td>
                                         {/* Email — show first, indicate more */}
-                                        <td className="px-2 py-1 border-r border-gray-100 max-w-[160px]">
+                                        <td className="px-2 py-1 border-r border-gray-100 max-w-[180px]">
                                             {firstEmail ? (
-                                                <div className="flex items-center gap-1">
+                                                <div className="flex items-center gap-1 flex-wrap">
                                                     <span className={`truncate ${firstEmail.is_bounced ? "line-through text-red-400" : "text-gray-700"}`}>{firstEmail.email}</span>
                                                     {firstEmail.is_bounced && <span className="text-[9px] bg-red-100 text-red-500 rounded px-0.5">!</span>}
                                                     <button onClick={() => copyText(firstEmail.email)} className="shrink-0 text-gray-400 hover:text-gray-600"><Copy size={10} /></button>
                                                     {emails.length > 1 && <span className="text-[9px] text-gray-400">+{emails.length - 1}</span>}
+                                                    {pro.is_email_verified && (
+                                                        <span className="inline-flex items-center gap-0.5 text-[9px] bg-green-100 text-green-700 rounded px-1 py-0.5 font-medium whitespace-nowrap">
+                                                            <ShieldCheck size={9} /> verified
+                                                        </span>
+                                                    )}
                                                 </div>
                                             ) : <span className="text-gray-400">—</span>}
                                         </td>
@@ -711,6 +988,13 @@ export default function ProfessionalsTable() {
 
             {showForm && <ProfessionalFormModal editing={editing} onClose={() => setShowForm(false)} onSaved={handleSaved} />}
             {emailPreviewPro && <EmailPreviewModal pro={emailPreviewPro} onClose={() => setEmailPreviewPro(null)} />}
+            {showVerifyModal && (
+                <VerifyEmailsModal
+                    selectedProfessionals={selectedProfessionals}
+                    onClose={() => setShowVerifyModal(false)}
+                    onComplete={() => { load(page, limit, appliedFilters); setSelectedIds(new Set()); }}
+                />
+            )}
         </div>
     );
 }
