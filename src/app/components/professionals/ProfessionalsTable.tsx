@@ -9,6 +9,7 @@ import {
     updateProfessional,
     deleteProfessional,
 } from "@/app/api_handlers/api/professionals.api";
+import { getCountries, getCountryName } from "@/utils/countries";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -59,6 +60,7 @@ const EMPTY_FORM = {
     linkedin_context: "",
     qualification: "",
     status: "",
+    country: "",
     email_text: "",
     email_subject: "",
 };
@@ -70,6 +72,7 @@ const EMPTY_FILTERS = {
     designation: "",
     qualification: "",
     status: "",
+    country: "",
     date_filter: "",
     date_from: "",
     date_to: "",
@@ -296,10 +299,20 @@ function ProfessionalFormModal({ editing, onClose, onSaved }: { editing: any | n
                     <EmailsField emails={form.emails} onChange={(v) => setForm((p) => ({ ...p, emails: v }))} />
                     <PhonesField phones={form.phones} onChange={(v) => setForm((p) => ({ ...p, phones: v }))} />
 
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-4 gap-2">
                         <CSelect label="Designation" name="designation" value={form.designation} onChange={handleChange} options={DESIGNATIONS} />
                         <CSelect label="Qualification" name="qualification" value={form.qualification} onChange={handleChange} options={QUALIFICATIONS} />
                         <CSelect label="Status" name="status" value={form.status} onChange={handleChange} options={STATUSES} />
+                        <div className="flex flex-col gap-0.5">
+                            <label className="text-[10px] text-gray-500 font-medium uppercase tracking-wide">Country</label>
+                            <select name="country" value={form.country} onChange={handleChange}
+                                className="border border-gray-300 rounded px-1.5 py-1 text-xs focus:outline-none focus:border-gray-500 w-full bg-white">
+                                <option value="">— select —</option>
+                                {getCountries().map((c) => (
+                                    <option key={c.code} value={c.code}>{c.name} ({c.code})</option>
+                                ))}
+                            </select>
+                        </div>
                     </div>
 
                     <CTextarea label="Overall LinkedIn Context" name="linkedin_context" value={form.linkedin_context} onChange={handleChange} rows={3} />
@@ -476,7 +489,7 @@ export default function ProfessionalsTable() {
     const handleSaved = () => { load(page, limit, appliedFilters); };
     const toggleExpand = (id: string) => setExpandedId((prev) => (prev === id ? null : id));
 
-    const COL_SPAN = 10;
+    const COL_SPAN = 11;
 
     return (
         <div className="p-3 bg-white min-h-screen">
@@ -529,7 +542,7 @@ export default function ProfessionalsTable() {
                     </div>
                 )}
 
-                <div className="flex items-end gap-1.5">
+                <div className="flex items-end gap-1.5 flex-wrap">
                     {(["designation", "qualification", "status"] as const).map((f) => (
                         <div key={f} className="flex flex-col gap-0.5">
                             <label className="text-[10px] text-gray-400 uppercase">{f}</label>
@@ -542,6 +555,16 @@ export default function ProfessionalsTable() {
                             </select>
                         </div>
                     ))}
+                    <div className="flex flex-col gap-0.5">
+                        <label className="text-[10px] text-gray-400 uppercase">Country</label>
+                        <select name="country" value={filters.country} onChange={handleFilterChange}
+                            className="border border-gray-300 rounded px-1.5 py-0.5 text-xs focus:outline-none focus:border-gray-500 bg-white">
+                            <option value="">All</option>
+                            {getCountries().map((c) => (
+                                <option key={c.code} value={c.code}>{c.name} ({c.code})</option>
+                            ))}
+                        </select>
+                    </div>
                     <button onClick={applyFilters} className="px-3 py-0.5 text-xs bg-gray-800 text-white rounded hover:bg-gray-700 mt-auto">Filter</button>
                     <button onClick={clearFilters} className="px-3 py-0.5 text-xs border border-gray-300 rounded hover:bg-white mt-auto">Clear</button>
                 </div>
@@ -560,6 +583,7 @@ export default function ProfessionalsTable() {
                             <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Designation</th>
                             <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Qual.</th>
                             <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200">Status</th>
+                            <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200">Country</th>
                             <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Added</th>
                             <th className="px-2 py-1 text-left font-medium text-gray-600">Actions</th>
                         </tr>
@@ -621,6 +645,14 @@ export default function ProfessionalsTable() {
                                             {pro.status
                                                 ? <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${STATUS_COLORS[pro.status] || "bg-gray-100 text-gray-600"}`}>{pro.status}</span>
                                                 : <span className="text-gray-400">—</span>}
+                                        </td>
+                                        <td className="px-2 py-1 border-r border-gray-100 text-gray-700 whitespace-nowrap">
+                                            {pro.country ? (
+                                                <span title={getCountryName(pro.country)} className="inline-flex items-center gap-1">
+                                                    <span className="font-mono text-[10px] bg-gray-100 px-1 rounded">{pro.country}</span>
+                                                    <span className="text-gray-500 text-[10px]">{getCountryName(pro.country)}</span>
+                                                </span>
+                                            ) : <span className="text-gray-400">—</span>}
                                         </td>
                                         <td className="px-2 py-1 border-r border-gray-100 text-gray-500 whitespace-nowrap">{formatDate(pro.createdAt)}</td>
                                         <td className="px-2 py-1">

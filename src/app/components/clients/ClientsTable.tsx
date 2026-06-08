@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Copy, Pencil, Trash2, ChevronDown, ChevronRight, ExternalLink, Plus, MessageCircle, X, Clock, Users, Building2, FileText, Calendar } from "lucide-react";
 import { showAppNotification } from "@/utils/notificationService";
 import { getAllClients, createClient, updateClient, deleteClient, logClientFollowup } from "@/app/api_handlers/api/clients.api";
+import { getCountries, getCountryName } from "@/utils/countries";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -61,7 +62,7 @@ const EMPTY_FORM = {
     first_name: "", last_name: "", linkedin_url: "", designation: "",
     emails: [emptyEmail()],
     phones: [emptyPhone()],
-    company_name: "", website: "", location: "", source: "",
+    company_name: "", website: "", location: "", source: "", country: "",
     job_description: "", proposal_submitted: "", contract_status: "", contract_notes: "",
     key_persons: [] as ReturnType<typeof emptyPerson>[],
     team_members: [] as ReturnType<typeof emptyTeamMember>[],
@@ -71,7 +72,7 @@ const EMPTY_FORM = {
 
 const EMPTY_FILTERS = {
     search_name: "", search_company: "", search_email: "",
-    source: "", contract_status: "",
+    source: "", contract_status: "", country: "",
     date_filter: "", date_from: "", date_to: "",
 };
 
@@ -306,9 +307,19 @@ function ClientFormModal({ editing, onClose, onSaved }: { editing: any | null; o
                                 <CInput label="Company Name" name="company_name" value={form.company_name} onChange={handleChange} />
                                 <CInput label="Website" name="website" value={form.website} onChange={handleChange} placeholder="https://..." />
                             </div>
-                            <div className="grid grid-cols-2 gap-2">
+                            <div className="grid grid-cols-3 gap-2">
                                 <CInput label="Location" name="location" value={form.location} onChange={handleChange} />
                                 <CSelect label="Source" name="source" value={form.source} onChange={handleChange} options={SOURCES} />
+                                <div className="flex flex-col gap-0.5">
+                                    <label className="text-[10px] text-gray-500 font-medium uppercase tracking-wide">Country</label>
+                                    <select name="country" value={form.country} onChange={handleChange}
+                                        className="border border-gray-300 rounded px-1.5 py-1 text-xs focus:outline-none focus:border-gray-500 w-full bg-white">
+                                        <option value="">— select —</option>
+                                        {getCountries().map((c) => (
+                                            <option key={c.code} value={c.code}>{c.name} ({c.code})</option>
+                                        ))}
+                                    </select>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -663,7 +674,7 @@ export default function ClientsTable() {
                     </div>
                 )}
 
-                <div className="flex items-end gap-1.5">
+                <div className="flex items-end gap-1.5 flex-wrap">
                     <div className="flex flex-col gap-0.5">
                         <label className="text-[10px] text-gray-400 uppercase">Source</label>
                         <select name="source" value={filters.source} onChange={handleFilterChange}
@@ -678,6 +689,16 @@ export default function ClientsTable() {
                             className="border border-gray-300 rounded px-1.5 py-0.5 text-xs focus:outline-none bg-white">
                             <option value="">All</option>
                             {CONTRACT_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                        <label className="text-[10px] text-gray-400 uppercase">Country</label>
+                        <select name="country" value={filters.country} onChange={handleFilterChange}
+                            className="border border-gray-300 rounded px-1.5 py-0.5 text-xs focus:outline-none bg-white">
+                            <option value="">All</option>
+                            {getCountries().map((c) => (
+                                <option key={c.code} value={c.code}>{c.name} ({c.code})</option>
+                            ))}
                         </select>
                     </div>
                     <button onClick={applyFilters} className="px-3 py-0.5 text-xs bg-gray-800 text-white rounded hover:bg-gray-700 mt-auto">Filter</button>
@@ -696,6 +717,7 @@ export default function ClientsTable() {
                             <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200">Company</th>
                             <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200">Email</th>
                             <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200">Source</th>
+                            <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200">Country</th>
                             <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Contract</th>
                             <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Next Follow-up</th>
                             <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Added</th>
@@ -743,6 +765,14 @@ export default function ClientsTable() {
                                             {client.source
                                                 ? <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${SOURCE_COLORS[client.source] || "bg-gray-100 text-gray-600"}`}>{client.source}</span>
                                                 : <span className="text-gray-400">—</span>}
+                                        </td>
+                                        <td className="px-2 py-1 border-r border-gray-100 whitespace-nowrap">
+                                            {client.country ? (
+                                                <span title={getCountryName(client.country)} className="inline-flex items-center gap-1">
+                                                    <span className="font-mono text-[10px] bg-gray-100 px-1 rounded">{client.country}</span>
+                                                    <span className="text-gray-500 text-[10px]">{getCountryName(client.country)}</span>
+                                                </span>
+                                            ) : <span className="text-gray-400">—</span>}
                                         </td>
                                         <td className="px-2 py-1 border-r border-gray-100">
                                             {client.contract_status

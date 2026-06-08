@@ -9,7 +9,7 @@ export async function getAllClients(filters?: any) {
     const params: IApiParams = {}
     if (filters) {
         params.query = {}
-        const keys = ['search_name', 'search_company', 'search_email', 'source', 'contract_status', 'date_filter', 'date_from', 'date_to', 'page', 'limit']
+        const keys = ['search_name', 'search_company', 'search_email', 'source', 'contract_status', 'country', 'date_filter', 'date_from', 'date_to', 'page', 'limit']
         keys.forEach((k) => {
             if (filters[k] !== undefined && filters[k] !== null && filters[k] !== '') {
                 params.query![k] = filters[k]
