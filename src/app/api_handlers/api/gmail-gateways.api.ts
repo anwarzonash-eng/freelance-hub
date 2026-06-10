@@ -13,7 +13,7 @@ export async function createGmailGateway(payload: { label: string }) {
     return await apiClient(GmailGatewaysAPIRoutes.CREATE, ApiMethod.POST, payload, undefined, undefined, true, true)
 }
 
-export async function updateGmailGateway(id: string, payload: { label: string }) {
+export async function updateGmailGateway(id: string, payload: { label: string; max_emails_per_day?: number | null }) {
     const params: IApiParams = { path: { id } }
     return await apiClient(GmailGatewaysAPIRoutes.UPDATE, ApiMethod.PUT, payload, params, undefined, true, true)
 }

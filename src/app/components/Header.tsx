@@ -215,6 +215,11 @@ const navItems: NavItem[] = [
         icon: "Professionals",
       },
       {
+        title: "Email Campaigns",
+        href: "/professionals/email-campaigns",
+        icon: "EmailGateway",
+      },
+      {
         title: "Clients",
         href: "/clients",
         icon: "Clients",
@@ -301,6 +306,7 @@ export function getAllNavRoles(
     { label: "Best Match", value: "/best-match" },
     { label: "AI Jobs", value: "/jobs/ai-jobs" },
     { label: "Professionals", value: "/professionals" },
+    { label: "Email Campaigns", value: "/professionals/email-campaigns" },
     { label: "Clients", value: "/clients" },
     { label: "Email Gateways", value: "/settings/email-gateways" },
     { label: "Referral Settings", value: "/settings/referral" },

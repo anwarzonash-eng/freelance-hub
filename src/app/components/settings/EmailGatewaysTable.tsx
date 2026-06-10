@@ -23,6 +23,7 @@ interface Gateway {
     is_authorized: boolean;
     last_used_at: string | null;
     createdAt: string;
+    max_emails_per_day: number | null;
 }
 
 // ─── Inbox Modal ──────────────────────────────────────────────────────────────
@@ -118,6 +119,11 @@ function GatewayRow({
             <td className="px-3 py-2 border-r border-gray-100">
                 <p className="text-xs font-medium text-gray-800">{gw.label}</p>
                 {gw.email && <p className="text-[10px] text-gray-400">{gw.email}</p>}
+                {gw.max_emails_per_day != null && (
+                    <p className="text-[10px] text-indigo-500 font-medium mt-0.5">
+                        Max {gw.max_emails_per_day}/day
+                    </p>
+                )}
             </td>
             <td className="px-3 py-2 border-r border-gray-100 text-center">
                 {gw.is_authorized ? (
@@ -177,13 +183,21 @@ function GatewayRow({
 
 function GatewayFormModal({ editing, onClose, onSaved }: { editing: Gateway | null; onClose: () => void; onSaved: () => void }) {
     const [label, setLabel] = useState(editing?.label || "");
+    const [maxPerDay, setMaxPerDay] = useState<string>(
+        editing?.max_emails_per_day != null ? String(editing.max_emails_per_day) : ""
+    );
     const [saving, setSaving] = useState(false);
 
     const handleSave = async () => {
         if (!label.trim()) { showAppNotification("error", "Validation", "Label is required."); return; }
+        const parsedMax = maxPerDay.trim() === "" ? null : parseInt(maxPerDay, 10);
+        if (maxPerDay.trim() !== "" && (isNaN(parsedMax!) || parsedMax! <= 0)) {
+            showAppNotification("error", "Validation", "Max emails per day must be a positive number.");
+            return;
+        }
         setSaving(true);
         const res = editing?.id
-            ? await updateGmailGateway(editing.id, { label })
+            ? await updateGmailGateway(editing.id, { label, max_emails_per_day: parsedMax })
             : await createGmailGateway({ label });
         setSaving(false);
         if (res) { onSaved(); onClose(); }
@@ -196,10 +210,28 @@ function GatewayFormModal({ editing, onClose, onSaved }: { editing: Gateway | nu
                     <span className="text-xs font-semibold text-gray-700">{editing?.id ? "Edit Gateway" : "Add Gmail Gateway"}</span>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
                 </div>
-                <div className="p-3">
-                    <label className="text-[10px] text-gray-500 font-medium uppercase tracking-wide block mb-0.5">Label *</label>
-                    <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder='e.g. "Business Outreach"'
-                        className="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-gray-500 mb-2" />
+                <div className="p-3 space-y-2">
+                    <div>
+                        <label className="text-[10px] text-gray-500 font-medium uppercase tracking-wide block mb-0.5">Label *</label>
+                        <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder='e.g. "Business Outreach"'
+                            className="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-gray-500" />
+                    </div>
+                    <div>
+                        <label className="text-[10px] text-gray-500 font-medium uppercase tracking-wide block mb-0.5">Max emails per day</label>
+                        <input
+                            type="number"
+                            min={1}
+                            step={1}
+                            value={maxPerDay}
+                            onChange={(e) => {
+                                const v = e.target.value;
+                                if (v === "" || (/^\d+$/.test(v) && parseInt(v, 10) > 0)) setMaxPerDay(v);
+                            }}
+                            placeholder="e.g. 100 (leave blank for unlimited)"
+                            className="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-gray-500"
+                        />
+                        <p className="text-[10px] text-gray-400 mt-0.5">Leave blank for unlimited.</p>
+                    </div>
                     {!editing?.id && (
                         <p className="text-[10px] text-gray-400 bg-gray-50 rounded p-2 leading-relaxed">
                             After creating, click <strong>Authorize</strong> to connect your Gmail account via Google OAuth.

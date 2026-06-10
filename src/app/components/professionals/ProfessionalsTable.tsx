@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Copy, Pencil, Trash2, ChevronDown, ChevronRight, ExternalLink, Plus, MessageCircle, X, ShieldCheck, Star } from "lucide-react";
+import { Copy, Pencil, Trash2, ChevronDown, ChevronRight, ExternalLink, Plus, MessageCircle, X, ShieldCheck, Star, Briefcase, Mail, Globe, Wifi } from "lucide-react";
 import { showAppNotification } from "@/utils/notificationService";
 import {
     getAllProfessionals,
@@ -10,6 +10,12 @@ import {
     deleteProfessional,
 } from "@/app/api_handlers/api/professionals.api";
 import { getCountries, getCountryName } from "@/utils/countries";
+import MatchJobsModal from "./MatchJobsModal";
+import CourtesyEmailModal from "./CourtesyEmailModal";
+import PlatformInviteModal from "./PlatformInviteModal";
+import EmailCampaignsViewer from "./EmailCampaignsViewer";
+import AssignGatewayModal from "./AssignGatewayModal";
+import { getAllGmailGateways } from "@/app/api_handlers/api/gmail-gateways.api";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -22,6 +28,16 @@ const JOB_MATCH_COLORS: Record<string, string> = {
 const QUALIFICATIONS = ["Graduation", "Master", "MPhil", "PHD"];
 const STATUSES = ["Email Sent", "Positive Response", "Negative Response", "Hate Response", "Joined"];
 const LIMIT_OPTIONS = [50, 100, 150];
+
+const EMAIL_TYPE_BADGES: Record<string, { label: string; bg: string; text: string }> = {
+    courtesy_email:       { label: "Ce", bg: "bg-blue-100",   text: "text-blue-700"   },
+    mercor_platform_join: { label: "Me", bg: "bg-violet-100", text: "text-violet-700" },
+    micro1_platform_join: { label: "Mi", bg: "bg-sky-100",    text: "text-sky-700"    },
+    aligner_platform_join:{ label: "Al", bg: "bg-teal-100",   text: "text-teal-700"   },
+    outlier_platform_join:{ label: "Ou", bg: "bg-orange-100", text: "text-orange-700" },
+    mercor_job:           { label: "Mj", bg: "bg-violet-200", text: "text-violet-800" },
+    aligner_job:          { label: "Aj", bg: "bg-teal-200",   text: "text-teal-800"   },
+};
 
 const STATUS_COLORS: Record<string, string> = {
     "Email Sent": "bg-blue-100 text-blue-700",
@@ -87,6 +103,8 @@ const EMPTY_FILTERS = {
     date_filter: "",
     date_from: "",
     date_to: "",
+    email_types: "",
+    email_gateway_ids: "",
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -681,8 +699,23 @@ export default function ProfessionalsTable() {
     const [emailPreviewPro, setEmailPreviewPro] = useState<any | null>(null);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [showVerifyModal, setShowVerifyModal] = useState(false);
+    const [showMatchModal, setShowMatchModal] = useState(false);
+    const [showEmailModal, setShowEmailModal] = useState(false);
+    const [showPlatformModal, setShowPlatformModal] = useState(false);
+    const [showAssignGatewayModal, setShowAssignGatewayModal] = useState(false);
+    const [viewingEmailsPro, setViewingEmailsPro] = useState<any>(null);
+    const [showEmailTypeDropdown, setShowEmailTypeDropdown] = useState(false);
+    const [showGatewayDropdown, setShowGatewayDropdown] = useState(false);
+    const [gateways, setGateways] = useState<any[]>([]);
 
     useEffect(() => { setIsAdmin(getAdminRole()); }, []);
+
+    useEffect(() => {
+        getAllGmailGateways().then((res: any) => {
+            const list = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
+            setGateways(list);
+        });
+    }, []);
 
     const load = useCallback(async (pg: number, lim: number, af: typeof EMPTY_FILTERS) => {
         setLoading(true);
@@ -764,7 +797,7 @@ export default function ProfessionalsTable() {
         load(page, limit, appliedFilters);
     };
 
-    const COL_SPAN = 12;
+    const COL_SPAN = isAdmin ? 9 : 8;
 
     return (
         <div className="p-3 bg-white min-h-screen">
@@ -772,19 +805,33 @@ export default function ProfessionalsTable() {
             <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-3">
                     <h1 className="text-sm font-semibold text-gray-800">Professionals</h1>
-                    {selectedIds.size > 0 && (
+                    {isAdmin && selectedIds.size > 0 && (
                         <div className="flex items-center gap-1.5">
                             <span className="text-xs text-gray-500">{selectedIds.size} selected</span>
                             <button onClick={() => setShowVerifyModal(true)}
                                 className="flex items-center gap-1 text-xs bg-green-700 text-white px-2 py-1 rounded hover:bg-green-600">
                                 <ShieldCheck size={12} /> Verify Emails
                             </button>
-                            {isAdmin && (
-                                <button onClick={handleBulkDelete}
-                                    className="flex items-center gap-1 text-xs bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700">
-                                    <Trash2 size={12} /> Delete Selected
-                                </button>
-                            )}
+                            <button onClick={() => setShowMatchModal(true)}
+                                className="flex items-center gap-1 text-xs bg-indigo-600 text-white px-2 py-1 rounded hover:bg-indigo-700">
+                                <Briefcase size={12} /> Match Jobs
+                            </button>
+                            <button onClick={() => setShowEmailModal(true)}
+                                className="flex items-center gap-1 text-xs bg-teal-600 text-white px-2 py-1 rounded hover:bg-teal-700">
+                                <Mail size={12} /> Courtesy Email
+                            </button>
+                            <button onClick={() => setShowPlatformModal(true)}
+                                className="flex items-center gap-1 text-xs bg-violet-600 text-white px-2 py-1 rounded hover:bg-violet-700">
+                                <Globe size={12} /> Platform Invite
+                            </button>
+                            <button onClick={() => setShowAssignGatewayModal(true)}
+                                className="flex items-center gap-1 text-xs bg-indigo-500 text-white px-2 py-1 rounded hover:bg-indigo-600">
+                                <Wifi size={12} /> Assign Gateway
+                            </button>
+                            <button onClick={handleBulkDelete}
+                                className="flex items-center gap-1 text-xs bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700">
+                                <Trash2 size={12} /> Delete Selected
+                            </button>
                             <button onClick={() => setSelectedIds(new Set())}
                                 className="text-xs text-gray-400 hover:text-gray-600 underline">Clear</button>
                         </div>
@@ -858,14 +905,16 @@ export default function ProfessionalsTable() {
                             <option value="false">Not Shortlisted</option>
                         </select>
                     </div>
-                    <div className="flex flex-col gap-0.5">
-                        <label className="text-[10px] text-gray-400 uppercase">Job Match</label>
-                        <select name="job_match_status" value={filters.job_match_status} onChange={handleFilterChange}
-                            className="border border-gray-300 rounded px-1.5 py-0.5 text-xs focus:outline-none focus:border-gray-500 bg-white">
-                            <option value="">All</option>
-                            {JOB_MATCH_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                    </div>
+                    {isAdmin && (
+                        <div className="flex flex-col gap-0.5">
+                            <label className="text-[10px] text-gray-400 uppercase">Job Match</label>
+                            <select name="job_match_status" value={filters.job_match_status} onChange={handleFilterChange}
+                                className="border border-gray-300 rounded px-1.5 py-0.5 text-xs focus:outline-none focus:border-gray-500 bg-white">
+                                <option value="">All</option>
+                                {JOB_MATCH_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                        </div>
+                    )}
                     <div className="flex flex-col gap-0.5">
                         <label className="text-[10px] text-gray-400 uppercase">Country</label>
                         <select name="country" value={filters.country} onChange={handleFilterChange}
@@ -876,18 +925,124 @@ export default function ProfessionalsTable() {
                             ))}
                         </select>
                     </div>
-                    <div className="flex flex-col gap-0.5">
-                        <label className="text-[10px] text-gray-400 uppercase">Email Status</label>
-                        <select name="email_verification_status" value={filters.email_verification_status} onChange={handleFilterChange}
-                            className="border border-gray-300 rounded px-1.5 py-0.5 text-xs focus:outline-none focus:border-gray-500 bg-white">
-                            <option value="">All</option>
-                            <option value="Deliverable">Deliverable</option>
-                            <option value="Undeliverable">Undeliverable</option>
-                            <option value="Risky">Risky</option>
-                            <option value="Unknown">Unknown</option>
-                            <option value="not_checked">Not Checked</option>
-                        </select>
-                    </div>
+                    {isAdmin && (
+                        <div className="flex flex-col gap-0.5">
+                            <label className="text-[10px] text-gray-400 uppercase">Email Status</label>
+                            <select name="email_verification_status" value={filters.email_verification_status} onChange={handleFilterChange}
+                                className="border border-gray-300 rounded px-1.5 py-0.5 text-xs focus:outline-none focus:border-gray-500 bg-white">
+                                <option value="">All</option>
+                                <option value="Deliverable">Deliverable</option>
+                                <option value="Undeliverable">Undeliverable</option>
+                                <option value="Risky">Risky</option>
+                                <option value="Unknown">Unknown</option>
+                                <option value="not_checked">Not Checked</option>
+                            </select>
+                        </div>
+                    )}
+                    {/* Email Type multiselect — admin only */}
+                    {isAdmin && (
+                        <div className="relative mt-auto">
+                            <button
+                                onClick={() => setShowEmailTypeDropdown(p => !p)}
+                                className="flex items-center gap-1 border border-gray-300 rounded px-2 py-1 text-xs bg-white hover:bg-gray-50 text-gray-700"
+                            >
+                                Email Type
+                                {filters.email_types && filters.email_types !== "" ? ` (${filters.email_types.split(',').length})` : ""}
+                                <ChevronDown size={11} className="text-gray-400" />
+                            </button>
+                            {showEmailTypeDropdown && (
+                                <div className="absolute z-20 top-full mt-1 left-0 bg-white border border-gray-200 rounded shadow-lg p-2 space-y-1 min-w-[180px]">
+                                    {[
+                                        { value: "no_emails", label: "No Emails" },
+                                        { value: "courtesy_email", label: "Courtesy Email" },
+                                        { value: "mercor_platform_join", label: "Mercor Invite" },
+                                        { value: "micro1_platform_join", label: "Micro1 Invite" },
+                                        { value: "aligner_platform_join", label: "Aligner Invite" },
+                                        { value: "outlier_platform_join", label: "Outlier Invite" },
+                                        { value: "mercor_job", label: "Mercor Job" },
+                                        { value: "aligner_job", label: "Aligner Job" },
+                                    ].map(opt => {
+                                        const selected = (filters.email_types ?? "").split(',').filter(Boolean).includes(opt.value)
+                                        return (
+                                            <label key={opt.value} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selected}
+                                                    onChange={() => {
+                                                        const current = (filters.email_types ?? "").split(',').filter(Boolean)
+                                                        const next = selected
+                                                            ? current.filter(v => v !== opt.value)
+                                                            : [...current, opt.value]
+                                                        setFilters((f: any) => ({ ...f, email_types: next.join(',') }))
+                                                    }}
+                                                    className="w-3 h-3"
+                                                />
+                                                <span className="text-xs text-gray-700">{opt.label}</span>
+                                            </label>
+                                        )
+                                    })}
+                                    <div className="border-t border-gray-100 pt-1 mt-1">
+                                        <button onClick={() => { setFilters((f: any) => ({ ...f, email_types: "" })); setShowEmailTypeDropdown(false) }}
+                                            className="text-[10px] text-gray-400 hover:text-gray-700 w-full text-left">Clear</button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                    {/* Gateway multiselect — admin only */}
+                    {isAdmin && (
+                        <div className="relative mt-auto">
+                            <button
+                                onClick={() => setShowGatewayDropdown(p => !p)}
+                                className="flex items-center gap-1 border border-gray-300 rounded px-2 py-1 text-xs bg-white hover:bg-gray-50 text-gray-700"
+                            >
+                                Gateway
+                                {filters.email_gateway_ids && filters.email_gateway_ids !== "" ? ` (${filters.email_gateway_ids.split(',').length})` : ""}
+                                <ChevronDown size={11} className="text-gray-400" />
+                            </button>
+                            {showGatewayDropdown && (
+                                <div className="absolute z-20 top-full mt-1 left-0 bg-white border border-gray-200 rounded shadow-lg p-2 space-y-1 min-w-[180px]">
+                                    <label className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded">
+                                        <input
+                                            type="checkbox"
+                                            checked={(filters.email_gateway_ids ?? "").split(',').filter(Boolean).includes('none')}
+                                            onChange={() => {
+                                                const current = (filters.email_gateway_ids ?? "").split(',').filter(Boolean)
+                                                const selected = current.includes('none')
+                                                const next = selected ? current.filter(v => v !== 'none') : [...current, 'none']
+                                                setFilters((f: any) => ({ ...f, email_gateway_ids: next.join(',') }))
+                                            }}
+                                            className="w-3 h-3"
+                                        />
+                                        <span className="text-xs text-gray-500 italic">No Gateway</span>
+                                    </label>
+                                    {gateways.map(gw => {
+                                        const selected = (filters.email_gateway_ids ?? "").split(',').filter(Boolean).includes(gw.id)
+                                        return (
+                                            <label key={gw.id} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selected}
+                                                    onChange={() => {
+                                                        const current = (filters.email_gateway_ids ?? "").split(',').filter(Boolean)
+                                                        const next = selected ? current.filter(v => v !== gw.id) : [...current, gw.id]
+                                                        setFilters((f: any) => ({ ...f, email_gateway_ids: next.join(',') }))
+                                                    }}
+                                                    className="w-3 h-3"
+                                                />
+                                                <span className="text-xs text-gray-700">{gw.label}</span>
+                                                {gw.email && <span className="text-[10px] text-gray-400 truncate max-w-[80px]">{gw.email}</span>}
+                                            </label>
+                                        )
+                                    })}
+                                    <div className="border-t border-gray-100 pt-1 mt-1">
+                                        <button onClick={() => { setFilters((f: any) => ({ ...f, email_gateway_ids: "" })); setShowGatewayDropdown(false) }}
+                                            className="text-[10px] text-gray-400 hover:text-gray-700 w-full text-left">Clear</button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
                     <button onClick={applyFilters} className="px-3 py-0.5 text-xs bg-gray-800 text-white rounded hover:bg-gray-700 mt-auto">Filter</button>
                     <button onClick={clearFilters} className="px-3 py-0.5 text-xs border border-gray-300 rounded hover:bg-white mt-auto">Clear</button>
                 </div>
@@ -898,24 +1053,23 @@ export default function ProfessionalsTable() {
                 <table className="w-full text-xs border-collapse">
                     <thead>
                         <tr className="bg-gray-100 border-b border-gray-300">
-                            <th className="w-6 px-1 py-1 text-center border-r border-gray-200">
-                                <input
-                                    type="checkbox"
-                                    checked={allPageSelected}
-                                    ref={(el) => { if (el) el.indeterminate = somePageSelected && !allPageSelected; }}
-                                    onChange={handleSelectAll}
-                                    className="w-3 h-3 cursor-pointer"
-                                />
-                            </th>
+                            {isAdmin && (
+                                <th className="w-6 px-1 py-1 text-center border-r border-gray-200">
+                                    <input
+                                        type="checkbox"
+                                        checked={allPageSelected}
+                                        ref={(el) => { if (el) el.indeterminate = somePageSelected && !allPageSelected; }}
+                                        onChange={handleSelectAll}
+                                        className="w-3 h-3 cursor-pointer"
+                                    />
+                                </th>
+                            )}
                             <th className="w-6 px-1 py-1 text-left font-medium text-gray-500 border-r border-gray-200">#</th>
                             <th className="w-4 px-1 py-1 border-r border-gray-200"></th>
                             <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Name</th>
-                            <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200">Email</th>
-                            <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200">Phone</th>
-                            <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Designation</th>
-                            <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Qual.</th>
+                            <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Contact</th>
+                            <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Profile</th>
                             <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200">Status</th>
-                            <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200">Country</th>
                             <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Added</th>
                             <th className="px-2 py-1 text-left font-medium text-gray-600">Actions</th>
                         </tr>
@@ -937,82 +1091,128 @@ export default function ProfessionalsTable() {
                             return (
                                 <>
                                     <tr key={pro.id} className={`border-b border-gray-100 hover:bg-gray-50 ${isExpanded ? "bg-blue-50" : ""} ${selectedIds.has(pro.id) ? "bg-green-50" : ""}`}>
-                                        <td className="px-1 py-1 border-r border-gray-100 text-center">
-                                            <input type="checkbox" checked={selectedIds.has(pro.id)} onChange={() => handleSelectOne(pro.id)} className="w-3 h-3 cursor-pointer" />
-                                        </td>
+                                        {isAdmin && (
+                                            <td className="px-1 py-1 border-r border-gray-100 text-center">
+                                                <input type="checkbox" checked={selectedIds.has(pro.id)} onChange={() => handleSelectOne(pro.id)} className="w-3 h-3 cursor-pointer" />
+                                            </td>
+                                        )}
                                         <td className="px-1 py-1 text-gray-400 border-r border-gray-100 text-center">{rowNum}</td>
                                         <td className="px-1 py-1 border-r border-gray-100 text-center">
                                             <button onClick={() => toggleExpand(pro.id)} className="text-gray-400 hover:text-gray-700">
                                                 {isExpanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
                                             </button>
                                         </td>
-                                        <td className="px-2 py-1 border-r border-gray-100 whitespace-nowrap font-medium text-gray-800">
+                                        {/* Name */}
+                                        <td className="px-2 py-1.5 border-r border-gray-100 whitespace-nowrap font-medium text-gray-800">
                                             <div className="flex items-center gap-1">
-                                                {pro.short_listed && <Star size={11} className="text-yellow-400 fill-yellow-400 shrink-0" />}
-                                                {pro.first_name} {pro.last_name}
+                                                {pro.short_listed && <Star size={10} className="text-yellow-400 fill-yellow-400 shrink-0" />}
+                                                <span className="text-xs">{pro.first_name} {pro.last_name}</span>
                                             </div>
                                         </td>
-                                        {/* Email — show first, indicate more */}
-                                        <td className="px-2 py-1 border-r border-gray-100 max-w-[180px]">
-                                            {firstEmail ? (
-                                                <div className="flex items-center gap-1 flex-wrap">
-                                                    <span className={`truncate ${firstEmail.is_bounced ? "line-through text-red-400" : "text-gray-700"}`}>{firstEmail.email}</span>
-                                                    {firstEmail.is_bounced && <span className="text-[9px] bg-red-100 text-red-500 rounded px-0.5">!</span>}
-                                                    <button onClick={() => copyText(firstEmail.email)} className="shrink-0 text-gray-400 hover:text-gray-600"><Copy size={10} /></button>
-                                                    {emails.length > 1 && <span className="text-[9px] text-gray-400">+{emails.length - 1}</span>}
-                                                    {pro.email_verification_status && (
-                                                        <span className={`inline-flex items-center gap-0.5 text-[9px] rounded px-1 py-0.5 font-medium whitespace-nowrap ${emailStatusColor(pro.email_verification_status)}`}>
-                                                            {pro.is_email_verified && <ShieldCheck size={9} />}
-                                                            {pro.email_verification_status}
+                                        {/* Contact: email + phone stacked */}
+                                        <td className="px-2 py-1.5 border-r border-gray-100">
+                                            <div className="space-y-0.5">
+                                                {firstEmail ? (
+                                                    <div className="flex items-center gap-1">
+                                                        <span className={`text-[10px] truncate max-w-[140px] ${firstEmail.is_bounced ? "line-through text-red-400" : "text-gray-700"}`}>
+                                                            {firstEmail.email}
                                                         </span>
-                                                    )}
-                                                </div>
-                                            ) : <span className="text-gray-400">—</span>}
+                                                        {isAdmin && pro.email_verification_status && (
+                                                            <span title={pro.email_verification_status}
+                                                                className={`text-[8px] font-bold px-0.5 rounded ${emailStatusColor(pro.email_verification_status)}`}>
+                                                                {pro.email_verification_status[0]}
+                                                            </span>
+                                                        )}
+                                                        <button onClick={() => copyText(firstEmail.email)} className="text-gray-300 hover:text-gray-600 shrink-0"><Copy size={9} /></button>
+                                                        {emails.length > 1 && <span className="text-[9px] text-gray-400">+{emails.length - 1}</span>}
+                                                    </div>
+                                                ) : null}
+                                                {firstPhone ? (
+                                                    <div className="flex items-center gap-1">
+                                                        {firstPhone.is_whatsapp
+                                                            ? <a href={whatsappUrl(firstPhone.phone)} target="_blank" rel="noopener noreferrer"
+                                                                className="flex items-center gap-0.5 text-[10px] text-green-700 hover:underline">
+                                                                <MessageCircle size={9} />{firstPhone.phone}
+                                                              </a>
+                                                            : <span className="text-[10px] text-gray-600">{firstPhone.phone}</span>}
+                                                        <button onClick={() => copyText(firstPhone.phone)} className="text-gray-300 hover:text-gray-600 shrink-0"><Copy size={9} /></button>
+                                                        {phones.length > 1 && <span className="text-[9px] text-gray-400">+{phones.length - 1}</span>}
+                                                    </div>
+                                                ) : null}
+                                                {!firstEmail && !firstPhone && <span className="text-gray-400 text-[10px]">—</span>}
+                                            </div>
                                         </td>
-                                        {/* Phone — show first */}
-                                        <td className="px-2 py-1 border-r border-gray-100 whitespace-nowrap">
-                                            {firstPhone ? (
-                                                <div className="flex items-center gap-1">
-                                                    {firstPhone.is_whatsapp
-                                                        ? <a href={whatsappUrl(firstPhone.phone)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-0.5 text-green-700 hover:underline">
-                                                            <MessageCircle size={10} />{firstPhone.phone}
-                                                        </a>
-                                                        : <span className="text-gray-700">{firstPhone.phone}</span>}
-                                                    <button onClick={() => copyText(firstPhone.phone)} className="text-gray-400 hover:text-gray-600"><Copy size={10} /></button>
-                                                    {phones.length > 1 && <span className="text-[9px] text-gray-400">+{phones.length - 1}</span>}
-                                                </div>
-                                            ) : <span className="text-gray-400">—</span>}
+                                        {/* Profile: designation + qual + country stacked */}
+                                        <td className="px-2 py-1.5 border-r border-gray-100">
+                                            <div className="space-y-0.5">
+                                                {pro.designation && <div className="text-[10px] text-gray-700 font-medium">{pro.designation}</div>}
+                                                {pro.qualification && <div className="text-[10px] text-gray-500">{pro.qualification}</div>}
+                                                {pro.country && (
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="font-mono text-[9px] bg-gray-100 px-0.5 rounded">{pro.country}</span>
+                                                        <span className="text-[9px] text-gray-400">{getCountryName(pro.country)}</span>
+                                                    </div>
+                                                )}
+                                                {!pro.designation && !pro.qualification && !pro.country && <span className="text-gray-400 text-[10px]">—</span>}
+                                            </div>
                                         </td>
-                                        <td className="px-2 py-1 border-r border-gray-100 text-gray-700">{pro.designation || "—"}</td>
-                                        <td className="px-2 py-1 border-r border-gray-100 text-gray-700 whitespace-nowrap">{pro.qualification || "—"}</td>
-                                        <td className="px-2 py-1 border-r border-gray-100">
-                                            <div className="flex flex-col gap-0.5">
+                                        {/* Status: compact badges + email type icons */}
+                                        <td className="px-2 py-1.5 border-r border-gray-100">
+                                            <div className="space-y-0.5">
                                                 {pro.status
-                                                    ? <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${STATUS_COLORS[pro.status] || "bg-gray-100 text-gray-600"}`}>{pro.status}</span>
-                                                    : <span className="text-gray-400">—</span>}
-                                                {pro.job_match_status && pro.job_match_status !== "Not Matched" && (
-                                                    <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${JOB_MATCH_COLORS[pro.job_match_status] || "bg-gray-100 text-gray-500"}`}>
-                                                        {pro.job_match_status}
-                                                    </span>
+                                                    ? <span className={`inline-block px-1 py-0 rounded text-[9px] font-medium whitespace-nowrap ${STATUS_COLORS[pro.status] || "bg-gray-100 text-gray-600"}`}>{pro.status}</span>
+                                                    : null}
+                                                {isAdmin && pro.job_match_status && pro.job_match_status !== "Not Matched" && (
+                                                    <div>
+                                                        <span className={`inline-block px-1 py-0 rounded text-[9px] font-medium whitespace-nowrap ${JOB_MATCH_COLORS[pro.job_match_status] || "bg-gray-100 text-gray-500"}`}>
+                                                            {pro.matched_jobs_count > 0 ? `${pro.matched_jobs_count} matched` : "Matched"}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                {/* Email campaign type icons — admin only */}
+                                                {isAdmin && Array.isArray(pro.email_campaigns) && pro.email_campaigns.length > 0 && (
+                                                    <div className="flex items-center gap-0.5 flex-wrap">
+                                                        {pro.email_campaigns.map((ec: any, i: number) => {
+                                                            const badge = EMAIL_TYPE_BADGES[ec.email_type];
+                                                            const tip = `${(ec.email_type || "").replace(/_/g, " ")} · ${(ec.status || "").replace(/_/g, " ")}`;
+                                                            return (
+                                                                <span key={i} title={tip}
+                                                                    className={`text-[8px] font-bold px-1 py-0 rounded cursor-default select-none ${badge ? badge.bg + " " + badge.text : "bg-gray-100 text-gray-600"}`}>
+                                                                    {badge ? badge.label : ec.email_type[0].toUpperCase()}
+                                                                </span>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+                                                {/* Gateway badge — admin only */}
+                                                {isAdmin && pro.email_gateway_id && (() => {
+                                                    const gw = gateways.find(g => g.id === pro.email_gateway_id);
+                                                    return gw ? (
+                                                        <span title={gw.email || gw.label}
+                                                            className="inline-flex items-center gap-0.5 text-[8px] font-medium px-1 py-0 rounded bg-indigo-100 text-indigo-700 whitespace-nowrap">
+                                                            <Wifi size={8} />{gw.label}
+                                                        </span>
+                                                    ) : null;
+                                                })()}
+                                                {!pro.status && !(pro.job_match_status && pro.job_match_status !== "Not Matched") && !(Array.isArray(pro.email_campaigns) && pro.email_campaigns.length > 0) && !pro.email_gateway_id && (
+                                                    <span className="text-gray-400 text-[10px]">—</span>
                                                 )}
                                             </div>
                                         </td>
-                                        <td className="px-2 py-1 border-r border-gray-100 text-gray-700 whitespace-nowrap">
-                                            {pro.country ? (
-                                                <span title={getCountryName(pro.country)} className="inline-flex items-center gap-1">
-                                                    <span className="font-mono text-[10px] bg-gray-100 px-1 rounded">{pro.country}</span>
-                                                    <span className="text-gray-500 text-[10px]">{getCountryName(pro.country)}</span>
-                                                </span>
-                                            ) : <span className="text-gray-400">—</span>}
-                                        </td>
-                                        <td className="px-2 py-1 border-r border-gray-100 text-gray-500 whitespace-nowrap">{formatDate(pro.createdAt)}</td>
-                                        <td className="px-2 py-1">
+                                        <td className="px-2 py-1.5 border-r border-gray-100 text-gray-500 whitespace-nowrap text-[10px]">{formatDate(pro.createdAt)}</td>
+                                        <td className="px-2 py-1.5">
                                             <div className="flex items-center gap-1.5">
                                                 <button onClick={() => handleToggleShortlist(pro)} title={pro.short_listed ? "Remove from shortlist" : "Add to shortlist"}
                                                     className={pro.short_listed ? "text-yellow-400 hover:text-yellow-500" : "text-gray-300 hover:text-yellow-400"}>
                                                     <Star size={11} className={pro.short_listed ? "fill-yellow-400" : ""} />
                                                 </button>
                                                 <button onClick={() => handleEdit(pro)} className="text-gray-500 hover:text-gray-800"><Pencil size={11} /></button>
+                                                {isAdmin && (
+                                                    <button onClick={() => setViewingEmailsPro(pro)} title="View Email Campaigns"
+                                                        className="text-gray-400 hover:text-teal-600">
+                                                        <Mail size={11} />
+                                                    </button>
+                                                )}
                                                 {isAdmin && (
                                                     <button onClick={() => handleDelete(pro.id, `${pro.first_name} ${pro.last_name}`)} className="text-red-400 hover:text-red-600">
                                                         <Trash2 size={11} />
@@ -1071,6 +1271,40 @@ export default function ProfessionalsTable() {
                     selectedProfessionals={selectedProfessionals}
                     onClose={() => setShowVerifyModal(false)}
                     onComplete={() => { load(page, limit, appliedFilters); setSelectedIds(new Set()); }}
+                />
+            )}
+            {showMatchModal && (
+                <MatchJobsModal
+                    professionals={selectedProfessionals}
+                    onClose={() => setShowMatchModal(false)}
+                    onMatchSaved={() => { load(page, limit, appliedFilters); }}
+                />
+            )}
+            {showEmailModal && (
+                <CourtesyEmailModal
+                    professionals={selectedProfessionals}
+                    onClose={() => setShowEmailModal(false)}
+                    onSaved={() => { load(page, limit, appliedFilters); }}
+                />
+            )}
+            {showPlatformModal && (
+                <PlatformInviteModal
+                    professionals={selectedProfessionals}
+                    onClose={() => setShowPlatformModal(false)}
+                    onSaved={() => { load(page, limit, appliedFilters); }}
+                />
+            )}
+            {viewingEmailsPro && (
+                <EmailCampaignsViewer
+                    professional={viewingEmailsPro}
+                    onClose={() => setViewingEmailsPro(null)}
+                />
+            )}
+            {showAssignGatewayModal && (
+                <AssignGatewayModal
+                    selectedProfessionals={selectedProfessionals}
+                    onClose={() => setShowAssignGatewayModal(false)}
+                    onComplete={() => { setShowAssignGatewayModal(false); setSelectedIds(new Set()); load(page, limit, appliedFilters); }}
                 />
             )}
         </div>

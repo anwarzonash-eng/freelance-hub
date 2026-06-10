@@ -153,6 +153,23 @@ export enum ProfessionalsAPIRoutes {
     CREATE = 'professionals',
     UPDATE = 'professionals/:id',
     DELETE = 'professionals/:id',
+    ASSIGN_GATEWAY = 'professionals/assign-gateway',
+}
+
+export enum MatchedJobsAPIRoutes {
+    SAVE_BATCH = 'matched-jobs/batch',
+    GET_BY_PROFESSIONAL = 'matched-jobs',
+    DELETE = 'matched-jobs/:id',
+}
+
+export enum EmailCampaignsAPIRoutes {
+    SAVE_BATCH = 'email-campaigns/batch',
+    QUEUE_BATCH = 'email-campaigns/queue-batch',
+    REBALANCE_QUEUE = 'email-campaigns/rebalance-queue',
+    GET_STATS = 'email-campaigns/stats',
+    GET_ALL = 'email-campaigns/all',
+    GET_BY_PROFESSIONAL = 'email-campaigns',
+    UPDATE_STATUS = 'email-campaigns/:id/status',
 }
 
 export enum ShowErrorMessageOptionsRoutes {
