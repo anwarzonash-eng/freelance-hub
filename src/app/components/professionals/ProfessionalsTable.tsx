@@ -8,6 +8,7 @@ import {
     createProfessional,
     updateProfessional,
     deleteProfessional,
+    verifyProfessionalEmail,
 } from "@/app/api_handlers/api/professionals.api";
 import { getCountries, getCountryName } from "@/utils/countries";
 import MatchJobsModal from "./MatchJobsModal";
@@ -492,13 +493,10 @@ function VerifyEmailsModal({
     onClose: () => void;
     onComplete: () => void;
 }) {
-    const [phase, setPhase] = useState<"setup" | "verifying" | "done" | "error">("setup");
+    const [phase, setPhase] = useState<"setup" | "verifying" | "done">("setup");
     const [progress, setProgress] = useState("");
     const [results, setResults] = useState<{ proId: string; name: string; email: string; classification: string; verified: boolean }[]>([]);
     const [error, setError] = useState("");
-
-    const verifaliaSid = process.env.NEXT_PUBLIC_VERIFALIA_SID ?? "";
-    const verifaliaPassword = process.env.NEXT_PUBLIC_VERIFALIA_PASSWORD ?? "";
 
     const eligible = selectedProfessionals.filter((p) => {
         const emails = Array.isArray(p.emails) ? p.emails : [];
@@ -507,10 +505,6 @@ function VerifyEmailsModal({
     const skipped = selectedProfessionals.length - eligible.length;
 
     const handleVerify = async () => {
-        if (!verifaliaSid || !verifaliaPassword) {
-            setError("Verifalia credentials are not configured. Set NEXT_PUBLIC_VERIFALIA_SID and NEXT_PUBLIC_VERIFALIA_PASSWORD in .env and restart the dev server.");
-            return;
-        }
         if (eligible.length === 0) {
             setError("No selected professionals have email addresses.");
             return;
@@ -518,86 +512,42 @@ function VerifyEmailsModal({
         setPhase("verifying");
         setError("");
 
-        try {
-            const emailToPro = new Map<string, { id: string; name: string }>();
-            for (const pro of eligible) {
-                const emails = Array.isArray(pro.emails) ? pro.emails : [];
-                if (emails[0]?.email) {
-                    emailToPro.set(emails[0].email, { id: pro.id, name: `${pro.first_name} ${pro.last_name}` });
-                }
-            }
+        const verificationResults: typeof results = [];
 
-            const emailList = [...emailToPro.keys()];
-            setProgress(`Submitting ${emailList.length} email${emailList.length !== 1 ? "s" : ""} to Verifalia…`);
+        for (let i = 0; i < eligible.length; i++) {
+            const pro = eligible[i];
+            const name = `${pro.first_name} ${pro.last_name}`;
+            const emails = Array.isArray(pro.emails) ? pro.emails : [];
+            const email = emails[0]?.email ?? "";
 
-            const authHeader = "Basic " + btoa(`${verifaliaSid}:${verifaliaPassword}`);
+            setProgress(`Verifying ${i + 1} of ${eligible.length} — ${name}…`);
 
-            const submitRes = await fetch("https://api.verifalia.com/v2.5/email-validations", {
-                method: "POST",
-                headers: {
-                    Authorization: authHeader,
-                    "Content-Type": "application/json",
-                    Accept: "application/json",
-                },
-                body: JSON.stringify({
-                    entries: emailList.map((e) => ({ inputData: e })),
-                    quality: "Standard",
-                }),
-            });
-
-            if (!submitRes.ok) {
-                const errText = await submitRes.text();
-                throw new Error(`Verifalia returned ${submitRes.status}: ${errText.slice(0, 300)}`);
-            }
-
-            let jobData = await submitRes.json();
-            const jobId: string = jobData.overview?.id;
-            if (!jobId) throw new Error("No job ID returned from Verifalia.");
-
-            let attempts = 0;
-            while (jobData.overview?.status !== "Completed") {
-                if (attempts > 60) throw new Error("Timed out after 3 minutes waiting for Verifalia.");
-                attempts++;
-                setProgress(`Waiting for results… (${jobData.overview?.status ?? "InProgress"})`);
-                await new Promise((r) => setTimeout(r, 3000));
-                const pollRes = await fetch(`https://api.verifalia.com/v2.5/email-validations/${jobId}`, {
-                    headers: { Authorization: authHeader, Accept: "application/json" },
+            try {
+                const res = await verifyProfessionalEmail(pro.id);
+                const data = res?.data || res;
+                verificationResults.push({
+                    proId: pro.id,
+                    name,
+                    email: data?.email ?? email,
+                    classification: data?.classification ?? "Unknown",
+                    verified: !!data?.verified,
                 });
-                if (!pollRes.ok) {
-                    const errText = await pollRes.text();
-                    throw new Error(`Poll failed ${pollRes.status}: ${errText.slice(0, 200)}`);
-                }
-                jobData = await pollRes.json();
+            } catch (err: any) {
+                verificationResults.push({
+                    proId: pro.id,
+                    name,
+                    email,
+                    classification: "Error",
+                    verified: false,
+                });
             }
 
-            const entries: any[] = jobData.entries?.data ?? [];
-            const verificationResults: typeof results = [];
-
-            for (const entry of entries) {
-                const pro = emailToPro.get(entry.inputData);
-                if (pro) {
-                    verificationResults.push({
-                        proId: pro.id,
-                        name: pro.name,
-                        email: entry.inputData,
-                        classification: entry.classification ?? "Unknown",
-                        verified: entry.classification === "Deliverable",
-                    });
-                }
-            }
-
-            setProgress(`Saving ${verificationResults.length} result${verificationResults.length !== 1 ? "s" : ""} to database…`);
-            for (const r of verificationResults) {
-                await updateProfessional({ is_email_verified: r.verified, email_verification_status: r.classification }, r.proId);
-            }
-
-            setResults(verificationResults);
-            setPhase("done");
-            onComplete();
-        } catch (err: any) {
-            setError(err.message || "Unknown error occurred.");
-            setPhase("error");
+            // Reflect partial progress as we go
+            setResults([...verificationResults]);
         }
+
+        setPhase("done");
+        onComplete();
     };
 
     return (
@@ -612,20 +562,15 @@ function VerifyEmailsModal({
                     <div className="text-xs text-gray-600 bg-blue-50 border border-blue-200 rounded p-2 space-y-0.5">
                         <p><span className="font-medium">{eligible.length}</span> professional{eligible.length !== 1 ? "s" : ""} with emails will be verified.</p>
                         {skipped > 0 && <p className="text-gray-400">{skipped} skipped — no email address on record.</p>}
+                        <p className="text-gray-400">Each email is verified one at a time, falling back to the next configured Verifalia account when one runs out of credits.</p>
                     </div>
 
                     {phase === "setup" && (
                         <>
-                            {(!verifaliaSid || !verifaliaPassword) && (
-                                <div className="text-[10px] text-red-700 bg-red-50 border border-red-200 rounded p-2">
-                                    <p className="font-medium mb-0.5">Credentials not configured</p>
-                                    <p>Set <span className="font-mono">NEXT_PUBLIC_VERIFALIA_SID</span> and <span className="font-mono">NEXT_PUBLIC_VERIFALIA_PASSWORD</span> in your <span className="font-mono">.env</span> file and restart the dev server.</p>
-                                </div>
-                            )}
                             {error && <p className="text-xs text-red-500">{error}</p>}
                             <div className="flex justify-end gap-2 pt-1">
                                 <button onClick={onClose} className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50">Cancel</button>
-                                <button onClick={handleVerify} disabled={eligible.length === 0 || !verifaliaSid || !verifaliaPassword}
+                                <button onClick={handleVerify} disabled={eligible.length === 0}
                                     className="px-3 py-1 text-xs bg-green-700 text-white rounded hover:bg-green-600 disabled:opacity-50">
                                     Start Verification
                                 </button>
@@ -634,19 +579,26 @@ function VerifyEmailsModal({
                     )}
 
                     {phase === "verifying" && (
-                        <div className="text-center py-6 space-y-2">
-                            <div className="text-xs text-gray-600 animate-pulse">{progress}</div>
-                            <div className="text-[10px] text-gray-400">Do not close this window…</div>
-                        </div>
-                    )}
-
-                    {phase === "error" && (
                         <div className="space-y-2">
-                            <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded p-2 whitespace-pre-wrap break-all">{error}</div>
-                            <div className="flex justify-end gap-2">
-                                <button onClick={() => { setPhase("setup"); setError(""); }} className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50">Try Again</button>
-                                <button onClick={onClose} className="px-3 py-1 text-xs bg-gray-800 text-white rounded hover:bg-gray-700">Close</button>
+                            <div className="text-center py-3 space-y-2">
+                                <div className="text-xs text-gray-600 animate-pulse">{progress}</div>
+                                <div className="text-[10px] text-gray-400">Do not close this window…</div>
                             </div>
+                            {results.length > 0 && (
+                                <div className="border border-gray-200 rounded divide-y divide-gray-100 max-h-48 overflow-y-auto">
+                                    {results.map((r, i) => (
+                                        <div key={i} className="flex items-center justify-between px-2 py-1.5 text-xs">
+                                            <div>
+                                                <div className="font-medium text-gray-800">{r.name}</div>
+                                                <div className="text-gray-400 text-[10px]">{r.email}</div>
+                                            </div>
+                                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${emailStatusColor(r.classification)}`}>
+                                                {r.classification}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -1184,6 +1136,13 @@ export default function ProfessionalsTable() {
                                                         })}
                                                     </div>
                                                 )}
+                                                {/* Replied badge — admin only */}
+                                                {isAdmin && pro.has_replied && (
+                                                    <span title="Professional replied to an email"
+                                                        className="inline-flex items-center gap-0.5 text-[8px] font-bold px-1 py-0 rounded bg-purple-100 text-purple-700 whitespace-nowrap">
+                                                        <MessageCircle size={8} /> Replied
+                                                    </span>
+                                                )}
                                                 {/* Gateway badge — admin only */}
                                                 {isAdmin && pro.email_gateway_id && (() => {
                                                     const gw = gateways.find(g => g.id === pro.email_gateway_id);
@@ -1194,7 +1153,7 @@ export default function ProfessionalsTable() {
                                                         </span>
                                                     ) : null;
                                                 })()}
-                                                {!pro.status && !(pro.job_match_status && pro.job_match_status !== "Not Matched") && !(Array.isArray(pro.email_campaigns) && pro.email_campaigns.length > 0) && !pro.email_gateway_id && (
+                                                {!pro.status && !(pro.job_match_status && pro.job_match_status !== "Not Matched") && !(Array.isArray(pro.email_campaigns) && pro.email_campaigns.length > 0) && !pro.email_gateway_id && !pro.has_replied && (
                                                     <span className="text-gray-400 text-[10px]">—</span>
                                                 )}
                                             </div>

@@ -44,3 +44,12 @@ export async function updateEmailStatus(id: string, status: string) {
     const params: IApiParams = { path: { id } }
     return await apiClient(EmailCampaignsAPIRoutes.UPDATE_STATUS, ApiMethod.PATCH, { status }, params, undefined, true, true)
 }
+
+export async function updateEmailScheduledTime(id: string, hour: number, minute: number) {
+    const params: IApiParams = { path: { id } }
+    return await apiClient(EmailCampaignsAPIRoutes.UPDATE_SCHEDULED_TIME, ApiMethod.PATCH, { hour, minute }, params, undefined, true, true)
+}
+
+export async function checkEmailReplies() {
+    return await apiClient(EmailCampaignsAPIRoutes.CHECK_REPLIES, ApiMethod.POST, {}, undefined, undefined, true, true)
+}

@@ -30,6 +30,8 @@ import {
   Handshake,
   Link2,
   BriefcaseBusiness,
+  SlidersHorizontal,
+  ShieldCheck,
 } from "lucide-react";
 import LogoutButton from "./auth/LogoutButton";
 import { GlobalConstants } from "@/utils/global";
@@ -90,6 +92,8 @@ const iconMap: { [key: string]: LucideIcon } = {
   SettingsIcon: Settings,
   EmailGateway: Mail,
   ReferralSettings: Link2,
+  GlobalSettings: SlidersHorizontal,
+  VerifaliaCredentials: ShieldCheck,
   Jobs: BriefcaseBusiness,
 };
 
@@ -227,22 +231,6 @@ const navItems: NavItem[] = [
     ],
   },
   {
-    title: "Settings",
-    icon: "SettingsIcon",
-    children: [
-      {
-        title: "Email Gateways",
-        href: "/settings/email-gateways",
-        icon: "EmailGateway",
-      },
-      {
-        title: "Referral Settings",
-        href: "/settings/referral",
-        icon: "ReferralSettings",
-      },
-    ],
-  },
-  {
     title: "Auth",
     href: "/auth",
     icon: "Users",
@@ -308,8 +296,7 @@ export function getAllNavRoles(
     { label: "Professionals", value: "/professionals" },
     { label: "Email Campaigns", value: "/professionals/email-campaigns" },
     { label: "Clients", value: "/clients" },
-    { label: "Email Gateways", value: "/settings/email-gateways" },
-    { label: "Referral Settings", value: "/settings/referral" },
+    { label: "Settings", value: "/settings" },
   ];
   // const roles: { label: string; value: string }[] = [];
   // function traverse(list: NavItem[], isFirst: boolean = true) {
@@ -586,6 +573,9 @@ const Header: React.FC<HeaderProps> = ({
 
   // --- END FILTERING LOGIC ---
 
+  // Settings is no longer part of the main nav — only show its icon to roles that include it
+  const canAccessSettings = roles.includes("*") || allowedPaths.includes("/settings");
+
   // --- EFFECT TO UPDATE DOCUMENT TITLE ---
   useEffect(() => {
     const currentTitle = findCurrentMenuItem(navItems, pathname);
@@ -654,7 +644,22 @@ const Header: React.FC<HeaderProps> = ({
 
         {!isCollapsed && <LogoutButton />}
         {/* 3. Footer/Toggle Button Section */}
-        <div className="p-1.5 border-t border-gray-700 flex justify-center">
+        <div className={`p-1.5 border-t border-gray-700 flex items-center ${canAccessSettings ? "justify-between" : "justify-center"}`}>
+          {canAccessSettings && (
+            <Link
+              href="/settings"
+              passHref
+              className={`p-1 rounded-full transition-colors ${
+                normalizePath(pathname)?.startsWith("/settings")
+                  ? "text-teal-400 bg-gray-700"
+                  : "text-gray-400 hover:bg-gray-700 hover:text-white"
+              }`}
+              aria-label="Settings"
+              title="Settings"
+            >
+              <Settings size={18} />
+            </Link>
+          )}
           <button
             onClick={handleToggle}
             className="p-1 rounded-full text-gray-400 hover:bg-gray-700 hover:text-white transition-colors"

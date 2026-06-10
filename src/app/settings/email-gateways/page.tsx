@@ -1,5 +1,5 @@
-import EmailGatewaysTable from "@/app/components/settings/EmailGatewaysTable";
+import SettingsTabs from "@/app/components/settings/SettingsTabs";
 
 export default function EmailGatewaysPage() {
-    return <EmailGatewaysTable />;
+    return <SettingsTabs defaultTab="email-gateways" />;
 }

@@ -136,6 +136,19 @@ export enum ReferralSettingsAPIRoutes {
     UPSERT = 'referral-settings',
 }
 
+export enum GlobalSettingsAPIRoutes {
+    GET = 'global-settings',
+    SET_GMAIL_SCHEDULER = 'global-settings/gmail-scheduler',
+}
+
+export enum VerifaliaCredentialsAPIRoutes {
+    GET_ALL = 'verifalia-credentials',
+    CREATE = 'verifalia-credentials',
+    UPDATE = 'verifalia-credentials/:id',
+    DELETE = 'verifalia-credentials/:id',
+    CHECK_BALANCE = 'verifalia-credentials/:id/check-balance',
+}
+
 export enum AiJobsAPIRoutes {
     GET_ALL = 'ai-jobs',
     GET_BY_ID = 'ai-jobs/:id',
@@ -154,6 +167,7 @@ export enum ProfessionalsAPIRoutes {
     UPDATE = 'professionals/:id',
     DELETE = 'professionals/:id',
     ASSIGN_GATEWAY = 'professionals/assign-gateway',
+    VERIFY_EMAIL = 'professionals/:id/verify-email',
 }
 
 export enum MatchedJobsAPIRoutes {
@@ -170,6 +184,8 @@ export enum EmailCampaignsAPIRoutes {
     GET_ALL = 'email-campaigns/all',
     GET_BY_PROFESSIONAL = 'email-campaigns',
     UPDATE_STATUS = 'email-campaigns/:id/status',
+    UPDATE_SCHEDULED_TIME = 'email-campaigns/:id/scheduled-time',
+    CHECK_REPLIES = 'email-campaigns/check-replies',
 }
 
 export enum ShowErrorMessageOptionsRoutes {

@@ -16,8 +16,11 @@ const TYPE_COLORS: Record<string, string> = {
 const STATUS_COLORS: Record<string, string> = {
     email_created: 'bg-gray-100 text-gray-600',
     email_in_queue: 'bg-yellow-100 text-yellow-700',
+    email_sending: 'bg-blue-100 text-blue-700',
     email_sent: 'bg-green-100 text-green-700',
+    email_failed: 'bg-red-100 text-red-700',
     email_bounced: 'bg-red-100 text-red-600',
+    email_replied: 'bg-purple-100 text-purple-700',
     email_positive_response: 'bg-emerald-100 text-emerald-700',
     email_negative_response: 'bg-red-100 text-red-700',
 }
@@ -88,6 +91,22 @@ export default function EmailDetailModal({ email, toEmail, fromEmail, profession
                             className="text-gray-300 hover:text-gray-600 shrink-0"><Copy size={10} /></button>
                     </div>
                 </div>
+
+                {/* Failure details */}
+                {email.status === 'email_failed' && email.error_message && (
+                    <div className="px-4 py-2 border-b border-gray-100 shrink-0 bg-red-50">
+                        <div className="flex gap-2 text-xs">
+                            <span className="text-red-500 w-14 shrink-0 font-medium">Reason</span>
+                            <span className="text-red-700 flex-1">{email.error_message}</span>
+                        </div>
+                        {typeof email.attempts === 'number' && (
+                            <div className="flex gap-2 text-xs mt-1">
+                                <span className="text-red-500 w-14 shrink-0 font-medium">Attempts</span>
+                                <span className="text-red-700">{email.attempts}</span>
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {/* Body */}
                 <div className="flex-1 overflow-hidden flex flex-col min-h-0">

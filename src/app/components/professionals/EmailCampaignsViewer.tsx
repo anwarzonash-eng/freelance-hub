@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, Mail, Loader2 } from 'lucide-react'
+import { X, Mail, Loader2, MessageCircle } from 'lucide-react'
 import { getEmailsByProfessional } from '@/app/api_handlers/api/email-campaigns.api'
 import { getAllGmailGateways } from '@/app/api_handlers/api/gmail-gateways.api'
 import EmailDetailModal from './EmailDetailModal'
+import ConversationModal from './ConversationModal'
 
 const TYPE_COLORS: Record<string, string> = {
     courtesy_email: 'bg-blue-100 text-blue-700',
@@ -19,8 +20,11 @@ const TYPE_COLORS: Record<string, string> = {
 const STATUS_COLORS: Record<string, string> = {
     email_created: 'bg-gray-100 text-gray-600',
     email_in_queue: 'bg-yellow-100 text-yellow-700',
+    email_sending: 'bg-blue-100 text-blue-700',
     email_sent: 'bg-green-100 text-green-700',
+    email_failed: 'bg-red-100 text-red-700',
     email_bounced: 'bg-red-100 text-red-600',
+    email_replied: 'bg-purple-100 text-purple-700',
     email_positive_response: 'bg-emerald-100 text-emerald-700',
     email_negative_response: 'bg-red-100 text-red-700',
 }
@@ -38,6 +42,7 @@ export default function EmailCampaignsViewer({ professional, onClose }: { profes
     const [loading, setLoading] = useState(true)
     const [gateways, setGateways] = useState<any[]>([])
     const [selectedEmail, setSelectedEmail] = useState<any>(null)
+    const [conversation, setConversation] = useState<any[] | null>(null)
 
     useEffect(() => {
         Promise.all([
@@ -94,10 +99,22 @@ export default function EmailCampaignsViewer({ professional, onClose }: { profes
                                     <span className={`text-[9px] px-1.5 py-0.5 rounded ${STATUS_COLORS[email.status] ?? 'bg-gray-100 text-gray-500'}`}>
                                         {fmt(email.status)}
                                     </span>
+                                    {email.status === 'email_replied' && Array.isArray(email.conversation) && email.conversation.length > 0 && (
+                                        <span
+                                            onClick={(e) => { e.stopPropagation(); setConversation(email.conversation) }}
+                                            title="View conversation"
+                                            className="text-purple-500 hover:text-purple-700"
+                                        >
+                                            <MessageCircle size={11} />
+                                        </span>
+                                    )}
                                     <span className="text-[9px] text-gray-400 ml-auto">{fmtDate(email.createdAt)}</span>
                                 </div>
                                 <div className="text-xs font-medium text-gray-700 truncate">{email.subject}</div>
                                 {toEmail && <div className="text-[10px] text-gray-400 truncate">To: {toEmail}</div>}
+                                {email.status === 'email_replied' && email.reply_snippet && (
+                                    <div className="text-[10px] text-purple-600 truncate mt-0.5">Reply: {email.reply_snippet}</div>
+                                )}
                             </button>
                         ))}
                     </div>
@@ -112,6 +129,10 @@ export default function EmailCampaignsViewer({ professional, onClose }: { profes
                     professionalName={`${professional.first_name} ${professional.last_name}`}
                     onClose={() => setSelectedEmail(null)}
                 />
+            )}
+
+            {conversation && (
+                <ConversationModal messages={conversation} onClose={() => setConversation(null)} />
             )}
         </>
     )

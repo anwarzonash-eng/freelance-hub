@@ -38,3 +38,8 @@ export async function deleteProfessional(id: string) {
 export async function assignGatewayToProfessionals(professional_ids: string[], gateway_id: string | null) {
     return await apiClient(ProfessionalsAPIRoutes.ASSIGN_GATEWAY, ApiMethod.PATCH, { professional_ids, gateway_id }, undefined, undefined, true, true)
 }
+
+export async function verifyProfessionalEmail(id: string) {
+    const params: IApiParams = { path: { id } }
+    return await apiClient(ProfessionalsAPIRoutes.VERIFY_EMAIL, ApiMethod.POST, {}, params, undefined, true, true)
+}

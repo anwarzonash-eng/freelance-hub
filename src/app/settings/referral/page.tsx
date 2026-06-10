@@ -1,5 +1,5 @@
-import ReferralSettings from "@/app/components/settings/ReferralSettings";
+import SettingsTabs from "@/app/components/settings/SettingsTabs";
 
 export default function ReferralSettingsPage() {
-    return <ReferralSettings />;
+    return <SettingsTabs defaultTab="referral" />;
 }

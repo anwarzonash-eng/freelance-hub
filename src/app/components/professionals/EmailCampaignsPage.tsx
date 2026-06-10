@@ -2,11 +2,12 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { Mail, ChevronDown, Loader2, ListChecks, BarChart2, Wifi, RefreshCw } from 'lucide-react'
-import { getAllEmailCampaigns, queueEmailBatch, getEmailCampaignStats, rebalanceEmailQueue } from '@/app/api_handlers/api/email-campaigns.api'
+import { Mail, ChevronDown, Loader2, ListChecks, BarChart2, Wifi, RefreshCw, Pencil, Check, X, AlertTriangle, MessageSquare, MessageCircle } from 'lucide-react'
+import { getAllEmailCampaigns, queueEmailBatch, getEmailCampaignStats, rebalanceEmailQueue, updateEmailScheduledTime, checkEmailReplies } from '@/app/api_handlers/api/email-campaigns.api'
 import { getAllGmailGateways } from '@/app/api_handlers/api/gmail-gateways.api'
 import { showAppNotification } from '@/utils/notificationService'
 import EmailDetailModal from './EmailDetailModal'
+import ConversationModal from './ConversationModal'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -23,8 +24,11 @@ const TYPE_COLORS: Record<string, string> = {
 const STATUS_COLORS: Record<string, string> = {
     email_created: 'bg-gray-100 text-gray-600',
     email_in_queue: 'bg-yellow-100 text-yellow-700',
+    email_sending: 'bg-blue-100 text-blue-700',
     email_sent: 'bg-green-100 text-green-700',
+    email_failed: 'bg-red-100 text-red-700',
     email_bounced: 'bg-red-100 text-red-600',
+    email_replied: 'bg-purple-100 text-purple-700',
     email_positive_response: 'bg-emerald-100 text-emerald-700',
     email_negative_response: 'bg-red-100 text-red-700',
 }
@@ -32,8 +36,11 @@ const STATUS_COLORS: Record<string, string> = {
 const STATUS_BG_MAP: Record<string, string> = {
     email_created: 'bg-gray-500',
     email_in_queue: 'bg-yellow-500',
+    email_sending: 'bg-blue-500',
     email_sent: 'bg-green-500',
+    email_failed: 'bg-red-700',
     email_bounced: 'bg-red-500',
+    email_replied: 'bg-purple-500',
     email_positive_response: 'bg-emerald-500',
     email_negative_response: 'bg-red-700',
 }
@@ -51,8 +58,11 @@ const EMAIL_TYPES = [
 const EMAIL_STATUSES = [
     { value: 'email_created', label: 'Created' },
     { value: 'email_in_queue', label: 'In Queue' },
+    { value: 'email_sending', label: 'Sending' },
     { value: 'email_sent', label: 'Sent' },
+    { value: 'email_failed', label: 'Failed' },
     { value: 'email_bounced', label: 'Bounced' },
+    { value: 'email_replied', label: 'Replied' },
     { value: 'email_positive_response', label: 'Positive Response' },
     { value: 'email_negative_response', label: 'Negative Response' },
 ]
@@ -72,6 +82,67 @@ function fmtTime(iso: string) {
 function fmtDayLabel(day: string) {
     const d = new Date(day + 'T12:00:00Z')
     return d.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: '2-digit' })
+}
+
+// ─── Scheduled Time Cell (editable, for testing) ───────────────────────────────
+
+function ScheduledTimeCell({ row, onUpdated }: { row: any; onUpdated: (id: string, scheduledAt: string) => void }) {
+    const [editing, setEditing] = useState(false)
+    const [hour, setHour] = useState(0)
+    const [minute, setMinute] = useState(0)
+    const [saving, setSaving] = useState(false)
+
+    if (!row.scheduled_at) return <span className="text-gray-300">—</span>
+
+    const startEdit = () => {
+        const d = new Date(row.scheduled_at)
+        setHour(d.getHours())
+        setMinute(d.getMinutes())
+        setEditing(true)
+    }
+
+    const handleSave = async () => {
+        setSaving(true)
+        try {
+            const res: any = await updateEmailScheduledTime(row.id, hour, minute)
+            const updated = res?.data?.scheduled_at ?? res?.scheduled_at
+            if (updated) onUpdated(row.id, updated)
+            setEditing(false)
+        } catch {
+            showAppNotification('error', 'Error', 'Failed to update scheduled time.')
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    if (editing) {
+        return (
+            <div className="flex items-center gap-1">
+                <input type="number" min={0} max={23} value={hour}
+                    onChange={e => setHour(Math.min(23, Math.max(0, Number(e.target.value))))}
+                    className="w-10 border border-gray-300 rounded px-1 py-0.5 text-[10px]" />
+                <span className="text-gray-400">:</span>
+                <input type="number" min={0} max={59} value={minute}
+                    onChange={e => setMinute(Math.min(59, Math.max(0, Number(e.target.value))))}
+                    className="w-10 border border-gray-300 rounded px-1 py-0.5 text-[10px]" />
+                <button onClick={handleSave} disabled={saving} title="Save" className="text-green-600 hover:text-green-800 disabled:opacity-50">
+                    {saving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                </button>
+                <button onClick={() => setEditing(false)} disabled={saving} title="Cancel" className="text-gray-400 hover:text-gray-600">
+                    <X size={12} />
+                </button>
+            </div>
+        )
+    }
+
+    return (
+        <span title={new Date(row.scheduled_at).toLocaleString()} className="inline-flex items-center gap-1 group">
+            {fmtDate(row.scheduled_at)} {fmtTime(row.scheduled_at)}
+            <button onClick={startEdit} title="Edit time" className="text-gray-300 hover:text-teal-600 opacity-0 group-hover:opacity-100">
+                <Pencil size={10} />
+            </button>
+        </span>
+    )
 }
 
 // ─── Stats Tab ────────────────────────────────────────────────────────────────
@@ -344,6 +415,8 @@ function EmailsTab({ gateways }: { gateways: any[] }) {
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
     const [queuingIds, setQueuingIds] = useState<Set<string>>(new Set())
     const [selectedEmail, setSelectedEmail] = useState<any>(null)
+    const [conversation, setConversation] = useState<any[] | null>(null)
+    const [checkingReplies, setCheckingReplies] = useState(false)
 
     const gatewayMap = new Map(gateways.map(g => [g.id, g]))
 
@@ -376,6 +449,22 @@ function EmailsTab({ gateways }: { gateways: any[] }) {
             setSelectedIds(prev => { const next = new Set(prev); data.forEach(r => next.delete(r.id)); return next })
         } else {
             setSelectedIds(prev => { const next = new Set(prev); data.forEach(r => next.add(r.id)); return next })
+        }
+    }
+
+    const handleCheckReplies = async () => {
+        setCheckingReplies(true)
+        try {
+            const res: any = await checkEmailReplies()
+            const payload = res?.data ?? res
+            const replied = payload?.replied ?? 0
+            const checked = payload?.checked ?? 0
+            showAppNotification('success', 'Checked Replies', `${replied} of ${checked} sent email${checked !== 1 ? 's' : ''} have replies.`)
+            load(page, limit, appliedFilters)
+        } catch {
+            showAppNotification('error', 'Error', 'Failed to check replies.')
+        } finally {
+            setCheckingReplies(false)
         }
     }
 
@@ -417,6 +506,15 @@ function EmailsTab({ gateways }: { gateways: any[] }) {
                                 className="text-xs text-gray-400 hover:text-gray-600 underline">Clear</button>
                         </>
                     )}
+                    <button
+                        onClick={handleCheckReplies}
+                        disabled={checkingReplies}
+                        className="flex items-center gap-1 text-xs bg-purple-600 text-white px-2 py-1 rounded hover:bg-purple-700 disabled:opacity-50"
+                    >
+                        {checkingReplies
+                            ? <><Loader2 size={11} className="animate-spin" /> Checking…</>
+                            : <><MessageSquare size={11} /> Check Replies</>}
+                    </button>
                 </div>
                 <span className="text-[10px] text-gray-400">{total} total</span>
             </div>
@@ -543,6 +641,7 @@ function EmailsTab({ gateways }: { gateways: any[] }) {
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Type</th>
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Status</th>
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Subject</th>
+                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Reply</th>
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Scheduled</th>
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Date</th>
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 w-8"></th>
@@ -550,12 +649,12 @@ function EmailsTab({ gateways }: { gateways: any[] }) {
                     </thead>
                     <tbody>
                         {loading && (
-                            <tr><td colSpan={11} className="text-center py-8 text-gray-400">
+                            <tr><td colSpan={12} className="text-center py-8 text-gray-400">
                                 <div className="flex items-center justify-center gap-2"><Loader2 size={14} className="animate-spin" /> Loading…</div>
                             </td></tr>
                         )}
                         {!loading && data.length === 0 && (
-                            <tr><td colSpan={11} className="text-center py-8 text-gray-400">No email campaigns found.</td></tr>
+                            <tr><td colSpan={12} className="text-center py-8 text-gray-400">No email campaigns found.</td></tr>
                         )}
                         {!loading && data.map((row, idx) => {
                             const pro = row.professional
@@ -591,17 +690,38 @@ function EmailsTab({ gateways }: { gateways: any[] }) {
                                         </span>
                                     </td>
                                     <td className="px-2 py-1.5 border-r border-gray-100">
-                                        <span className={`text-[9px] px-1.5 py-0.5 rounded whitespace-nowrap ${STATUS_COLORS[row.status] ?? 'bg-gray-100 text-gray-500'}`}>
-                                            {fmt(row.status)}
+                                        <span className="inline-flex items-center gap-1">
+                                            <span className={`text-[9px] px-1.5 py-0.5 rounded whitespace-nowrap ${STATUS_COLORS[row.status] ?? 'bg-gray-100 text-gray-500'}`}>
+                                                {fmt(row.status)}
+                                            </span>
+                                            {row.status === 'email_failed' && (
+                                                <span title={row.error_message || 'Email failed to send.'} className="shrink-0 inline-flex">
+                                                    <AlertTriangle size={11} className="text-red-500" />
+                                                </span>
+                                            )}
                                         </span>
                                     </td>
                                     <td className="px-2 py-1.5 border-r border-gray-100 max-w-[200px] truncate text-gray-700">{row.subject}</td>
+                                    <td className="px-2 py-1.5 border-r border-gray-100 max-w-[180px]">
+                                        {row.status === 'email_replied' ? (
+                                            <div className="flex items-center gap-1">
+                                                <span className="text-[10px] text-purple-700 truncate" title={row.reply_snippet || ''}>
+                                                    {row.reply_snippet || 'Replied'}
+                                                </span>
+                                                {Array.isArray(row.conversation) && row.conversation.length > 0 && (
+                                                    <button onClick={() => setConversation(row.conversation)}
+                                                        title="View conversation" className="text-purple-500 hover:text-purple-700 shrink-0">
+                                                        <MessageCircle size={12} />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        ) : <span className="text-gray-300 text-[10px]">—</span>}
+                                    </td>
                                     <td className="px-2 py-1.5 border-r border-gray-100 text-[10px] text-gray-500 whitespace-nowrap">
-                                        {row.scheduled_at ? (
-                                            <span title={new Date(row.scheduled_at).toLocaleString()}>
-                                                {fmtDate(row.scheduled_at)} {fmtTime(row.scheduled_at)}
-                                            </span>
-                                        ) : <span className="text-gray-300">—</span>}
+                                        <ScheduledTimeCell
+                                            row={row}
+                                            onUpdated={(id, scheduledAt) => setData(prev => prev.map(r => r.id === id ? { ...r, scheduled_at: scheduledAt } : r))}
+                                        />
                                     </td>
                                     <td className="px-2 py-1.5 border-r border-gray-100 text-gray-400 whitespace-nowrap">{fmtDate(row.createdAt)}</td>
                                     <td className="px-2 py-1.5">
@@ -647,6 +767,10 @@ function EmailsTab({ gateways }: { gateways: any[] }) {
                     professionalName={selectedEmail.pro ? `${selectedEmail.pro.first_name} ${selectedEmail.pro.last_name}` : undefined}
                     onClose={() => setSelectedEmail(null)}
                 />
+            )}
+
+            {conversation && (
+                <ConversationModal messages={conversation} onClose={() => setConversation(null)} />
             )}
         </div>
     )
