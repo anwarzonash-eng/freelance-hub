@@ -188,6 +188,12 @@ export enum EmailCampaignsAPIRoutes {
     CHECK_REPLIES = 'email-campaigns/check-replies',
 }
 
+export enum EmailNotificationsAPIRoutes {
+    GET_ALL = 'email-notifications',
+    GET_RECENT = 'email-notifications/recent',
+    MARK_READ = 'email-notifications/mark-read',
+}
+
 export enum ShowErrorMessageOptionsRoutes {
     INCLUDE,
     EXCLUDE

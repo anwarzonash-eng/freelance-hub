@@ -34,6 +34,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import LogoutButton from "./auth/LogoutButton";
+import NotificationBell from "./notifications/NotificationBell";
 import { GlobalConstants } from "@/utils/global";
 
 // --- 1. Typescript Interfaces & Definitions ---
@@ -646,19 +647,22 @@ const Header: React.FC<HeaderProps> = ({
         {/* 3. Footer/Toggle Button Section */}
         <div className={`p-1.5 border-t border-gray-700 flex items-center ${canAccessSettings ? "justify-between" : "justify-center"}`}>
           {canAccessSettings && (
-            <Link
-              href="/settings"
-              passHref
-              className={`p-1 rounded-full transition-colors ${
-                normalizePath(pathname)?.startsWith("/settings")
-                  ? "text-teal-400 bg-gray-700"
-                  : "text-gray-400 hover:bg-gray-700 hover:text-white"
-              }`}
-              aria-label="Settings"
-              title="Settings"
-            >
-              <Settings size={18} />
-            </Link>
+            <div className="flex items-center gap-1">
+              <Link
+                href="/settings"
+                passHref
+                className={`p-1 rounded-full transition-colors ${
+                  normalizePath(pathname)?.startsWith("/settings")
+                    ? "text-teal-400 bg-gray-700"
+                    : "text-gray-400 hover:bg-gray-700 hover:text-white"
+                }`}
+                aria-label="Settings"
+                title="Settings"
+              >
+                <Settings size={18} />
+              </Link>
+              <NotificationBell />
+            </div>
           )}
           <button
             onClick={handleToggle}
