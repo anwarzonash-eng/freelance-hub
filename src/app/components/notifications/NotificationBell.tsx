@@ -26,7 +26,7 @@ export default function NotificationBell() {
     const [items, setItems] = useState<any[]>([])
     const [unreadCount, setUnreadCount] = useState(0)
     const [loading, setLoading] = useState(false)
-    const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
+    const [pos, setPos] = useState<{ top?: number; bottom?: number; left: number } | null>(null)
     const [selected, setSelected] = useState<any>(null)
     const btnRef = useRef<HTMLButtonElement>(null)
     const router = useRouter()
@@ -52,7 +52,15 @@ export default function NotificationBell() {
     const handleToggle = () => {
         if (!open) {
             const rect = btnRef.current?.getBoundingClientRect()
-            if (rect) setPos({ top: rect.top, left: rect.right + 8 })
+            if (rect) {
+                const popupHeight = 320
+                const spaceBelow = window.innerHeight - rect.top
+                if (spaceBelow < popupHeight) {
+                    setPos({ bottom: window.innerHeight - rect.bottom, left: rect.right + 8 })
+                } else {
+                    setPos({ top: rect.top, left: rect.right + 8 })
+                }
+            }
             load()
             if (unreadCount > 0) {
                 markNotificationsRead().then(() => setUnreadCount(0)).catch(() => { })
@@ -83,8 +91,8 @@ export default function NotificationBell() {
                 <>
                     <div className="fixed inset-0 z-[55]" onClick={() => setOpen(false)} />
                     <div
-                        className="fixed z-[60] w-80 bg-white rounded shadow-2xl border border-gray-200 flex flex-col max-h-[70vh]"
-                        style={{ top: pos.top, left: pos.left }}
+                        className="fixed z-[60] w-80 bg-white rounded shadow-2xl border border-gray-200 flex flex-col max-h-[70vh] min-h-[220px]"
+                        style={{ top: pos.top, bottom: pos.bottom, left: pos.left }}
                         onClick={e => e.stopPropagation()}
                     >
                         <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 shrink-0">
@@ -101,12 +109,12 @@ export default function NotificationBell() {
 
                         <div className="flex-1 overflow-y-auto">
                             {loading && items.length === 0 && (
-                                <div className="flex items-center justify-center py-6 text-xs text-gray-400 gap-2">
+                                <div className="flex items-center justify-center h-full py-6 text-xs text-gray-400 gap-2">
                                     <Loader2 size={13} className="animate-spin" /> Loading…
                                 </div>
                             )}
                             {!loading && items.length === 0 && (
-                                <div className="text-center py-6 text-xs text-gray-400">No notifications.</div>
+                                <div className="flex items-center justify-center h-full py-6 text-xs text-gray-400">No notifications.</div>
                             )}
                             {items.map(n => (
                                 <button key={n.id} onClick={() => { setSelected(n); setOpen(false) }}

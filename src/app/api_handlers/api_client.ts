@@ -8,7 +8,7 @@ const BASE_API_URL = process.env.NEXT_PUBLIC_API_PATH;
 const BASE_API_URL_PERSONAL_SITES = process.env.NEXT_PUBLIC_PERSONAL_SITES_API_DOMAIN;
 
 
-const publicUrls: string[] = ['/login']
+const publicUrls: string[] = ['/login', '/', '/404']
 
 
 
@@ -64,7 +64,6 @@ export const apiClient = async <T = any, P = any>(
     let token = null;
     if (!isPublicSiteAPI) {
         token = localStorage.getItem('authToken') || null;
-        console.log("Using auth token:", token);
     }
 
     const url = buildUrl(apiBaseURL, route, params);
@@ -96,7 +95,6 @@ export const apiClient = async <T = any, P = any>(
         if (response.status == 401) {
             localStorage.removeItem('authToken');
             window.location.href = '/login';
-            console.log("Unauthorized access - 401");
             return null;
         }
 
@@ -106,13 +104,8 @@ export const apiClient = async <T = any, P = any>(
             return null;
         }
 
-        // const roles: String[] = jsonResponse.userInfo?.roles || jsonResponse.data.user.roles || ['*'];
-        console.log(publicUrls.includes(window.location.pathname))
-
         if (!publicUrls.includes(window.location.pathname)) {
-            console.log('check role')
             if (jsonResponse.userInfo && !jsonResponse.userInfo?.roles.some((route) => route === window.location.pathname)) {
-
                 window.location.href = '/404';
                 return null;
             }
@@ -123,7 +116,6 @@ export const apiClient = async <T = any, P = any>(
         return jsonResponse;
 
     } catch (error) {
-        console.error('API Client Error:', error);
         const errorMessage = `A network or parsing error occurred: ${error instanceof Error ? error.message : 'Unknown error'}`;
         showErrorMessage && showAppNotification('error', 'API Request Failed', errorMessage);
         return null;
