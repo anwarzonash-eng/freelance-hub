@@ -231,13 +231,14 @@ export default function NotificationsPage() {
                         <button onClick={() => setPage(1)} disabled={page === 1} className="px-2 py-0.5 text-[10px] border border-gray-300 rounded disabled:opacity-40 hover:bg-gray-50">«</button>
                         <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="px-2 py-0.5 text-[10px] border border-gray-300 rounded disabled:opacity-40 hover:bg-gray-50">‹</button>
                         {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                            const pg = Math.max(1, Math.min(page - 2 + i, totalPages - 4 + i))
-                            return pg <= totalPages ? (
+                            const start = Math.max(1, Math.min(page - 2, totalPages - 4))
+                            const pg = start + i
+                            return (
                                 <button key={pg} onClick={() => setPage(pg)}
                                     className={`px-2 py-0.5 text-[10px] border rounded ${pg === page ? 'bg-gray-800 text-white border-gray-800' : 'border-gray-300 hover:bg-gray-50'}`}>
                                     {pg}
                                 </button>
-                            ) : null
+                            )
                         })}
                         <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="px-2 py-0.5 text-[10px] border border-gray-300 rounded disabled:opacity-40 hover:bg-gray-50">›</button>
                         <button onClick={() => setPage(totalPages)} disabled={page === totalPages} className="px-2 py-0.5 text-[10px] border border-gray-300 rounded disabled:opacity-40 hover:bg-gray-50">»</button>

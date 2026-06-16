@@ -204,6 +204,28 @@ export enum SponsoredCompaniesAPIRoutes {
     UPSERT_JSON = 'sponsored-companies/upsert-json',
 }
 
+export enum SponsoredJobsAPIRoutes {
+    GET_ALL = 'sponsored-jobs',
+    GET_DISTINCT = 'sponsored-jobs/distinct-values',
+    UPSERT_FOR_COMPANY = 'sponsored-jobs/upsert-for-company/:companyId',
+}
+
+export enum JobApplicantsAPIRoutes {
+    GET_ALL = 'job-applicants',
+    GET_BY_ID = 'job-applicants/:id',
+    CREATE = 'job-applicants',
+    UPDATE = 'job-applicants/:id',
+    DELETE = 'job-applicants/:id',
+}
+
+export enum JobCVsAPIRoutes {
+    GET_ALL = 'job-cvs',
+    GET_BY_ID = 'job-cvs/:id',
+    CREATE = 'job-cvs',
+    UPDATE = 'job-cvs/:id',
+    DELETE = 'job-cvs/:id',
+}
+
 export enum ShowErrorMessageOptionsRoutes {
     INCLUDE,
     EXCLUDE

@@ -1,19 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { Mail, Link2, SlidersHorizontal, ShieldCheck } from "lucide-react";
+import { Mail, Link2, SlidersHorizontal, ShieldCheck, Users } from "lucide-react";
 import EmailGatewaysTable from "./EmailGatewaysTable";
 import ReferralSettings from "./ReferralSettings";
 import GlobalSettings from "./GlobalSettings";
 import VerifaliaCredentialsTable from "./VerifaliaCredentialsTable";
+import AuthUsersSettings from "./AuthUsersSettings";
 
-export type SettingsTab = "email-gateways" | "referral" | "global" | "verifalia";
+export type SettingsTab = "email-gateways" | "referral" | "global" | "verifalia" | "auth";
 
 const TABS: { key: SettingsTab; label: string; icon: typeof Mail }[] = [
     { key: "email-gateways", label: "Email Gateways", icon: Mail },
     { key: "referral", label: "Referral Settings", icon: Link2 },
     { key: "global", label: "Gmail Api Schedular", icon: SlidersHorizontal },
     { key: "verifalia", label: "Verifalia Credentials", icon: ShieldCheck },
+    { key: "auth", label: "Auth Users", icon: Users },
 ];
 
 export default function SettingsTabs({ defaultTab = "email-gateways" }: { defaultTab?: SettingsTab }) {
@@ -45,6 +47,7 @@ export default function SettingsTabs({ defaultTab = "email-gateways" }: { defaul
                 {activeTab === "referral" && <ReferralSettings />}
                 {activeTab === "global" && <GlobalSettings />}
                 {activeTab === "verifalia" && <VerifaliaCredentialsTable />}
+                {activeTab === "auth" && <AuthUsersSettings />}
             </div>
         </div>
     );

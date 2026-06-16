@@ -1,13 +1,14 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, RefreshCw, Pencil, Trash2, ExternalLink, ChevronDown, Search, Building2 } from 'lucide-react'
+import { Plus, RefreshCw, Pencil, Trash2, ExternalLink, ChevronDown, Search, Building2, BriefcaseBusiness } from 'lucide-react'
 import { getAllCompanies, getDistinctCompanyValues, deleteCompany } from '@/app/api_handlers/api/sponsored-companies.api'
 import CompanyFormModal from './CompanyFormModal'
 import CompanyJsonPanel from './CompanyJsonPanel'
+import CompanyJobsModal from './CompanyJobsModal'
 
 const LIMIT_OPTIONS = [25, 50, 100, 200]
-const EMPTY_FILTERS = { sponsor_type: '', sponsor_route: '', is_deleted: '', visa_mentioned: '', keyword: '' }
+const EMPTY_FILTERS = { sponsor_type: '', sponsor_route: '', is_deleted: 'false', visa_mentioned: '', keyword: '', has_website: '', has_career_page: '' }
 
 function Badge({ value, on, off }: { value: boolean; on: string; off: string }) {
     return (
@@ -37,6 +38,7 @@ export default function CompaniesPage() {
     const [editing, setEditing] = useState<any | null>(null)
     const [adding, setAdding] = useState(false)
     const [deleting, setDeleting] = useState<string | null>(null)
+    const [addingJobsFor, setAddingJobsFor] = useState<any | null>(null)
 
     const load = useCallback(async (pg: number, lim: number, af: typeof EMPTY_FILTERS) => {
         setLoading(true)
@@ -47,6 +49,8 @@ export default function CompaniesPage() {
             if (af.is_deleted !== '') q.is_deleted = af.is_deleted
             if (af.visa_mentioned !== '') q.visa_mentioned = af.visa_mentioned
             if (af.keyword) q.keyword = af.keyword
+            if (af.has_website !== '') q.has_website = af.has_website
+            if (af.has_career_page !== '') q.has_career_page = af.has_career_page
             const res: any = await getAllCompanies(q)
             const payload = res?.data ?? res
             setData(Array.isArray(payload?.data) ? payload.data : [])
@@ -201,6 +205,28 @@ export default function CompaniesPage() {
                         </select>
                     </div>
 
+                    {/* Has Domain */}
+                    <div className="flex flex-col gap-0.5">
+                        <label className="text-[10px] text-gray-400 uppercase">Domain Found</label>
+                        <select value={filters.has_website} onChange={e => setFilters(f => ({ ...f, has_website: e.target.value }))}
+                            className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none">
+                            <option value="">All</option>
+                            <option value="true">Yes</option>
+                            <option value="false">No</option>
+                        </select>
+                    </div>
+
+                    {/* Has Career Page */}
+                    <div className="flex flex-col gap-0.5">
+                        <label className="text-[10px] text-gray-400 uppercase">Career Page Found</label>
+                        <select value={filters.has_career_page} onChange={e => setFilters(f => ({ ...f, has_career_page: e.target.value }))}
+                            className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none">
+                            <option value="">All</option>
+                            <option value="true">Yes</option>
+                            <option value="false">No</option>
+                        </select>
+                    </div>
+
                     <button onClick={applyFilters} className="px-3 py-1 text-xs bg-gray-800 text-white rounded hover:bg-gray-700 mt-auto">Filter</button>
                     <button onClick={clearFilters} className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-white mt-auto">Clear</button>
 
@@ -286,6 +312,8 @@ export default function CompaniesPage() {
                                     </td>
                                     <td className="px-2 py-1.5">
                                         <div className="flex items-center gap-1.5">
+                                            <button onClick={() => setAddingJobsFor(row)} title="Add Jobs"
+                                                className="text-gray-400 hover:text-teal-600"><BriefcaseBusiness size={12} /></button>
                                             <button onClick={() => setEditing(row)} title="Edit"
                                                 className="text-gray-400 hover:text-blue-600"><Pencil size={12} /></button>
                                             <button onClick={() => handleDelete(row.id)} disabled={deleting === row.id} title="Delete"
@@ -307,13 +335,14 @@ export default function CompaniesPage() {
                         <button onClick={() => setPage(1)} disabled={page === 1} className="px-2 py-0.5 text-[10px] border border-gray-300 rounded disabled:opacity-40 hover:bg-gray-50">«</button>
                         <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="px-2 py-0.5 text-[10px] border border-gray-300 rounded disabled:opacity-40 hover:bg-gray-50">‹</button>
                         {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                            const pg = Math.max(1, Math.min(page - 2 + i, totalPages - 4 + i))
-                            return pg <= totalPages ? (
+                            const start = Math.max(1, Math.min(page - 2, totalPages - 4))
+                            const pg = start + i
+                            return (
                                 <button key={pg} onClick={() => setPage(pg)}
                                     className={`px-2 py-0.5 text-[10px] border rounded ${pg === page ? 'bg-gray-800 text-white border-gray-800' : 'border-gray-300 hover:bg-gray-50'}`}>
                                     {pg}
                                 </button>
-                            ) : null
+                            )
                         })}
                         <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="px-2 py-0.5 text-[10px] border border-gray-300 rounded disabled:opacity-40 hover:bg-gray-50">›</button>
                         <button onClick={() => setPage(totalPages)} disabled={page === totalPages} className="px-2 py-0.5 text-[10px] border border-gray-300 rounded disabled:opacity-40 hover:bg-gray-50">»</button>
@@ -327,6 +356,12 @@ export default function CompaniesPage() {
                     company={editing}
                     onClose={() => { setAdding(false); setEditing(null) }}
                     onSaved={() => { setAdding(false); setEditing(null); refresh() }}
+                />
+            )}
+            {addingJobsFor && (
+                <CompanyJobsModal
+                    company={addingJobsFor}
+                    onClose={() => setAddingJobsFor(null)}
                 />
             )}
         </div>

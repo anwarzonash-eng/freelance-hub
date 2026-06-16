@@ -223,6 +223,11 @@ const navItems: NavItem[] = [
         href: "/jobs/cvs",
         icon: "Leads",
       },
+      {
+        title: "Applicants",
+        href: "/applicants",
+        icon: "Professionals",
+      },
     ],
   },
   {
@@ -246,19 +251,6 @@ const navItems: NavItem[] = [
       },
     ],
   },
-  {
-    title: "Auth",
-    href: "/auth",
-    icon: "Users",
-
-    children: [
-      {
-        title: "Auth Users",
-        href: "/auth",
-        icon: "Users",
-      },
-    ],
-  },
 ];
 // ...existing code...
 // ------------------------------------------
@@ -276,15 +268,51 @@ const normalizePath = (path: string | undefined): string | null => {
 };
 
 /**
- * Filters the flat navigation items based on allowed roles (paths).
+ * Strip query string then normalize, for role comparison.
+ * e.g. "/upwork-jobs?type=all" → "/upwork-jobs"
+ */
+const hrefToPath = (href: string | undefined): string | null =>
+  normalizePath((href || "").split("?")[0]);
+
+/**
+ * Returns true if `currentPath` is allowed by any entry in `allowedPaths`.
+ * Supports prefix matching for dynamic-ID routes:
+ *   role "/viewCV"  matches  "/viewCV/1", "/viewCV/42", etc.
+ */
+export const pathAllowed = (currentPath: string, allowedPaths: string[]): boolean => {
+  const curr = normalizePath(currentPath) ?? "";
+  return allowedPaths.some((role) => {
+    const r = normalizePath(role) ?? "";
+    return curr === r || curr.startsWith(r + "/");
+  });
+};
+
+/**
+ * Returns a filtered copy of navItems based on allowed role paths.
+ * - Never mutates the original array.
+ * - Hides a parent whose every child is inaccessible.
  */
 const filterNavItems = (list: NavItem[], allowedPaths: string[]): NavItem[] => {
-  return list.map((nav) => {
-    nav.children = nav.children?.filter((child) =>
-      allowedPaths.includes(child.href || "/"),
-    );
-    return nav;
-  });
+  const filtered: NavItem[] = [];
+
+  for (const nav of list) {
+    if (nav.children && nav.children.length > 0) {
+      const accessibleChildren = nav.children.filter((child) => {
+        const p = hrefToPath(child.href);
+        return p !== null && pathAllowed(p, allowedPaths);
+      });
+      if (accessibleChildren.length > 0) {
+        filtered.push({ ...nav, children: accessibleChildren });
+      }
+    } else {
+      const p = hrefToPath(nav.href);
+      if (p !== null && pathAllowed(p, allowedPaths)) {
+        filtered.push({ ...nav });
+      }
+    }
+  }
+
+  return filtered;
 };
 
 // Helper to flatten navItems (including nested children)
@@ -312,9 +340,11 @@ export function getAllNavRoles(
     { label: "Companies", value: "/jobs/companies" },
     { label: "Listed Jobs", value: "/jobs/listed-jobs" },
     { label: "CVs", value: "/jobs/cvs" },
+    { label: "View CV (print)", value: "/viewCV" },
     { label: "Professionals", value: "/professionals" },
     { label: "Email Campaigns", value: "/professionals/email-campaigns" },
     { label: "Clients", value: "/clients" },
+    { label: "Applicants", value: "/applicants" },
     { label: "Settings", value: "/settings" },
   ];
   // const roles: { label: string; value: string }[] = [];
@@ -368,16 +398,16 @@ const PopoverMenuContent: React.FC<{
 
   const [nestedOpen, setNestedOpen] = useState("");
 
-  const baseClasses = `flex items-center my-0.5 rounded-sm text-xs font-medium p-1.5 transition-colors duration-200 cursor-pointer`;
-  const activeStyle = "bg-teal-600 text-white";
-  const hoverStyle = "hover:bg-gray-600 hover:text-white";
-  const inactiveStyle = "text-gray-300";
+  const baseClasses = `flex items-center my-px rounded text-[11px] font-medium px-2 py-1 transition-colors duration-150 cursor-pointer`;
+  const activeStyle = "bg-teal-50 text-teal-700";
+  const hoverStyle = "hover:bg-gray-100 hover:text-gray-900";
+  const inactiveStyle = "text-gray-600";
 
   return (
-    <div className="flex flex-col w-52 bg-gray-700 p-2 rounded shadow-2xl border border-gray-600 animate-in fade-in slide-in-from-left-1">
-      <h3 className="text-sm font-bold text-white mb-2 pb-1 border-b border-gray-600">
+    <div className="flex flex-col w-48 bg-white p-1.5 rounded shadow-lg border border-gray-200 animate-in fade-in slide-in-from-left-1">
+      <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1 px-1 pb-1 border-b border-gray-100">
         {item.title}
-      </h3>
+      </div>
 
       {item.children?.map((child) => {
         const IconComponent = iconMap[child.icon] || LayoutDashboard;
@@ -394,29 +424,27 @@ const PopoverMenuContent: React.FC<{
                   nestedOpen === child.title ? activeStyle : hoverStyle
                 }`}
               >
-                {/* <IconComponent size={16} className="flex-shrink-0" /> */}
-                <span className="ml-2 flex-grow">{child.title}</span>
+                <span className="grow">{child.title}</span>
                 <ChevronDown
-                  size={14}
-                  className={`transition-transform duration-200 ${
+                  size={11}
+                  className={`transition-transform duration-150 ${
                     nestedOpen === child.title ? "rotate-0" : "-rotate-90"
                   }`}
                 />
               </div>
 
               {nestedOpen === child.title && (
-                <div className="pl-4 flex flex-col">
+                <div className="pl-3 flex flex-col">
                   {child.children?.map((grandchild) => (
                     <Link
                       key={grandchild.title}
                       href={grandchild.href || "#"}
                       onClick={closePopover}
-                      className={`${baseClasses} pl-5 ${
+                      className={`${baseClasses} ${
                         isActive(grandchild.href) ? activeStyle : hoverStyle
                       } ${inactiveStyle}`}
                     >
-                      <IconComponent size={14} className="flex-shrink-0" />
-                      <span className="ml-2">{grandchild.title}</span>
+                      <span>{grandchild.title}</span>
                     </Link>
                   ))}
                 </div>
@@ -434,8 +462,7 @@ const PopoverMenuContent: React.FC<{
               isActive(child.href) ? activeStyle : hoverStyle
             } ${inactiveStyle}`}
           >
-            <IconComponent size={16} className="flex-shrink-0" />
-            <span className="ml-2">{child.title}</span>
+            <span>{child.title}</span>
           </Link>
         );
       })}
@@ -478,50 +505,42 @@ const MenuItem: React.FC<MenuItemProps> = ({
     );
   };
 
-  const baseClasses = `flex items-center my-0.5 rounded-sm text-xs font-medium transition-colors duration-200 cursor-pointer`;
+  const baseClasses = `flex items-center my-px rounded text-[11px] font-medium transition-colors duration-150 cursor-pointer`;
   const paddingClass =
-    level === 1 ? "p-2" : level === 2 ? "pl-5 py-1.5" : "pl-9 py-1.5";
-  const activeStyle = "bg-gray-700 text-white";
-  const hoverStyle = "hover:bg-gray-700 hover:text-white";
-  const inactiveStyle = "text-gray-400";
+    level === 1 ? "px-2.5 py-1.5" : level === 2 ? "pl-3 py-1" : "pl-5 py-1";
+  const activeStyle =
+    level === 1 ? "bg-gray-100 text-gray-900 font-semibold" : "text-teal-700 font-semibold";
+  const hoverStyle = "hover:bg-gray-100 hover:text-gray-900";
+  const inactiveStyle = level === 1 ? "text-gray-700 font-semibold" : "text-gray-500";
 
   // --- Render Logic for Parent/Link ---
   if (isParent) {
     return (
-      <div className={`space-y-0.5 ${level > 1 ? "mt-0.5" : "mt-1"}`}>
+      <div className={level > 1 ? "mt-px" : "mt-0.5"}>
         <div
           onClick={handleItemClick}
-          // Parent is active only if it is the current page link OR if it's open (to show children)
           className={`${baseClasses} ${paddingClass} ${
-            isSelfActive || isOpen ? activeStyle : hoverStyle
+            isSelfActive || isOpen ? activeStyle : `${hoverStyle} ${inactiveStyle}`
           } ${isCollapsed && level === 1 ? "justify-center" : ""}`}
         >
-          <IconComponent size={16} className="flex-shrink-0" />
-          {!isCollapsed && (
-            <span
-              className={`ml-2 flex-grow overflow-hidden whitespace-nowrap ${
-                // Change text color based on active state
-                level > 1
-                  ? "text-gray-300"
-                  : isSelfActive
-                    ? "text-white"
-                    : "text-white font-semibold"
-              }`}
-            >
-              {item.title}
-            </span>
-          )}
-          {!(isCollapsed && level === 1) && (
-            <ChevronDown
-              size={14}
-              className={`transition-transform duration-200 ${
-                isOpen ? "rotate-0" : "-rotate-90"
-              } flex-shrink-0`}
-            />
+          {isCollapsed && level === 1 ? (
+            <IconComponent size={14} className="shrink-0" />
+          ) : (
+            <>
+              <span className="grow overflow-hidden whitespace-nowrap">
+                {item.title}
+              </span>
+              <ChevronDown
+                size={10}
+                className={`transition-transform duration-150 shrink-0 text-gray-400 ${
+                  isOpen ? "rotate-0" : "-rotate-90"
+                }`}
+              />
+            </>
           )}
         </div>
         {!isCollapsed && isOpen && (
-          <div className="flex flex-col">
+          <div className="flex flex-col border-l-2 border-gray-100 ml-3 mt-0.5 mb-0.5">
             {item.children!.map((child) => (
               <MenuItem
                 key={child.title}
@@ -538,27 +557,21 @@ const MenuItem: React.FC<MenuItemProps> = ({
     );
   }
 
-  // --- Render Logic for Leaf Link (Only this link should be active) ---
-  const isCurrentActive = isSelfActive; // Using isSelfActive which is already calculated
+  // --- Render Logic for Leaf Link ---
+  const isCurrentActive = isSelfActive;
 
   return (
     <Link
       href={item.href || "#"}
       passHref
       className={`${baseClasses} ${paddingClass} ${
-        // Leaf links only use isCurrentActive for styling
         isCurrentActive ? activeStyle : `${hoverStyle} ${inactiveStyle}`
       } ${isCollapsed ? "justify-center" : ""} relative`}
     >
-      <IconComponent size={16} className="flex-shrink-0" />
-      {!isCollapsed && (
-        <span
-          className={`ml-2 overflow-hidden whitespace-nowrap ${
-            isCurrentActive ? "text-white" : "text-gray-300"
-          }`}
-        >
-          {item.title}
-        </span>
+      {isCollapsed ? (
+        <IconComponent size={14} className="shrink-0" />
+      ) : (
+        <span className="overflow-hidden whitespace-nowrap">{item.title}</span>
       )}
     </Link>
   );
@@ -580,20 +593,20 @@ const Header: React.FC<HeaderProps> = ({
 
   // --- FILTERING LOGIC IMPLEMENTED HERE ---
 
-  // 1. Normalize the allowed paths from roles
+  // Normalize stored role paths (strip trailing slashes; query strings already absent in roles)
   const allowedPaths = roles
     .map((path: string) => normalizePath(path))
     .filter((path: string | null): path is string => path !== null);
 
-  // 2. Filter the navigation items
+  // Filter nav: pass normalised allowedPaths so hrefToPath comparisons are symmetric
   const filteredNavItems = roles.includes("*")
     ? navItems
-    : filterNavItems(navItems, roles);
+    : filterNavItems(navItems, allowedPaths);
 
   // --- END FILTERING LOGIC ---
 
   // Settings is no longer part of the main nav — only show its icon to roles that include it
-  const canAccessSettings = roles.includes("*") || allowedPaths.includes("/settings");
+  const canAccessSettings = roles.includes("*") || pathAllowed("/settings", allowedPaths);
 
   // --- EFFECT TO UPDATE DOCUMENT TITLE ---
   useEffect(() => {
@@ -628,26 +641,17 @@ const Header: React.FC<HeaderProps> = ({
   return (
     <>
       <aside
-        className={`bg-gray-800 text-gray-300 shadow-xl fixed left-0 top-0 h-screen ${sidebarWidthClass} flex flex-col transition-all duration-300 z-50 border-r border-gray-700`}
+        className={`bg-white text-gray-700 shadow-sm fixed left-0 top-0 h-screen ${sidebarWidthClass} flex flex-col transition-all duration-300 z-50 border-r border-gray-200`}
       >
         {/* 1. Header/Logo Section */}
-        <div className="flex items-center justify-center h-12 p-1 border-b border-gray-700 transition-all duration-300">
-          <Link
-            href="/"
-            passHref
-            className={`text-xl font-bold text-teal-400 hover:text-white ${
-              isCollapsed ? "hidden" : "block"
-            }`}
-          >
-            Marketing Tool
-          </Link>
-          {isCollapsed && (
-            <span className="text-xl font-extrabold text-teal-400">T</span>
-          )}
-        </div>
+        {isCollapsed && (
+          <div className="flex items-center justify-center h-9 px-1 border-b border-gray-100 transition-all duration-300">
+            <span className="text-sm font-extrabold text-teal-600">M</span>
+          </div>
+        )}
 
         {/* 2. Navigation Section */}
-        <nav className="flex flex-col flex-grow px-1.5 mt-2 overflow-y-auto">
+        <nav className="flex flex-col grow px-1.5 mt-1 overflow-y-auto">
           {/* 🔑 RENDER THE FILTERED MENU ITEMS */}
           {filteredNavItems.map((item) => (
             <MenuItem
@@ -663,33 +667,33 @@ const Header: React.FC<HeaderProps> = ({
 
         {!isCollapsed && <LogoutButton />}
         {/* 3. Footer/Toggle Button Section */}
-        <div className={`p-1.5 border-t border-gray-700 flex items-center ${canAccessSettings ? "justify-between" : "justify-center"}`}>
+        <div className={`px-1.5 py-1 border-t border-gray-200 flex items-center ${canAccessSettings ? "justify-between" : "justify-center"}`}>
           {canAccessSettings && (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-0.5">
               <Link
                 href="/settings"
                 passHref
-                className={`p-1 rounded-full transition-colors ${
+                className={`p-1 rounded transition-colors ${
                   normalizePath(pathname)?.startsWith("/settings")
-                    ? "text-teal-400 bg-gray-700"
-                    : "text-gray-400 hover:bg-gray-700 hover:text-white"
+                    ? "text-teal-600 bg-teal-50"
+                    : "text-gray-400 hover:bg-gray-100 hover:text-gray-700"
                 }`}
                 aria-label="Settings"
                 title="Settings"
               >
-                <Settings size={18} />
+                <Settings size={14} />
               </Link>
               <NotificationBell />
             </div>
           )}
           <button
             onClick={handleToggle}
-            className="p-1 rounded-full text-gray-400 hover:bg-gray-700 hover:text-white transition-colors"
+            className="p-1 rounded text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"
             aria-expanded={!isCollapsed}
             aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             <ChevronLeft
-              size={18}
+              size={14}
               className={`transition-transform duration-300 ${
                 isCollapsed ? "rotate-180" : "rotate-0"
               }`}

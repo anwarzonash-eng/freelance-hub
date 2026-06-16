@@ -1,7 +1,8 @@
 // app/components/LayoutWrapper.jsx
 "use client";
 import { useEffect, useState } from "react";
-import Header from "./Header"; // Adjust path if necessary
+import Header from "./Header";
+import { pathAllowed } from "./Header";
 import { usePathname, useRouter } from "next/navigation";
 
 const COLLAPSED_WIDTH = "w-14"; // Matches w-14 in Header.jsx
@@ -14,6 +15,8 @@ const LayoutWrapper = ({ children, useData }) => {
   const router = useRouter();
   const pathname = usePathname();
 
+  const isStandalonePage = pathname?.startsWith("/viewCV");
+
   useEffect(() => {
     setIsLoggedIn(checkAuth());
     console.log("Auth check on path change:", pathname);
@@ -25,20 +28,36 @@ const LayoutWrapper = ({ children, useData }) => {
   };
 
   function checkAuth() {
+    // Standalone pages are fully public — no token or role required
+    if (isStandalonePage) {
+      return true;
+    }
     const token = localStorage.getItem("authToken");
     if (!token) {
       router.push("/login");
       return false;
-    } else {
-      if (pathname === "/login") {
-        router.push("/");
-      }
+    }
+    if (pathname === "/login") {
+      router.push("/");
       return true;
     }
+    const roles = JSON.parse(localStorage.getItem("roles") || '["*"]');
+    if (!roles.includes("*")) {
+      const allowedPaths = roles.map((p) => p.replace(/\/$/, "") || "/");
+      if (pathname !== "/" && !pathAllowed(pathname, allowedPaths)) {
+        router.push("/");
+        return false;
+      }
+    }
+    return true;
   }
 
   // Tailwind class for the main content margin
   const contentMarginClass = isCollapsed ? "ml-14" : "ml-56";
+
+  if (isStandalonePage) {
+    return <>{children}</>;
+  }
 
   return (
     // Flex container for the entire application layout

@@ -36,10 +36,9 @@ export default function LogoutButton() {
       onClick={handleLogout}
       // 5. Disable the button while loading
       disabled={loading}
-      className=""
+      className="mx-1.5 mb-1 px-2.5 py-1 text-[11px] text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors text-left"
     >
-      {/* 6. Display dynamic text based on the loading state */}
-      {loading ? "Logging Out..." : "Logout"}
+      {loading ? "Logging out…" : "Logout"}
     </button>
   );
 }
