@@ -194,6 +194,16 @@ export enum EmailNotificationsAPIRoutes {
     MARK_READ = 'email-notifications/mark-read',
 }
 
+export enum SponsoredCompaniesAPIRoutes {
+    GET_ALL = 'sponsored-companies',
+    GET_DISTINCT = 'sponsored-companies/distinct-values',
+    GET_BY_ID = 'sponsored-companies/:id',
+    CREATE = 'sponsored-companies',
+    UPDATE = 'sponsored-companies/:id',
+    DELETE = 'sponsored-companies/:id',
+    UPSERT_JSON = 'sponsored-companies/upsert-json',
+}
+
 export enum ShowErrorMessageOptionsRoutes {
     INCLUDE,
     EXCLUDE

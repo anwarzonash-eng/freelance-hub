@@ -208,6 +208,21 @@ const navItems: NavItem[] = [
         href: "/jobs/ai-jobs",
         icon: "Jobs",
       },
+      {
+        title: "Companies",
+        href: "/jobs/companies",
+        icon: "Clients",
+      },
+      {
+        title: "Listed Jobs",
+        href: "/jobs/listed-jobs",
+        icon: "Reporting",
+      },
+      {
+        title: "CVs",
+        href: "/jobs/cvs",
+        icon: "Leads",
+      },
     ],
   },
   {
@@ -294,6 +309,9 @@ export function getAllNavRoles(
     { label: "Auth", value: "/auth" },
     { label: "Best Match", value: "/best-match" },
     { label: "AI Jobs", value: "/jobs/ai-jobs" },
+    { label: "Companies", value: "/jobs/companies" },
+    { label: "Listed Jobs", value: "/jobs/listed-jobs" },
+    { label: "CVs", value: "/jobs/cvs" },
     { label: "Professionals", value: "/professionals" },
     { label: "Email Campaigns", value: "/professionals/email-campaigns" },
     { label: "Clients", value: "/clients" },
