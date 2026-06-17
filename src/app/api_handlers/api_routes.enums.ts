@@ -202,6 +202,7 @@ export enum SponsoredCompaniesAPIRoutes {
     UPDATE = 'sponsored-companies/:id',
     DELETE = 'sponsored-companies/:id',
     UPSERT_JSON = 'sponsored-companies/upsert-json',
+    RAW_QUERY = 'sponsored-companies/raw-query',
 }
 
 export enum SponsoredJobsAPIRoutes {

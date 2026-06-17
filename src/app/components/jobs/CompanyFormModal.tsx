@@ -22,6 +22,7 @@ const EMPTY_FORM = {
     hr_email: '',
     is_deleted: false,
     visa_mentioned: false,
+    rank: '' as number | '',
     it_jobs_count: 0,
     overall_jobs_count: 0,
 }
@@ -46,6 +47,7 @@ export default function CompanyFormModal({ company, onClose, onSaved }: Props) {
                 hr_email: company.hr_email ?? '',
                 is_deleted: Boolean(company.is_deleted),
                 visa_mentioned: Boolean(company.visa_mentioned),
+                rank: company.rank != null ? Number(company.rank) : '' as number | '',
                 it_jobs_count: Number(company.it_jobs_count) || 0,
                 overall_jobs_count: Number(company.overall_jobs_count) || 0,
             })
@@ -70,7 +72,7 @@ export default function CompanyFormModal({ company, onClose, onSaved }: Props) {
             const meta_data = metaRows.length > 0
                 ? Object.fromEntries(metaRows.filter(r => r.key.trim()).map(r => [r.key.trim(), r.value]))
                 : null
-            const payload = { ...form, meta_data }
+            const payload = { ...form, rank: form.rank !== '' ? Number(form.rank) : null, meta_data }
             if (isEdit) {
                 await updateCompany(company.id, payload)
             } else {
@@ -133,6 +135,11 @@ export default function CompanyFormModal({ company, onClose, onSaved }: Props) {
                             <div className="col-span-2">
                                 <label className={labelCls}>HR Email</label>
                                 <input className={inputCls} type="email" value={form.hr_email} onChange={e => set('hr_email', e.target.value)} />
+                            </div>
+                            <div>
+                                <label className={labelCls}>Rank</label>
+                                <input className={inputCls} type="number" min={1} value={form.rank} placeholder="Leave blank for unranked"
+                                    onChange={e => set('rank', e.target.value === '' ? '' : Number(e.target.value))} />
                             </div>
                             <div>
                                 <label className={labelCls}>IT Jobs Count</label>

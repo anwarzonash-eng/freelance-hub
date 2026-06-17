@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { Upload, ChevronDown, ChevronUp, CheckCircle, AlertTriangle } from 'lucide-react'
+import { Upload, ChevronDown, ChevronUp, CheckCircle, AlertTriangle, Copy } from 'lucide-react'
 import { upsertCompaniesFromJson } from '@/app/api_handlers/api/sponsored-companies.api'
 
 interface Props {
@@ -16,13 +16,62 @@ function parseLooseJson(input: string): any {
     return new Function(`"use strict"; return (${input})`)()
 }
 
+const SAMPLE_JSON = `[
+  {
+    "id": "acme_corp_ltd",
+    "organisation_name": "Acme Corp Ltd",
+    "city": "London",
+    "county": "Greater London",
+    "sponsor_type": "Worker",
+    "sponsor_route": "Skilled Worker",
+    "website": "https://acme.com",
+    "career_page": "https://acme.com/careers",
+    "hr_email": "hr@acme.com",
+    "rank": 1,
+    "is_deleted": false,
+    "visa_mentioned": true,
+    "it_jobs_count": 12,
+    "overall_jobs_count": 45
+  },
+  {
+    "id": "globex_solutions",
+    "organisation_name": "Globex Solutions",
+    "city": "Manchester",
+    "county": "Greater Manchester",
+    "sponsor_type": "Worker",
+    "sponsor_route": "Skilled Worker",
+    "website": "https://globex.io",
+    "career_page": null,
+    "hr_email": null,
+    "rank": null,
+    "is_deleted": false,
+    "visa_mentioned": false,
+    "it_jobs_count": 3,
+    "overall_jobs_count": 10
+  }
+]`
+
 export default function CompanyJsonPanel({ onDone }: Props) {
     const [open, setOpen] = useState(false)
     const [text, setText] = useState('')
     const [loading, setLoading] = useState(false)
     const [result, setResult] = useState<{ added: number; updated: number; errors: string[] } | null>(null)
     const [parseError, setParseError] = useState('')
+    const [showSample, setShowSample] = useState(false)
+    const [copied, setCopied] = useState(false)
     const fileRef = useRef<HTMLInputElement>(null)
+
+    const copySample = () => {
+        navigator.clipboard.writeText(SAMPLE_JSON)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 1500)
+    }
+
+    const useSample = () => {
+        setText(SAMPLE_JSON)
+        setParseError('')
+        setResult(null)
+    }
 
     const processJson = async (json: string) => {
         setParseError('')
@@ -72,8 +121,39 @@ export default function CompanyJsonPanel({ onDone }: Props) {
             {open && (
                 <div className="px-3 pb-3 space-y-2">
                     <p className="text-[10px] text-gray-400">
-                        Paste a JSON array of companies or upload a .json file. Existing IDs → updates <strong>website, career_page, hr_email, is_deleted</strong> only. New IDs → full insert.
+                        Paste a JSON array of companies or upload a .json file. Existing IDs → updates <strong>website, career_page, hr_email, rank, is_deleted</strong> only. New IDs → full insert.
                     </p>
+
+                    {/* Sample JSON */}
+                    <div className="border border-gray-200 rounded bg-white">
+                        <button
+                            type="button"
+                            className="w-full flex items-center justify-between px-2 py-1.5 text-[10px] text-gray-500 hover:bg-gray-50"
+                            onClick={() => setShowSample(s => !s)}
+                        >
+                            <span className="font-medium text-gray-600">Sample JSON</span>
+                            <div className="flex items-center gap-2">
+                                {showSample && (
+                                    <>
+                                        <button type="button" onClick={e => { e.stopPropagation(); copySample() }}
+                                            className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-gray-700 border border-gray-200 rounded px-1.5 py-0.5">
+                                            <Copy size={9} /> {copied ? 'Copied!' : 'Copy'}
+                                        </button>
+                                        <button type="button" onClick={e => { e.stopPropagation(); useSample() }}
+                                            className="flex items-center gap-1 text-[10px] text-teal-600 hover:text-teal-800 border border-teal-200 rounded px-1.5 py-0.5">
+                                            Use this
+                                        </button>
+                                    </>
+                                )}
+                                {showSample ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                            </div>
+                        </button>
+                        {showSample && (
+                            <pre className="px-2 pb-2 text-[10px] font-mono text-gray-600 overflow-x-auto border-t border-gray-100 leading-relaxed">
+                                {SAMPLE_JSON}
+                            </pre>
+                        )}
+                    </div>
 
                     <textarea
                         className="w-full h-40 border border-gray-300 rounded px-2 py-1.5 text-xs font-mono resize-y focus:outline-none focus:border-gray-500 bg-white"

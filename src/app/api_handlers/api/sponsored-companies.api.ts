@@ -27,3 +27,26 @@ export async function deleteCompany(id: string) {
 export async function upsertCompaniesFromJson(companies: any[]) {
     return apiClient(SponsoredCompaniesAPIRoutes.UPSERT_JSON, ApiMethod.POST, { companies }, undefined, {}, true)
 }
+
+export async function rawQueryCompanies(body: { where_clause?: string; page?: number; limit?: number; export_all?: boolean }) {
+    return apiClient(SponsoredCompaniesAPIRoutes.RAW_QUERY, ApiMethod.POST, body)
+}
+
+export async function rawQueryCompaniesOrError(body: { where_clause?: string; page?: number; limit?: number; export_all?: boolean }): Promise<{ payload: any; error: string | null }> {
+    const base = (process.env.NEXT_PUBLIC_API_PATH ?? '').replace(/\/$/, '')
+    const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null
+    try {
+        const res = await fetch(`${base}/${SponsoredCompaniesAPIRoutes.RAW_QUERY}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+            body: JSON.stringify(body),
+        })
+        const json = await res.json()
+        if (!res.ok || json.APIStatus === 'error') {
+            return { payload: null, error: json.message || 'SQL error' }
+        }
+        return { payload: json, error: null }
+    } catch (e: any) {
+        return { payload: null, error: e?.message || 'Network error' }
+    }
+}
