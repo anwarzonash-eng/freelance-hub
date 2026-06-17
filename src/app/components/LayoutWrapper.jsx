@@ -10,12 +10,13 @@ const EXPANDED_WIDTH = "w-44";
 const SIDEBAR_STORAGE_KEY = "sidebar_collapsed";
 
 const LayoutWrapper = ({ children, useData }) => {
-  const [isCollapsed, setIsCollapsed] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true";
-    }
-    return false;
-  });
+  const [isCollapsed, setIsCollapsed] = useState(false);
+
+  // Read localStorage after mount — avoids SSR/hydration mismatch where
+  // the server renders with false but the client initializer sees localStorage.
+  useEffect(() => {
+    setIsCollapsed(localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true");
+  }, []);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   const router = useRouter();

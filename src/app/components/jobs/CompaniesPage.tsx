@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Plus, RefreshCw, Pencil, Trash2, ExternalLink, ChevronDown, ChevronUp, Search, Building2, BriefcaseBusiness, Terminal, Download, X, SlidersHorizontal, ClipboardCheck, Users } from 'lucide-react'
+import { Plus, RefreshCw, Pencil, Trash2, ExternalLink, ChevronDown, ChevronUp, Search, Building2, BriefcaseBusiness, Terminal, Download, X, SlidersHorizontal, ClipboardCheck, Users, Copy, Check } from 'lucide-react'
 import { getAllCompanies, getDistinctCompanyValues, deleteCompany, rawQueryCompanies, rawQueryCompaniesOrError } from '@/app/api_handlers/api/sponsored-companies.api'
 import { getCompanyCategories } from '@/app/api_handlers/api/company-categories.api'
 import { listAuthUsers } from '@/app/api_handlers/api/auth.api'
@@ -12,7 +12,7 @@ import ManualCheckModal from './ManualCheckModal'
 import AssignModal from './AssignModal'
 
 const LIMIT_OPTIONS = [25, 50, 100, 200, 500, 1000, 2000, 3000, 4000, 5000]
-const EMPTY_FILTERS = { sponsor_type: '', sponsor_route: '', is_deleted: 'false', visa_mentioned: '', keyword: '', has_website: '', has_career_page: '', ranked: '', rank_op: '', rank_val: '', manual_check_done: '', date_from: '', date_to: '', checked_by: '', category_id: '', assigned: '', assigned_to: '' }
+const EMPTY_FILTERS = { sponsor_type: '', sponsor_route: '', is_deleted: 'false', visa_mentioned: '', keyword: '', has_website: '', has_career_page: '', ranked: '', rank_op: '', rank_val: '', manual_check_done: '', has_it_jobs: '', date_from: '', date_to: '', checked_by: '', category_id: '', assigned: '', assigned_to: '' }
 
 const ALL_COLUMNS = [
     { key: 'id', label: 'ID' },
@@ -34,11 +34,51 @@ const ALL_COLUMNS = [
 ]
 const DEFAULT_EXPORT_COLS = ['organisation_name', 'city', 'county', 'sponsor_type', 'sponsor_route', 'website', 'career_page', 'hr_email']
 
+// Table column visibility — keys match render logic below
+const TABLE_COLS = [
+    { key: 'num',          label: '#',            default: false },
+    { key: 'id',           label: 'ID',           default: false },
+    { key: 'rank',         label: 'Rank',         default: true  },
+    { key: 'organisation', label: 'Organisation', default: true  },
+    { key: 'city',         label: 'City',         default: true  },
+    { key: 'sponsor_type', label: 'Sponsor Type', default: false },
+    { key: 'sponsor_route',label: 'Route',        default: false },
+    { key: 'links',        label: 'Links',        default: true  },
+    { key: 'category',     label: 'Category',     default: true  },
+    { key: 'is_deleted',   label: 'Deleted',      default: false },
+    { key: 'visa',         label: 'Visa',         default: true  },
+    { key: 'checked',           label: 'Checked',       default: true  },
+    { key: 'has_it_jobs',       label: 'Has IT Jobs',   default: false },
+    { key: 'estimated_it_jobs', label: 'Est. IT Jobs',  default: false },
+    { key: 'checked_by_col',    label: 'Checked By',    default: false },
+    { key: 'overall_jobs',      label: 'Total Jobs',    default: false },
+    { key: 'it_jobs_count',     label: 'IT Jobs',       default: false },
+]
+const DEFAULT_TABLE_COLS = new Set(TABLE_COLS.filter(c => c.default).map(c => c.key))
+
 function Badge({ value, on, off }: { value: boolean; on: string; off: string }) {
     return (
         <span className={`inline-block text-[9px] px-1.5 py-0.5 rounded font-medium ${value ? on : off}`}>
             {value ? 'Yes' : 'No'}
         </span>
+    )
+}
+
+function CopyBtn({ value }: { value: string }) {
+    const [copied, setCopied] = useState(false)
+    if (!value) return null
+    const copy = (e: React.MouseEvent) => {
+        e.stopPropagation()
+        navigator.clipboard.writeText(value).then(() => {
+            setCopied(true)
+            setTimeout(() => setCopied(false), 1500)
+        })
+    }
+    return (
+        <button onClick={copy} title={`Copy: ${value}`}
+            className="shrink-0 text-gray-300 hover:text-gray-600 transition-colors">
+            {copied ? <Check size={10} className="text-teal-500" /> : <Copy size={10} />}
+        </button>
     )
 }
 
@@ -76,8 +116,22 @@ export default function CompaniesPage() {
     const [showViewDd, setShowViewDd] = useState(false)
     const viewDdRef = useRef<HTMLDivElement>(null)
 
+    // Table column visibility
+    const [visibleCols, setVisibleCols] = useState<Set<string>>(new Set(DEFAULT_TABLE_COLS))
+    const [showColDd, setShowColDd] = useState(false)
+    const colDdRef = useRef<HTMLDivElement>(null)
+
+    const col = (key: string) => visibleCols.has(key)
+
     const togglePanel = (key: string) =>
         setVisiblePanels(prev => {
+            const s = new Set(prev)
+            if (s.has(key)) s.delete(key); else s.add(key)
+            return s
+        })
+
+    const toggleCol = (key: string) =>
+        setVisibleCols(prev => {
             const s = new Set(prev)
             if (s.has(key)) s.delete(key); else s.add(key)
             return s
@@ -88,6 +142,7 @@ export default function CompaniesPage() {
     useEffect(() => {
         const handler = (e: MouseEvent) => {
             if (viewDdRef.current && !viewDdRef.current.contains(e.target as Node)) setShowViewDd(false)
+            if (colDdRef.current && !colDdRef.current.contains(e.target as Node)) setShowColDd(false)
         }
         document.addEventListener('mousedown', handler)
         return () => document.removeEventListener('mousedown', handler)
@@ -122,6 +177,7 @@ export default function CompaniesPage() {
             if (af.ranked !== '') q.ranked = af.ranked
             if (af.rank_op && af.rank_val !== '') { q.rank_op = af.rank_op; q.rank_val = af.rank_val }
             if (af.manual_check_done !== '') q.manual_check_done = af.manual_check_done
+            if (af.has_it_jobs !== '') q.has_it_jobs = af.has_it_jobs
             if (af.date_from) q.date_from = af.date_from
             if (af.date_to) q.date_to = af.date_to
             if (af.checked_by) q.checked_by = af.checked_by
@@ -273,6 +329,7 @@ export default function CompaniesPage() {
                 if (applied.ranked !== '') q.ranked = applied.ranked
                 if (applied.rank_op && applied.rank_val !== '') { q.rank_op = applied.rank_op; q.rank_val = applied.rank_val }
                 if (applied.manual_check_done !== '') q.manual_check_done = applied.manual_check_done
+                if (applied.has_it_jobs !== '') q.has_it_jobs = applied.has_it_jobs
                 if (applied.date_from) q.date_from = applied.date_from
                 if (applied.date_to) q.date_to = applied.date_to
                 if (applied.checked_by) q.checked_by = applied.checked_by
@@ -304,60 +361,12 @@ export default function CompaniesPage() {
 
     return (
         <div className="p-3 bg-white min-h-screen">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-3 border-b border-gray-200 pb-2">
-                <div className="flex items-center gap-2">
-                    <Building2 size={14} className="text-gray-500" />
-                    <h1 className="text-sm font-semibold text-gray-800">Sponsored Companies</h1>
-                    <span className="text-[10px] text-gray-400">{total.toLocaleString()} total</span>
-                    {sqlMode && <span className="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-medium">SQL Mode</span>}
-                </div>
-                <div className="flex items-center gap-2">
-                    <button onClick={refresh} disabled={loading} className="flex items-center gap-1 text-xs border border-gray-300 rounded px-2 py-1 hover:bg-gray-50 disabled:opacity-50 text-gray-600">
-                        <RefreshCw size={11} className={loading ? 'animate-spin' : ''} /> Refresh
-                    </button>
-
-                    {/* View toggle */}
-                    <div className="relative" ref={viewDdRef}>
-                        <button
-                            onClick={() => setShowViewDd(p => !p)}
-                            className="flex items-center gap-1 text-xs border border-gray-300 rounded px-2 py-1 hover:bg-gray-50 text-gray-600"
-                        >
-                            <SlidersHorizontal size={11} /> View
-                            {visiblePanels.size > 0 && (
-                                <span className="ml-0.5 bg-teal-500 text-white text-[9px] rounded-full w-3.5 h-3.5 flex items-center justify-center font-bold">
-                                    {visiblePanels.size}
-                                </span>
-                            )}
-                        </button>
-                        {showViewDd && (
-                            <div className="absolute right-0 top-full mt-1 z-30 bg-white border border-gray-200 rounded shadow-lg p-2 min-w-[160px]">
-                                {[
-                                    { key: 'upload', label: 'Upload JSON' },
-                                    { key: 'filters', label: 'Filters' },
-                                    { key: 'sql', label: 'SQL Query' },
-                                    { key: 'export', label: 'Export JSON' },
-                                ].map(({ key, label }) => (
-                                    <label key={key} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 px-1 py-1 rounded">
-                                        <input type="checkbox" className="w-3 h-3"
-                                            checked={visiblePanels.has(key)}
-                                            onChange={() => togglePanel(key)} />
-                                        <span className="text-xs text-gray-700">{label}</span>
-                                    </label>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-
-                    {isAdmin && !sqlMode && (
-                        <button onClick={() => setAssigning(true)} className="flex items-center gap-1 text-xs bg-indigo-600 text-white rounded px-3 py-1 hover:bg-indigo-700">
-                            <Users size={12} /> Assign
-                        </button>
-                    )}
-                    <button onClick={() => setAdding(true)} className="flex items-center gap-1 text-xs bg-gray-800 text-white rounded px-3 py-1 hover:bg-gray-700">
-                        <Plus size={12} /> Add Company
-                    </button>
-                </div>
+            {/* Header — title only, controls live in the table's last column header */}
+            <div className="flex items-center gap-2 mb-3 border-b border-gray-200 pb-2">
+                <Building2 size={14} className="text-gray-500" />
+                <h1 className="text-sm font-semibold text-gray-800">Sponsored Companies</h1>
+                <span className="text-[10px] text-gray-400">{total.toLocaleString()} total</span>
+                {sqlMode && <span className="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-medium">SQL Mode</span>}
             </div>
 
             {/* JSON Upload Panel */}
@@ -516,6 +525,17 @@ export default function CompaniesPage() {
                     </div>
 
                     <div className="flex flex-col gap-0.5">
+                        <label className="text-[10px] text-gray-400 uppercase">Has IT Jobs</label>
+                        <select value={filters.has_it_jobs} onChange={e => setFilters(f => ({ ...f, has_it_jobs: e.target.value }))}
+                            className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none">
+                            <option value="">All</option>
+                            <option value="true">Yes</option>
+                            <option value="false">No</option>
+                            <option value="unknown">Unknown</option>
+                        </select>
+                    </div>
+
+                    <div className="flex flex-col gap-0.5">
                         <label className="text-[10px] text-gray-400 uppercase">Check Date From</label>
                         <input type="date" value={filters.date_from} onChange={e => setFilters(f => ({ ...f, date_from: e.target.value }))}
                             className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none" />
@@ -570,14 +590,6 @@ export default function CompaniesPage() {
 
                     <button onClick={applyFilters} className="px-3 py-1 text-xs bg-gray-800 text-white rounded hover:bg-gray-700 mt-auto">Filter</button>
                     <button onClick={clearFilters} className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-white mt-auto">Clear</button>
-
-                    <div className="flex flex-col gap-0.5 ml-auto">
-                        <label className="text-[10px] text-gray-400 uppercase">Per page</label>
-                        <select value={limit} onChange={e => { setLimit(Number(e.target.value)); setPage(1) }}
-                            className="border border-gray-300 rounded px-1.5 py-1 text-xs bg-white focus:outline-none">
-                            {LIMIT_OPTIONS.map(o => <option key={o} value={o}>{o.toLocaleString()}</option>)}
-                        </select>
-                    </div>
                 </div>
             </div>
 
@@ -684,102 +696,258 @@ export default function CompaniesPage() {
                 <table className="w-full text-xs border-collapse">
                     <thead>
                         <tr className="bg-gray-100 border-b border-gray-300">
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-500 border-r border-gray-200 w-6">#</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 w-10">Rank</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Organisation</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">City</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Sponsor Type</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Route</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Links</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Category</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Deleted</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Visa</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Checked</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 w-20"></th>
+                            {col('num')          && <th className="px-2 py-1 text-left font-medium text-gray-500 border-r border-gray-200 w-6">#</th>}
+                            {col('id')           && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 max-w-[80px]">ID</th>}
+                            {col('rank')         && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 w-10">Rank</th>}
+                            {col('organisation') && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200">Organisation</th>}
+                            {col('city')         && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200">City</th>}
+                            {col('sponsor_type') && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Sponsor Type</th>}
+                            {col('sponsor_route')&& <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200">Route</th>}
+                            {col('links')        && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200">Links</th>}
+                            {col('category')     && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200">Category</th>}
+                            {col('is_deleted')   && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200">Del</th>}
+                            {col('visa')         && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200">Visa</th>}
+                            {col('checked')           && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Checked</th>}
+                            {col('has_it_jobs')       && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Has IT Jobs</th>}
+                            {col('estimated_it_jobs') && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Est. IT Jobs</th>}
+                            {col('checked_by_col')    && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Checked By</th>}
+                            {col('overall_jobs')      && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Total Jobs</th>}
+                            {col('it_jobs_count')     && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">IT Jobs</th>}
+                            <th className="px-1 py-1 font-medium text-gray-600">
+                                <div className="flex items-center justify-end gap-1.5 pr-1">
+                                    {/* Refresh */}
+                                    <button onClick={refresh} disabled={loading} title="Refresh"
+                                        className="text-gray-400 hover:text-gray-700 disabled:opacity-40">
+                                        <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+                                    </button>
+
+                                    {/* Columns dropdown */}
+                                    <div className="relative" ref={colDdRef}>
+                                        <button onClick={() => { setShowColDd(p => !p); setShowViewDd(false) }}
+                                            title="Show/hide columns"
+                                            className={`text-gray-400 hover:text-gray-700 relative ${showColDd ? 'text-indigo-600' : ''}`}>
+                                            <SlidersHorizontal size={12} />
+                                            {visibleCols.size !== DEFAULT_TABLE_COLS.size && (
+                                                <span className="absolute -top-1 -right-1 bg-indigo-500 text-white text-[7px] rounded-full w-2.5 h-2.5 flex items-center justify-center font-bold leading-none">·</span>
+                                            )}
+                                        </button>
+                                        {showColDd && (
+                                            <div className="absolute right-0 top-full mt-1 z-40 bg-white border border-gray-200 rounded shadow-lg p-2 min-w-[170px]">
+                                                <p className="text-[9px] text-gray-400 uppercase font-semibold px-1 mb-1">Columns</p>
+                                                {TABLE_COLS.map(({ key, label }) => (
+                                                    <label key={key} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded">
+                                                        <input type="checkbox" className="w-3 h-3"
+                                                            checked={visibleCols.has(key)}
+                                                            onChange={() => toggleCol(key)} />
+                                                        <span className="text-xs text-gray-700">{label}</span>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* View (panels) dropdown */}
+                                    <div className="relative" ref={viewDdRef}>
+                                        <button onClick={() => { setShowViewDd(p => !p); setShowColDd(false) }}
+                                            title="Toggle panels"
+                                            className={`text-gray-400 hover:text-gray-700 relative ${showViewDd ? 'text-teal-600' : ''}`}>
+                                            <ChevronDown size={12} />
+                                            {visiblePanels.size > 0 && (
+                                                <span className="absolute -top-1 -right-1 bg-teal-500 text-white text-[7px] rounded-full w-2.5 h-2.5 flex items-center justify-center font-bold leading-none">·</span>
+                                            )}
+                                        </button>
+                                        {showViewDd && (
+                                            <div className="absolute right-0 top-full mt-1 z-40 bg-white border border-gray-200 rounded shadow-lg p-2 min-w-[160px]">
+                                                <p className="text-[9px] text-gray-400 uppercase font-semibold px-1 mb-1">Panels</p>
+                                                {[
+                                                    { key: 'upload', label: 'Upload JSON' },
+                                                    { key: 'filters', label: 'Filters' },
+                                                    { key: 'sql', label: 'SQL Query' },
+                                                    { key: 'export', label: 'Export JSON' },
+                                                ].map(({ key, label }) => (
+                                                    <label key={key} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded">
+                                                        <input type="checkbox" className="w-3 h-3"
+                                                            checked={visiblePanels.has(key)}
+                                                            onChange={() => togglePanel(key)} />
+                                                        <span className="text-xs text-gray-700">{label}</span>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Assign (admin only) */}
+                                    {isAdmin && !sqlMode && (
+                                        <button onClick={() => setAssigning(true)} title="Assign companies"
+                                            className="text-gray-400 hover:text-indigo-600"><Users size={12} /></button>
+                                    )}
+
+                                    {/* Add company */}
+                                    <button onClick={() => setAdding(true)} title="Add company"
+                                        className="text-gray-400 hover:text-gray-800"><Plus size={12} /></button>
+                                </div>
+                            </th>
                         </tr>
                     </thead>
                     <tbody>
                         {loading && (
-                            <tr><td colSpan={12} className="text-center py-10 text-gray-400">
+                            <tr><td colSpan={visibleCols.size + 1} className="text-center py-10 text-gray-400">
                                 <div className="flex items-center justify-center gap-2"><RefreshCw size={13} className="animate-spin" /> Loading…</div>
                             </td></tr>
                         )}
                         {!loading && data.length === 0 && (
-                            <tr><td colSpan={12} className="text-center py-10 text-gray-400">No companies found.</td></tr>
+                            <tr><td colSpan={visibleCols.size + 1} className="text-center py-10 text-gray-400">No companies found.</td></tr>
                         )}
                         {!loading && data.map((row, idx) => {
                             const rowNum = (page - 1) * limit + idx + 1
+                            const catName = row.category_id ? categories.find(c => c.id === row.category_id)?.name : null
                             return (
                                 <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50">
-                                    <td className="px-2 py-1.5 text-gray-400 border-r border-gray-100">{rowNum}</td>
-                                    <td className="px-2 py-1.5 border-r border-gray-100 text-center">
-                                        {row.rank != null
-                                            ? <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded">{row.rank}</span>
-                                            : <span className="text-[10px] text-gray-300">—</span>}
-                                    </td>
-                                    <td className="px-2 py-1.5 border-r border-gray-100">
-                                        <div className="font-medium text-gray-800 max-w-[200px] truncate">{row.organisation_name}</div>
-                                        <div className="text-[10px] text-gray-400 font-mono">{row.id}</div>
-                                    </td>
-                                    <td className="px-2 py-1.5 border-r border-gray-100 text-gray-600 whitespace-nowrap">
-                                        {row.city}{row.county ? `, ${row.county}` : ''}
-                                    </td>
-                                    <td className="px-2 py-1.5 border-r border-gray-100">
-                                        {row.sponsor_type && (
-                                            <span className="text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded whitespace-nowrap">{row.sponsor_type}</span>
-                                        )}
-                                    </td>
-                                    <td className="px-2 py-1.5 border-r border-gray-100">
-                                        {row.sponsor_route && (
-                                            <span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded whitespace-nowrap">{row.sponsor_route}</span>
-                                        )}
-                                    </td>
-                                    <td className="px-2 py-1.5 border-r border-gray-100">
-                                        <div className="flex items-center gap-2">
-                                            {row.website && (
-                                                <a href={row.website} target="_blank" rel="noopener noreferrer"
-                                                    className="text-[10px] text-blue-600 hover:underline flex items-center gap-0.5" title={row.website}>
-                                                    Web <ExternalLink size={9} />
-                                                </a>
-                                            )}
-                                            {row.career_page && (
-                                                <a href={row.career_page} target="_blank" rel="noopener noreferrer"
-                                                    className="text-[10px] text-teal-600 hover:underline flex items-center gap-0.5" title={row.career_page}>
-                                                    Careers <ExternalLink size={9} />
-                                                </a>
-                                            )}
-                                        </div>
-                                        {row.hr_email && <div className="text-[10px] text-gray-400 truncate max-w-[140px]">{row.hr_email}</div>}
-                                    </td>
-                                    <td className="px-2 py-1.5 border-r border-gray-100">
-                                        {row.category_id && categories.find(c => c.id === row.category_id) ? (
-                                            <span className="text-[9px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded whitespace-nowrap">
-                                                {categories.find(c => c.id === row.category_id)!.name}
-                                            </span>
-                                        ) : <span className="text-[10px] text-gray-300">—</span>}
-                                    </td>
-                                    <td className="px-2 py-1.5 border-r border-gray-100">
-                                        <Badge value={row.is_deleted} on="bg-red-100 text-red-700" off="bg-green-100 text-green-700" />
-                                    </td>
-                                    <td className="px-2 py-1.5 border-r border-gray-100">
-                                        <Badge value={row.visa_mentioned} on="bg-teal-100 text-teal-700" off="bg-gray-100 text-gray-500" />
-                                    </td>
-                                    <td className="px-2 py-1.5 border-r border-gray-100">
-                                        {row.manual_check_done ? (
-                                            <div>
-                                                <span className="text-[9px] bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded font-medium">Done</span>
-                                                {row.last_manual_check_date && (
-                                                    <div className="text-[9px] text-gray-400 mt-0.5">
-                                                        {new Date(row.last_manual_check_date).toLocaleDateString()}
-                                                    </div>
-                                                )}
-                                                {row.checked_by && userMap[row.checked_by] && (
-                                                    <div className="text-[9px] text-gray-400">{userMap[row.checked_by]}</div>
-                                                )}
+                                    {col('num') && (
+                                        <td className="px-2 py-1 text-gray-400 border-r border-gray-100 whitespace-nowrap">{rowNum}</td>
+                                    )}
+                                    {col('id') && (
+                                        <td className="px-2 py-1 border-r border-gray-100">
+                                            <span className="text-[9px] font-mono text-gray-400 truncate block max-w-[80px]" title={row.id}>{row.id}</span>
+                                        </td>
+                                    )}
+                                    {col('rank') && (
+                                        <td className="px-2 py-1 border-r border-gray-100 text-center">
+                                            {row.rank != null
+                                                ? <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded">{row.rank}</span>
+                                                : <span className="text-[10px] text-gray-300">—</span>}
+                                        </td>
+                                    )}
+                                    {col('organisation') && (
+                                        <td className="px-2 py-1 border-r border-gray-100">
+                                            <div className="flex items-center gap-1 max-w-[220px]">
+                                                <span className="font-medium text-gray-800 truncate flex-1 text-[11px]" title={row.organisation_name}>{row.organisation_name}</span>
+                                                <CopyBtn value={[row.organisation_name, row.city, row.county].filter(Boolean).join(', ')} />
                                             </div>
-                                        ) : <span className="text-[9px] text-gray-300">—</span>}
-                                    </td>
-                                    <td className="px-2 py-1.5">
+                                        </td>
+                                    )}
+                                    {col('city') && (
+                                        <td className="px-2 py-1 border-r border-gray-100 text-gray-500 whitespace-nowrap text-[11px]">
+                                            {row.city}{row.county ? `, ${row.county}` : ''}
+                                        </td>
+                                    )}
+                                    {col('sponsor_type') && (
+                                        <td className="px-2 py-1 border-r border-gray-100">
+                                            {row.sponsor_type
+                                                ? <span className="text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded whitespace-nowrap">{row.sponsor_type}</span>
+                                                : <span className="text-[10px] text-gray-300">—</span>}
+                                        </td>
+                                    )}
+                                    {col('sponsor_route') && (
+                                        <td className="px-2 py-1 border-r border-gray-100">
+                                            {row.sponsor_route
+                                                ? <span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded whitespace-nowrap">{row.sponsor_route}</span>
+                                                : <span className="text-[10px] text-gray-300">—</span>}
+                                        </td>
+                                    )}
+                                    {col('links') && (
+                                        <td className="px-2 py-1 border-r border-gray-100">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                {row.website && (
+                                                    <span className="flex items-center gap-0.5">
+                                                        <a href={row.website} target="_blank" rel="noopener noreferrer"
+                                                            className="text-[10px] text-blue-600 hover:underline flex items-center gap-0.5" title={row.website}>
+                                                            Web <ExternalLink size={9} />
+                                                        </a>
+                                                        <CopyBtn value={row.website} />
+                                                    </span>
+                                                )}
+                                                {row.career_page && (
+                                                    <span className="flex items-center gap-0.5">
+                                                        <a href={row.career_page} target="_blank" rel="noopener noreferrer"
+                                                            className="text-[10px] text-teal-600 hover:underline flex items-center gap-0.5" title={row.career_page}>
+                                                            Careers <ExternalLink size={9} />
+                                                        </a>
+                                                        <CopyBtn value={row.career_page} />
+                                                    </span>
+                                                )}
+                                                {row.hr_email && (
+                                                    <span className="flex items-center gap-0.5">
+                                                        <span className="text-[10px] text-gray-400 truncate max-w-[110px]" title={row.hr_email}>{row.hr_email}</span>
+                                                        <CopyBtn value={row.hr_email} />
+                                                    </span>
+                                                )}
+                                                {!row.website && !row.career_page && !row.hr_email && <span className="text-[10px] text-gray-300">—</span>}
+                                            </div>
+                                        </td>
+                                    )}
+                                    {col('category') && (
+                                        <td className="px-2 py-1 border-r border-gray-100">
+                                            {catName
+                                                ? <span className="text-[9px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded whitespace-nowrap">{catName}</span>
+                                                : <span className="text-[10px] text-gray-300">—</span>}
+                                        </td>
+                                    )}
+                                    {col('is_deleted') && (
+                                        <td className="px-2 py-1 border-r border-gray-100">
+                                            <Badge value={row.is_deleted} on="bg-red-100 text-red-700" off="bg-green-100 text-green-700" />
+                                        </td>
+                                    )}
+                                    {col('visa') && (
+                                        <td className="px-2 py-1 border-r border-gray-100">
+                                            <Badge value={row.visa_mentioned} on="bg-teal-100 text-teal-700" off="bg-gray-100 text-gray-500" />
+                                        </td>
+                                    )}
+                                    {col('checked') && (
+                                        <td className="px-2 py-1 border-r border-gray-100 whitespace-nowrap">
+                                            {row.manual_check_done ? (
+                                                <span className="flex items-center gap-1">
+                                                    <span className="text-[9px] bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded font-medium">Done</span>
+                                                    {row.last_manual_check_date && (
+                                                        <span className="text-[9px] text-gray-400">
+                                                            {new Date(row.last_manual_check_date).toLocaleDateString()}
+                                                        </span>
+                                                    )}
+                                                    {row.checked_by && userMap[row.checked_by] && (
+                                                        <span className="text-[9px] text-gray-400">{userMap[row.checked_by]}</span>
+                                                    )}
+                                                </span>
+                                            ) : <span className="text-[9px] text-gray-300">—</span>}
+                                        </td>
+                                    )}
+                                    {col('has_it_jobs') && (
+                                        <td className="px-2 py-1 border-r border-gray-100">
+                                            {row.has_it_jobs === true
+                                                ? <span className="text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium">Yes</span>
+                                                : row.has_it_jobs === false
+                                                ? <span className="text-[9px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-medium">No</span>
+                                                : <span className="text-[9px] text-gray-300">—</span>}
+                                        </td>
+                                    )}
+                                    {col('estimated_it_jobs') && (
+                                        <td className="px-2 py-1 border-r border-gray-100 text-center">
+                                            {row.estimated_it_jobs != null
+                                                ? <span className="text-[10px] font-medium text-gray-700">{row.estimated_it_jobs}</span>
+                                                : <span className="text-[9px] text-gray-300">—</span>}
+                                        </td>
+                                    )}
+                                    {col('checked_by_col') && (
+                                        <td className="px-2 py-1 border-r border-gray-100">
+                                            {row.checked_by && userMap[row.checked_by]
+                                                ? <span className="text-[10px] text-gray-600">{userMap[row.checked_by]}</span>
+                                                : <span className="text-[9px] text-gray-300">—</span>}
+                                        </td>
+                                    )}
+                                    {col('overall_jobs') && (
+                                        <td className="px-2 py-1 border-r border-gray-100 text-center">
+                                            {row.overall_jobs_count > 0
+                                                ? <span className="text-[10px] font-medium text-gray-700">{row.overall_jobs_count}</span>
+                                                : <span className="text-[9px] text-gray-300">0</span>}
+                                        </td>
+                                    )}
+                                    {col('it_jobs_count') && (
+                                        <td className="px-2 py-1 border-r border-gray-100 text-center">
+                                            {row.it_jobs_count > 0
+                                                ? <span className="text-[10px] font-medium text-blue-700">{row.it_jobs_count}</span>
+                                                : <span className="text-[9px] text-gray-300">0</span>}
+                                        </td>
+                                    )}
+                                    <td className="px-2 py-1">
                                         <div className="flex items-center gap-1.5">
                                             <button onClick={() => setManualChecking(row)} title="Apply Manual Check"
                                                 className="text-gray-400 hover:text-teal-600"><ClipboardCheck size={12} /></button>
@@ -799,10 +967,17 @@ export default function CompaniesPage() {
             </div>
 
             {/* Pagination */}
-            {totalPages > 1 && (
-                <div className="flex items-center justify-between mt-2">
-                    <span className="text-[10px] text-gray-400">Page {page} of {totalPages} · {total.toLocaleString()} records</span>
+            <div className="flex items-center justify-between mt-2">
+                <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-gray-400">{total.toLocaleString()} records</span>
+                    <select value={limit} onChange={e => { setLimit(Number(e.target.value)); setPage(1) }}
+                        className="border border-gray-300 rounded px-1.5 py-0.5 text-[10px] bg-white focus:outline-none">
+                        {LIMIT_OPTIONS.map(o => <option key={o} value={o}>{o.toLocaleString()} / page</option>)}
+                    </select>
+                </div>
+                {totalPages > 1 && (
                     <div className="flex items-center gap-1">
+                        <span className="text-[10px] text-gray-400 mr-1">Page {page} of {totalPages}</span>
                         <button onClick={() => setPage(1)} disabled={page === 1} className="px-2 py-0.5 text-[10px] border border-gray-300 rounded disabled:opacity-40 hover:bg-gray-50">«</button>
                         <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="px-2 py-0.5 text-[10px] border border-gray-300 rounded disabled:opacity-40 hover:bg-gray-50">‹</button>
                         {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
@@ -818,8 +993,8 @@ export default function CompaniesPage() {
                         <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="px-2 py-0.5 text-[10px] border border-gray-300 rounded disabled:opacity-40 hover:bg-gray-50">›</button>
                         <button onClick={() => setPage(totalPages)} disabled={page === totalPages} className="px-2 py-0.5 text-[10px] border border-gray-300 rounded disabled:opacity-40 hover:bg-gray-50">»</button>
                     </div>
-                </div>
-            )}
+                )}
+            </div>
 
             {/* Modals */}
             {(adding || editing) && (
