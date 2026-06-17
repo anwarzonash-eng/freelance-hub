@@ -5,11 +5,17 @@ import Header from "./Header";
 import { pathAllowed } from "./Header";
 import { usePathname, useRouter } from "next/navigation";
 
-const COLLAPSED_WIDTH = "w-14"; // Matches w-14 in Header.jsx
-const EXPANDED_WIDTH = "w-56"; // Matches w-56 in Header.jsx
+const COLLAPSED_WIDTH = "w-14";
+const EXPANDED_WIDTH = "w-44";
+const SIDEBAR_STORAGE_KEY = "sidebar_collapsed";
 
 const LayoutWrapper = ({ children, useData }) => {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true";
+    }
+    return false;
+  });
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   const router = useRouter();
@@ -19,12 +25,14 @@ const LayoutWrapper = ({ children, useData }) => {
 
   useEffect(() => {
     setIsLoggedIn(checkAuth());
-    console.log("Auth check on path change:", pathname);
   }, [pathname]);
 
-  // Toggle function passed to the Header
   const toggleSidebar = () => {
-    setIsCollapsed((prev) => !prev);
+    setIsCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem(SIDEBAR_STORAGE_KEY, String(next));
+      return next;
+    });
   };
 
   function checkAuth() {
@@ -53,7 +61,7 @@ const LayoutWrapper = ({ children, useData }) => {
   }
 
   // Tailwind class for the main content margin
-  const contentMarginClass = isCollapsed ? "ml-14" : "ml-56";
+  const contentMarginClass = isCollapsed ? "ml-14" : "ml-44";
 
   if (isStandalonePage) {
     return <>{children}</>;

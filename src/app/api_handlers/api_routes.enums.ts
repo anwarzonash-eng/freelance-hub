@@ -203,6 +203,15 @@ export enum SponsoredCompaniesAPIRoutes {
     DELETE = 'sponsored-companies/:id',
     UPSERT_JSON = 'sponsored-companies/upsert-json',
     RAW_QUERY = 'sponsored-companies/raw-query',
+    MANUAL_CHECK = 'sponsored-companies/:id/manual-check',
+    ASSIGN = 'sponsored-companies/assign',
+}
+
+export enum CompanyCategoriesAPIRoutes {
+    GET_ALL = 'company-categories',
+    CREATE = 'company-categories',
+    UPDATE = 'company-categories/:id',
+    DELETE = 'company-categories/:id',
 }
 
 export enum SponsoredJobsAPIRoutes {

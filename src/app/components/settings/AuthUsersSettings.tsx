@@ -1,6 +1,6 @@
 "use client";
 import React, { useEffect, useState } from "react";
-import { Eye, EyeOff, Plus, Pencil, Trash2 } from "lucide-react";
+import { Eye, EyeOff, Plus, Pencil, Trash2, ChevronDown, ChevronRight } from "lucide-react";
 import { getAllNavRoles } from "@/app/components/Header";
 import {
     listAuthUsers,
@@ -9,7 +9,213 @@ import {
     deleteAuthUser,
 } from "@/app/api_handlers/api/auth.api";
 
-const NAV_ROLES = getAllNavRoles();
+const ALL_NAV_ROLES = getAllNavRoles();
+
+// Mirrors the sidebar navItems structure
+const NAV_GROUPS = [
+    {
+        label: "Leads",
+        roles: [
+            { label: "All Leads", value: "/leads" },
+            { label: "Upwork Jobs", value: "/upwork-jobs" },
+        ],
+    },
+    {
+        label: "Personal Websites",
+        roles: [
+            { label: "Websites", value: "/manage-detail-profiles" },
+            { label: "Main Profiles", value: "/main-profiles" },
+            { label: "Portfolios", value: "/manage-portfolios" },
+            { label: "Educations", value: "/manage-educations" },
+            { label: "Experiences", value: "/experiences" },
+            { label: "Media Upload", value: "/media-upload" },
+            { label: "Testimonials", value: "/manage-testimonials" },
+            { label: "FAQ", value: "/faq" },
+            { label: "Skill Groups", value: "/manage-skill-groups" },
+            { label: "Skills", value: "/manage-skills" },
+            { label: "Categories", value: "/manage-categories" },
+        ],
+    },
+    {
+        label: "Jobs",
+        roles: [
+            { label: "AI Jobs", value: "/jobs/ai-jobs" },
+            { label: "Companies", value: "/jobs/companies" },
+            { label: "Listed Jobs", value: "/jobs/listed-jobs" },
+            { label: "CVs", value: "/jobs/cvs" },
+            { label: "Applicants", value: "/applicants" },
+        ],
+    },
+    {
+        label: "Professionals",
+        roles: [
+            { label: "All Professionals", value: "/professionals" },
+            { label: "Email Campaigns", value: "/professionals/email-campaigns" },
+            { label: "Clients", value: "/clients" },
+        ],
+    },
+];
+
+const GROUP_ROLE_VALUES = new Set(NAV_GROUPS.flatMap(g => g.roles.map(r => r.value)));
+
+// Roles not belonging to any nav group (*, /auth, /settings, /viewCV, /best-match, etc.)
+const ADDITIONAL_ROLES = ALL_NAV_ROLES.filter(r => !GROUP_ROLE_VALUES.has(r.value));
+
+function groupState(roles: string[], groupRoles: { value: string }[]): "all" | "some" | "none" {
+    const selected = groupRoles.filter(r => roles.includes(r.value)).length;
+    if (selected === 0) return "none";
+    if (selected === groupRoles.length) return "all";
+    return "some";
+}
+
+function RoleTree({ roles, onChange }: { roles: string[]; onChange: (roles: string[]) => void }) {
+    const [openGroups, setOpenGroups] = useState<Set<string>>(new Set(NAV_GROUPS.map(g => g.label)));
+
+    const toggleGroup = (label: string) =>
+        setOpenGroups(prev => {
+            const s = new Set(prev);
+            if (s.has(label)) s.delete(label); else s.add(label);
+            return s;
+        });
+
+    const toggleGroupRoles = (groupRoles: { value: string }[], state: "all" | "some" | "none") => {
+        const vals = groupRoles.map(r => r.value);
+        if (state === "all") {
+            onChange(roles.filter(r => !vals.includes(r)));
+        } else {
+            const next = [...roles];
+            vals.forEach(v => { if (!next.includes(v)) next.push(v); });
+            onChange(next);
+        }
+    };
+
+    const toggleRole = (value: string) => {
+        if (roles.includes(value)) {
+            onChange(roles.filter(r => r !== value));
+        } else {
+            onChange([...roles, value]);
+        }
+    };
+
+    const allNonSpecial = ALL_NAV_ROLES.filter(r => r.value !== "*").map(r => r.value);
+    const starSelected = roles.includes("*");
+
+    return (
+        <div className="border border-gray-200 rounded bg-white divide-y divide-gray-100">
+            {/* Nav groups */}
+            {NAV_GROUPS.map(group => {
+                const state = groupState(roles, group.roles);
+                const isOpen = openGroups.has(group.label);
+                return (
+                    <div key={group.label}>
+                        <div className="flex items-center gap-2 px-2 py-1.5 bg-gray-50 cursor-pointer select-none"
+                            onClick={() => toggleGroup(group.label)}>
+                            <input
+                                type="checkbox"
+                                className="w-3 h-3 shrink-0"
+                                checked={state === "all"}
+                                ref={el => { if (el) el.indeterminate = state === "some"; }}
+                                onChange={() => toggleGroupRoles(group.roles, state)}
+                                onClick={e => e.stopPropagation()}
+                            />
+                            <span className="text-[11px] font-semibold text-gray-700 flex-1">{group.label}</span>
+                            <span className="text-[10px] text-gray-400">
+                                {group.roles.filter(r => roles.includes(r.value)).length}/{group.roles.length}
+                            </span>
+                            {isOpen
+                                ? <ChevronDown size={11} className="text-gray-400 shrink-0" />
+                                : <ChevronRight size={11} className="text-gray-400 shrink-0" />}
+                        </div>
+                        {isOpen && (
+                            <div className="pl-6 pr-2 py-1 flex flex-col gap-0.5">
+                                {group.roles.map(r => (
+                                    <label key={r.value} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
+                                        <input
+                                            type="checkbox"
+                                            className="w-3 h-3"
+                                            checked={roles.includes(r.value)}
+                                            onChange={() => toggleRole(r.value)}
+                                        />
+                                        <span className="text-[10px] text-gray-700">{r.label}</span>
+                                        <span className="text-[9px] text-gray-400 font-mono ml-auto">{r.value}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                );
+            })}
+
+            {/* Additional roles */}
+            <div>
+                <div className="px-2 py-1.5 bg-gray-50">
+                    <span className="text-[11px] font-semibold text-gray-700">Additional Roles</span>
+                </div>
+                <div className="pl-2 pr-2 py-1 flex flex-col gap-0.5">
+                    {ADDITIONAL_ROLES.map(r => (
+                        <label key={r.value} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
+                            <input
+                                type="checkbox"
+                                className="w-3 h-3"
+                                checked={r.value === "*"
+                                    ? starSelected || roles.filter(v => v !== "*").length === allNonSpecial.length
+                                    : roles.includes(r.value)}
+                                onChange={() => {
+                                    if (r.value === "*") {
+                                        if (starSelected) {
+                                            onChange(roles.filter(v => v !== "*"));
+                                        } else {
+                                            onChange([...new Set([...roles, "*"])]);
+                                        }
+                                    } else {
+                                        toggleRole(r.value);
+                                    }
+                                }}
+                            />
+                            <span className="text-[10px] text-gray-700">{r.label}</span>
+                            <span className="text-[9px] text-gray-400 font-mono ml-auto">{r.value}</span>
+                        </label>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function RolesSummary({ roles }: { roles: string[] }) {
+    if (!Array.isArray(roles) || roles.length === 0) return <span className="text-[10px] text-gray-300">—</span>;
+    if (roles.includes("*")) return <span className="text-[9px] bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded font-medium">All Access</span>;
+
+    const groupBadges = NAV_GROUPS.map(g => {
+        const matched = g.roles.filter(r => roles.includes(r.value));
+        if (matched.length === 0) return null;
+        const isFull = matched.length === g.roles.length;
+        return (
+            <span key={g.label}
+                className={`text-[9px] px-1.5 py-0.5 rounded font-medium whitespace-nowrap ${isFull ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600"}`}
+                title={matched.map(r => r.label).join(", ")}>
+                {g.label}{!isFull && ` (${matched.length}/${g.roles.length})`}
+            </span>
+        );
+    }).filter(Boolean);
+
+    const extras = roles.filter(v => !GROUP_ROLE_VALUES.has(v) && v !== "*");
+    const extraBadges = extras.map(v => {
+        const found = ADDITIONAL_ROLES.find(r => r.value === v);
+        return (
+            <span key={v} className="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-medium whitespace-nowrap">
+                {found?.label || v}
+            </span>
+        );
+    });
+
+    return (
+        <div className="flex flex-wrap gap-1">
+            {groupBadges}
+            {extraBadges}
+        </div>
+    );
+}
 
 const emptyForm = {
     userid: "",
@@ -47,25 +253,6 @@ export default function AuthUsersSettings() {
     const handleChange = (e: any) => {
         const { name, value } = e.target;
         setForm((prev) => ({ ...prev, [name]: value }));
-    };
-
-    const handleRoleChange = (role: string) => {
-        setForm((prev) => {
-            let roles = [...prev.roles];
-            if (role === "*") {
-                roles = roles.includes("*") ? [] : NAV_ROLES.map((r) => r.value);
-            } else {
-                roles = roles.includes(role) ? roles.filter((r) => r !== role) : [...roles, role];
-                const allNonStar = NAV_ROLES.filter((r) => r.value !== "*").map((r) => r.value);
-                const selectedNonStar = roles.filter((r) => r !== "*");
-                if (selectedNonStar.length === allNonStar.length) {
-                    if (!roles.includes("*")) roles = [...roles, "*"];
-                } else {
-                    roles = roles.filter((r) => r !== "*");
-                }
-            }
-            return { ...prev, roles };
-        });
     };
 
     const handleSubmit = async (e: any) => {
@@ -167,19 +354,10 @@ export default function AuthUsersSettings() {
                     </div>
                     <div className="flex flex-col gap-0.5 mb-3">
                         <label className="text-[10px] text-gray-400 uppercase">Page Access</label>
-                        <div className="border border-gray-200 rounded bg-white p-2 grid grid-cols-3 gap-1 max-h-48 overflow-y-auto">
-                            {NAV_ROLES.map((navRole) => (
-                                <label key={navRole.value} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded">
-                                    <input
-                                        type="checkbox"
-                                        checked={form.roles.includes(navRole.value)}
-                                        onChange={() => handleRoleChange(navRole.value)}
-                                        className="w-3 h-3"
-                                    />
-                                    <span className="text-[10px] text-gray-700">{navRole.label}</span>
-                                </label>
-                            ))}
-                        </div>
+                        <RoleTree
+                            roles={form.roles}
+                            onChange={roles => setForm(f => ({ ...f, roles }))}
+                        />
                     </div>
                     <div className="flex gap-2">
                         <button type="submit" className="px-3 py-1 text-xs bg-gray-800 text-white rounded hover:bg-gray-700">
@@ -230,8 +408,8 @@ export default function AuthUsersSettings() {
                                             {user.role || "user"}
                                         </span>
                                     </td>
-                                    <td className="px-2 py-1.5 border-r border-gray-100 text-gray-500 max-w-[300px] truncate text-[10px]">
-                                        {Array.isArray(user.roles) ? user.roles.join(", ") : "—"}
+                                    <td className="px-2 py-2 border-r border-gray-100 max-w-[340px]">
+                                        <RolesSummary roles={user.roles} />
                                     </td>
                                     <td className="px-2 py-1.5">
                                         <div className="flex items-center gap-1.5">

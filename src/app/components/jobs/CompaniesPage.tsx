@@ -1,14 +1,18 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Plus, RefreshCw, Pencil, Trash2, ExternalLink, ChevronDown, ChevronUp, Search, Building2, BriefcaseBusiness, Terminal, Download, X, SlidersHorizontal } from 'lucide-react'
+import { Plus, RefreshCw, Pencil, Trash2, ExternalLink, ChevronDown, ChevronUp, Search, Building2, BriefcaseBusiness, Terminal, Download, X, SlidersHorizontal, ClipboardCheck, Users } from 'lucide-react'
 import { getAllCompanies, getDistinctCompanyValues, deleteCompany, rawQueryCompanies, rawQueryCompaniesOrError } from '@/app/api_handlers/api/sponsored-companies.api'
+import { getCompanyCategories } from '@/app/api_handlers/api/company-categories.api'
+import { listAuthUsers } from '@/app/api_handlers/api/auth.api'
 import CompanyFormModal from './CompanyFormModal'
 import CompanyJsonPanel from './CompanyJsonPanel'
 import CompanyJobsModal from './CompanyJobsModal'
+import ManualCheckModal from './ManualCheckModal'
+import AssignModal from './AssignModal'
 
 const LIMIT_OPTIONS = [25, 50, 100, 200, 500, 1000, 2000, 3000, 4000, 5000]
-const EMPTY_FILTERS = { sponsor_type: '', sponsor_route: '', is_deleted: 'false', visa_mentioned: '', keyword: '', has_website: '', has_career_page: '', ranked: '', rank_op: '', rank_val: '' }
+const EMPTY_FILTERS = { sponsor_type: '', sponsor_route: '', is_deleted: 'false', visa_mentioned: '', keyword: '', has_website: '', has_career_page: '', ranked: '', rank_op: '', rank_val: '', manual_check_done: '', date_from: '', date_to: '', checked_by: '', category_id: '', assigned: '', assigned_to: '' }
 
 const ALL_COLUMNS = [
     { key: 'id', label: 'ID' },
@@ -94,6 +98,15 @@ export default function CompaniesPage() {
     const [adding, setAdding] = useState(false)
     const [deleting, setDeleting] = useState<string | null>(null)
     const [addingJobsFor, setAddingJobsFor] = useState<any | null>(null)
+    const [manualChecking, setManualChecking] = useState<any | null>(null)
+    const [assigning, setAssigning] = useState(false)
+
+    // Categories + auth users for display
+    const [categories, setCategories] = useState<{ id: string; name: string }[]>([])
+    const [userMap, setUserMap] = useState<Record<string, string>>({})
+    const [userList, setUserList] = useState<{ id: string; userid: string }[]>([])
+    const [currentUserId, setCurrentUserId] = useState('')
+    const [isAdmin, setIsAdmin] = useState(false)
 
     const loadFilter = useCallback(async (pg: number, lim: number, af: typeof EMPTY_FILTERS) => {
         setLoading(true)
@@ -108,6 +121,13 @@ export default function CompaniesPage() {
             if (af.has_career_page !== '') q.has_career_page = af.has_career_page
             if (af.ranked !== '') q.ranked = af.ranked
             if (af.rank_op && af.rank_val !== '') { q.rank_op = af.rank_op; q.rank_val = af.rank_val }
+            if (af.manual_check_done !== '') q.manual_check_done = af.manual_check_done
+            if (af.date_from) q.date_from = af.date_from
+            if (af.date_to) q.date_to = af.date_to
+            if (af.checked_by) q.checked_by = af.checked_by
+            if (af.category_id) q.category_id = af.category_id
+            if (af.assigned !== '') q.assigned = af.assigned
+            if (af.assigned_to) q.assigned_to = af.assigned_to
             const res: any = await getAllCompanies(q)
             const payload = res?.data ?? res
             setData(Array.isArray(payload?.data) ? payload.data : [])
@@ -154,6 +174,32 @@ export default function CompaniesPage() {
             setSponsorTypes(p?.sponsor_types ?? [])
             setSponsorRoutes(p?.sponsor_routes ?? [])
         }).catch(() => { })
+
+        getCompanyCategories().then((res: any) => {
+            const list = res?.data ?? res
+            setCategories(Array.isArray(list) ? list : [])
+        }).catch(() => { })
+
+        listAuthUsers().then((res: any) => {
+            const list = res?.data ?? res
+            if (Array.isArray(list)) {
+                const eligible = list.filter((u: any) => u.id !== '00000000-0000-0000-0000-000000000001')
+                const map: Record<string, string> = {}
+                eligible.forEach((u: any) => { if (u.id) map[u.id] = u.userid || u.id })
+                setUserMap(map)
+                setUserList(eligible.map((u: any) => ({ id: u.id, userid: u.userid || u.id })))
+            }
+        }).catch(() => { })
+
+        // Decode current user from JWT
+        try {
+            const token = localStorage.getItem('authToken')
+            if (token) {
+                const payload = JSON.parse(atob(token.split('.')[1]))
+                setCurrentUserId(payload.sub || payload.id || payload.userid || '')
+                setIsAdmin(payload.role === 'admin')
+            }
+        } catch { }
     }, [])
 
     const applyFilters = () => {
@@ -226,6 +272,13 @@ export default function CompaniesPage() {
                 if (applied.has_career_page !== '') q.has_career_page = applied.has_career_page
                 if (applied.ranked !== '') q.ranked = applied.ranked
                 if (applied.rank_op && applied.rank_val !== '') { q.rank_op = applied.rank_op; q.rank_val = applied.rank_val }
+                if (applied.manual_check_done !== '') q.manual_check_done = applied.manual_check_done
+                if (applied.date_from) q.date_from = applied.date_from
+                if (applied.date_to) q.date_to = applied.date_to
+                if (applied.checked_by) q.checked_by = applied.checked_by
+                if (applied.category_id) q.category_id = applied.category_id
+                if (applied.assigned !== '') q.assigned = applied.assigned
+                if (applied.assigned_to) q.assigned_to = applied.assigned_to
                 const res: any = await getAllCompanies(q)
                 const payload = res?.data ?? res
                 allData = Array.isArray(payload?.data) ? payload.data : []
@@ -296,6 +349,11 @@ export default function CompaniesPage() {
                         )}
                     </div>
 
+                    {isAdmin && !sqlMode && (
+                        <button onClick={() => setAssigning(true)} className="flex items-center gap-1 text-xs bg-indigo-600 text-white rounded px-3 py-1 hover:bg-indigo-700">
+                            <Users size={12} /> Assign
+                        </button>
+                    )}
                     <button onClick={() => setAdding(true)} className="flex items-center gap-1 text-xs bg-gray-800 text-white rounded px-3 py-1 hover:bg-gray-700">
                         <Plus size={12} /> Add Company
                     </button>
@@ -447,6 +505,69 @@ export default function CompaniesPage() {
                         </div>
                     </div>
 
+                    <div className="flex flex-col gap-0.5">
+                        <label className="text-[10px] text-gray-400 uppercase">Manual Checked</label>
+                        <select value={filters.manual_check_done} onChange={e => setFilters(f => ({ ...f, manual_check_done: e.target.value }))}
+                            className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none">
+                            <option value="">All</option>
+                            <option value="true">Done</option>
+                            <option value="false">Not Done</option>
+                        </select>
+                    </div>
+
+                    <div className="flex flex-col gap-0.5">
+                        <label className="text-[10px] text-gray-400 uppercase">Check Date From</label>
+                        <input type="date" value={filters.date_from} onChange={e => setFilters(f => ({ ...f, date_from: e.target.value }))}
+                            className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none" />
+                    </div>
+
+                    <div className="flex flex-col gap-0.5">
+                        <label className="text-[10px] text-gray-400 uppercase">Check Date To</label>
+                        <input type="date" value={filters.date_to} onChange={e => setFilters(f => ({ ...f, date_to: e.target.value }))}
+                            className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none" />
+                    </div>
+
+                    <div className="flex flex-col gap-0.5">
+                        <label className="text-[10px] text-gray-400 uppercase">Checked By</label>
+                        <select value={filters.checked_by} onChange={e => setFilters(f => ({ ...f, checked_by: e.target.value }))}
+                            className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none min-w-[100px]">
+                            <option value="">All</option>
+                            {Object.entries(userMap).map(([id, name]) => (
+                                <option key={id} value={id}>{name}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="flex flex-col gap-0.5">
+                        <label className="text-[10px] text-gray-400 uppercase">Category</label>
+                        <select value={filters.category_id} onChange={e => setFilters(f => ({ ...f, category_id: e.target.value }))}
+                            className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none min-w-[110px]">
+                            <option value="">All</option>
+                            {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                    </div>
+
+                    <div className="flex flex-col gap-0.5">
+                        <label className="text-[10px] text-gray-400 uppercase">Assigned</label>
+                        <select value={filters.assigned} onChange={e => setFilters(f => ({ ...f, assigned: e.target.value }))}
+                            className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none">
+                            <option value="">All</option>
+                            <option value="true">Assigned</option>
+                            <option value="false">Unassigned</option>
+                        </select>
+                    </div>
+
+                    <div className="flex flex-col gap-0.5">
+                        <label className="text-[10px] text-gray-400 uppercase">Assigned To</label>
+                        <select value={filters.assigned_to} onChange={e => setFilters(f => ({ ...f, assigned_to: e.target.value }))}
+                            className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none min-w-[100px]">
+                            <option value="">All</option>
+                            {Object.entries(userMap).map(([id, name]) => (
+                                <option key={id} value={id}>{name}</option>
+                            ))}
+                        </select>
+                    </div>
+
                     <button onClick={applyFilters} className="px-3 py-1 text-xs bg-gray-800 text-white rounded hover:bg-gray-700 mt-auto">Filter</button>
                     <button onClick={clearFilters} className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-white mt-auto">Clear</button>
 
@@ -570,19 +691,21 @@ export default function CompaniesPage() {
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Sponsor Type</th>
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Route</th>
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Links</th>
+                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Category</th>
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Deleted</th>
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Visa</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 w-14"></th>
+                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Checked</th>
+                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 w-20"></th>
                         </tr>
                     </thead>
                     <tbody>
                         {loading && (
-                            <tr><td colSpan={10} className="text-center py-10 text-gray-400">
+                            <tr><td colSpan={12} className="text-center py-10 text-gray-400">
                                 <div className="flex items-center justify-center gap-2"><RefreshCw size={13} className="animate-spin" /> Loading…</div>
                             </td></tr>
                         )}
                         {!loading && data.length === 0 && (
-                            <tr><td colSpan={10} className="text-center py-10 text-gray-400">No companies found.</td></tr>
+                            <tr><td colSpan={12} className="text-center py-10 text-gray-400">No companies found.</td></tr>
                         )}
                         {!loading && data.map((row, idx) => {
                             const rowNum = (page - 1) * limit + idx + 1
@@ -629,13 +752,37 @@ export default function CompaniesPage() {
                                         {row.hr_email && <div className="text-[10px] text-gray-400 truncate max-w-[140px]">{row.hr_email}</div>}
                                     </td>
                                     <td className="px-2 py-1.5 border-r border-gray-100">
+                                        {row.category_id && categories.find(c => c.id === row.category_id) ? (
+                                            <span className="text-[9px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded whitespace-nowrap">
+                                                {categories.find(c => c.id === row.category_id)!.name}
+                                            </span>
+                                        ) : <span className="text-[10px] text-gray-300">—</span>}
+                                    </td>
+                                    <td className="px-2 py-1.5 border-r border-gray-100">
                                         <Badge value={row.is_deleted} on="bg-red-100 text-red-700" off="bg-green-100 text-green-700" />
                                     </td>
                                     <td className="px-2 py-1.5 border-r border-gray-100">
                                         <Badge value={row.visa_mentioned} on="bg-teal-100 text-teal-700" off="bg-gray-100 text-gray-500" />
                                     </td>
+                                    <td className="px-2 py-1.5 border-r border-gray-100">
+                                        {row.manual_check_done ? (
+                                            <div>
+                                                <span className="text-[9px] bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded font-medium">Done</span>
+                                                {row.last_manual_check_date && (
+                                                    <div className="text-[9px] text-gray-400 mt-0.5">
+                                                        {new Date(row.last_manual_check_date).toLocaleDateString()}
+                                                    </div>
+                                                )}
+                                                {row.checked_by && userMap[row.checked_by] && (
+                                                    <div className="text-[9px] text-gray-400">{userMap[row.checked_by]}</div>
+                                                )}
+                                            </div>
+                                        ) : <span className="text-[9px] text-gray-300">—</span>}
+                                    </td>
                                     <td className="px-2 py-1.5">
                                         <div className="flex items-center gap-1.5">
+                                            <button onClick={() => setManualChecking(row)} title="Apply Manual Check"
+                                                className="text-gray-400 hover:text-teal-600"><ClipboardCheck size={12} /></button>
                                             <button onClick={() => setAddingJobsFor(row)} title="Add Jobs"
                                                 className="text-gray-400 hover:text-teal-600"><BriefcaseBusiness size={12} /></button>
                                             <button onClick={() => setEditing(row)} title="Edit"
@@ -686,6 +833,23 @@ export default function CompaniesPage() {
                 <CompanyJobsModal
                     company={addingJobsFor}
                     onClose={() => setAddingJobsFor(null)}
+                />
+            )}
+            {manualChecking && (
+                <ManualCheckModal
+                    company={manualChecking}
+                    currentUserId={currentUserId}
+                    onClose={() => setManualChecking(null)}
+                    onSaved={() => { setManualChecking(null); refresh() }}
+                />
+            )}
+            {assigning && (
+                <AssignModal
+                    filters={applied}
+                    totalFiltered={total}
+                    users={userList}
+                    onClose={() => setAssigning(false)}
+                    onDone={() => { setAssigning(false); refresh() }}
                 />
             )}
         </div>

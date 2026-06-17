@@ -28,6 +28,14 @@ export async function upsertCompaniesFromJson(companies: any[]) {
     return apiClient(SponsoredCompaniesAPIRoutes.UPSERT_JSON, ApiMethod.POST, { companies }, undefined, {}, true)
 }
 
+export async function manualCheckCompany(id: string, body: any) {
+    return apiClient(SponsoredCompaniesAPIRoutes.MANUAL_CHECK, ApiMethod.PATCH, body, { path: { id } }, {}, true)
+}
+
+export async function assignCompanies(body: { filters: any; assignments: { userId: string; count: number }[] }) {
+    return apiClient(SponsoredCompaniesAPIRoutes.ASSIGN, ApiMethod.POST, body, undefined, {}, true)
+}
+
 export async function rawQueryCompanies(body: { where_clause?: string; page?: number; limit?: number; export_all?: boolean }) {
     return apiClient(SponsoredCompaniesAPIRoutes.RAW_QUERY, ApiMethod.POST, body)
 }
