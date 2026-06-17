@@ -73,7 +73,11 @@ export default function CompaniesPage() {
     const viewDdRef = useRef<HTMLDivElement>(null)
 
     const togglePanel = (key: string) =>
-        setVisiblePanels(prev => { const s = new Set(prev); s.has(key) ? s.delete(key) : s.add(key); return s })
+        setVisiblePanels(prev => {
+            const s = new Set(prev)
+            if (s.has(key)) s.delete(key); else s.add(key)
+            return s
+        })
 
     const showSqlPanel = visiblePanels.has('sql')
 

@@ -67,7 +67,7 @@ export default function CompanyJsonPanel({ onDone }: Props) {
         setTimeout(() => setCopied(false), 1500)
     }
 
-    const useSample = () => {
+    const pasteSample = () => {
         setText(SAMPLE_JSON)
         setParseError('')
         setResult(null)
@@ -139,7 +139,7 @@ export default function CompanyJsonPanel({ onDone }: Props) {
                                             className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-gray-700 border border-gray-200 rounded px-1.5 py-0.5">
                                             <Copy size={9} /> {copied ? 'Copied!' : 'Copy'}
                                         </button>
-                                        <button type="button" onClick={e => { e.stopPropagation(); useSample() }}
+                                        <button type="button" onClick={e => { e.stopPropagation(); pasteSample() }}
                                             className="flex items-center gap-1 text-[10px] text-teal-600 hover:text-teal-800 border border-teal-200 rounded px-1.5 py-0.5">
                                             Use this
                                         </button>
