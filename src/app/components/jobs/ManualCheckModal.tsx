@@ -95,7 +95,7 @@ export default function ManualCheckModal({ company, currentUserId, currentUserUU
             const timeoutPromise = new Promise((_, reject) =>
                 setTimeout(() => reject(new Error('Request timeout - please try again')), 10000)
             )
-            const res = await Promise.race([
+            const res: any = await Promise.race([
                 manualCheckCompany(company.id, {
                     ...form,
                     estimated_it_jobs: form.estimated_it_jobs !== '' ? Number(form.estimated_it_jobs) : null,
