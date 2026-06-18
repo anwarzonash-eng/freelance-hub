@@ -28,6 +28,8 @@ export default function ManualCheckModal({ company, currentUserId, onClose, onSa
         estimated_it_jobs: company.estimated_it_jobs ?? '' as number | '',
         category_id: company.category_id ?? '',
         visa_mentioned: Boolean(company.visa_mentioned),
+        offers_freelance: company.offers_freelance ?? null as boolean | null,
+        should_apply: Boolean(company.should_apply),
         website: company.website ?? '',
         career_page: company.career_page ?? '',
     })
@@ -91,6 +93,8 @@ export default function ManualCheckModal({ company, currentUserId, onClose, onSa
                 ...form,
                 estimated_it_jobs: form.estimated_it_jobs !== '' ? Number(form.estimated_it_jobs) : null,
                 category_id: form.category_id || null,
+                offers_freelance: form.offers_freelance ?? null,
+                should_apply: Boolean(form.should_apply),
                 website: form.website || null,
                 career_page: form.career_page || null,
                 checked_by: currentUserId || null,
@@ -204,6 +208,30 @@ export default function ManualCheckModal({ company, currentUserId, onClose, onSa
                                 <input type="checkbox" checked={form.visa_mentioned} onChange={e => set('visa_mentioned', e.target.checked)} className="w-3.5 h-3.5" />
                                 Visa Mentioned
                             </label>
+                        </div>
+
+                        {/* Should Apply */}
+                        <div className="flex items-center gap-2">
+                            <label className="flex items-center gap-2 cursor-pointer text-xs text-gray-700">
+                                <input type="checkbox" checked={form.should_apply} onChange={e => set('should_apply', e.target.checked)} className="w-3.5 h-3.5 accent-teal-600" />
+                                Should Apply For This Company
+                            </label>
+                        </div>
+
+                        {/* Offers Freelance */}
+                        <div>
+                            <label className={labelCls}>Does Offer Freelance</label>
+                            <div className="flex items-center gap-3">
+                                {([['true', 'Yes'], ['false', 'No'], ['', 'Unknown']] as const).map(([val, label]) => (
+                                    <label key={val} className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-700">
+                                        <input type="radio" name="offers_freelance"
+                                            checked={form.offers_freelance === (val === '' ? null : val === 'true')}
+                                            onChange={() => set('offers_freelance', val === '' ? null : val === 'true')}
+                                            className="w-3 h-3" />
+                                        {label}
+                                    </label>
+                                ))}
+                            </div>
                         </div>
 
                         {/* Domain */}

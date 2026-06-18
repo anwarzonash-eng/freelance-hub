@@ -22,6 +22,8 @@ const EMPTY_FORM = {
     hr_email: '',
     is_deleted: false,
     visa_mentioned: false,
+    offers_freelance: null as boolean | null,
+    should_apply: false,
     rank: '' as number | '',
     it_jobs_count: 0,
     overall_jobs_count: 0,
@@ -47,6 +49,8 @@ export default function CompanyFormModal({ company, onClose, onSaved }: Props) {
                 hr_email: company.hr_email ?? '',
                 is_deleted: Boolean(company.is_deleted),
                 visa_mentioned: Boolean(company.visa_mentioned),
+                offers_freelance: company.offers_freelance ?? null,
+                should_apply: Boolean(company.should_apply),
                 rank: company.rank != null ? Number(company.rank) : '' as number | '',
                 it_jobs_count: Number(company.it_jobs_count) || 0,
                 overall_jobs_count: Number(company.overall_jobs_count) || 0,
@@ -152,7 +156,7 @@ export default function CompanyFormModal({ company, onClose, onSaved }: Props) {
                         </div>
 
                         {/* Flags */}
-                        <div className="flex items-center gap-6">
+                        <div className="flex items-center gap-6 flex-wrap">
                             <label className="flex items-center gap-2 cursor-pointer text-xs text-gray-700">
                                 <input type="checkbox" checked={form.is_deleted} onChange={e => set('is_deleted', e.target.checked)} className="w-3.5 h-3.5" />
                                 Is Deleted
@@ -161,6 +165,22 @@ export default function CompanyFormModal({ company, onClose, onSaved }: Props) {
                                 <input type="checkbox" checked={form.visa_mentioned} onChange={e => set('visa_mentioned', e.target.checked)} className="w-3.5 h-3.5" />
                                 Visa Mentioned
                             </label>
+                            <label className="flex items-center gap-2 cursor-pointer text-xs text-gray-700">
+                                <input type="checkbox" checked={form.should_apply} onChange={e => set('should_apply', e.target.checked)} className="w-3.5 h-3.5 accent-teal-600" />
+                                Should Apply
+                            </label>
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs text-gray-700">Offers Freelance</span>
+                                {([['true', 'Yes'], ['false', 'No'], ['', 'Unknown']] as const).map(([val, label]) => (
+                                    <label key={val} className="flex items-center gap-1 cursor-pointer text-xs text-gray-600">
+                                        <input type="radio" name="offers_freelance"
+                                            checked={form.offers_freelance === (val === '' ? null : val === 'true')}
+                                            onChange={() => set('offers_freelance', val === '' ? null : val === 'true')}
+                                            className="w-3 h-3" />
+                                        {label}
+                                    </label>
+                                ))}
+                            </div>
                         </div>
 
                         {/* Dynamic meta_data */}
@@ -185,7 +205,7 @@ export default function CompanyFormModal({ company, onClose, onSaved }: Props) {
                                             onChange={e => setMetaRow(i, 'key', e.target.value)}
                                         />
                                         <input
-                                            className="flex-[2] border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-gray-500"
+                                            className="flex-2 border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-gray-500"
                                             placeholder="Value"
                                             value={row.value}
                                             onChange={e => setMetaRow(i, 'value', e.target.value)}

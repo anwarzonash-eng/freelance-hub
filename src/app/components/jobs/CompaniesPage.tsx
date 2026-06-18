@@ -12,7 +12,7 @@ import ManualCheckModal from './ManualCheckModal'
 import AssignModal from './AssignModal'
 
 const LIMIT_OPTIONS = [25, 50, 100, 200, 500, 1000, 2000, 3000, 4000, 5000]
-const EMPTY_FILTERS = { sponsor_type: '', sponsor_route: '', is_deleted: 'false', visa_mentioned: '', keyword: '', has_website: '', has_career_page: '', ranked: '', rank_op: '', rank_val: '', manual_check_done: '', has_it_jobs: '', date_from: '', date_to: '', checked_by: '', category_id: '', assigned: '', assigned_to: '' }
+const EMPTY_FILTERS = { sponsor_type: '', sponsor_route: '', is_deleted: 'false', visa_mentioned: '', keyword: '', has_website: '', has_career_page: '', ranked: '', rank_op: '', rank_val: '', manual_check_done: '', has_it_jobs: '', offers_freelance: '', should_apply: '', date_from: '', date_to: '', checked_by: '', category_id: '', assigned: '', assigned_to: '' }
 
 const ALL_COLUMNS = [
     { key: 'id', label: 'ID' },
@@ -53,6 +53,9 @@ const TABLE_COLS = [
     { key: 'checked_by_col',    label: 'Checked By',    default: false },
     { key: 'overall_jobs',      label: 'Total Jobs',    default: false },
     { key: 'it_jobs_count',     label: 'IT Jobs',       default: false },
+    { key: 'assigned_to_col',   label: 'Assigned To',   default: false },
+    { key: 'offers_freelance',  label: 'Freelance',     default: false },
+    { key: 'should_apply',      label: 'Should Apply',  default: false },
 ]
 const DEFAULT_TABLE_COLS = new Set(TABLE_COLS.filter(c => c.default).map(c => c.key))
 
@@ -178,6 +181,8 @@ export default function CompaniesPage() {
             if (af.rank_op && af.rank_val !== '') { q.rank_op = af.rank_op; q.rank_val = af.rank_val }
             if (af.manual_check_done !== '') q.manual_check_done = af.manual_check_done
             if (af.has_it_jobs !== '') q.has_it_jobs = af.has_it_jobs
+            if (af.offers_freelance !== '') q.offers_freelance = af.offers_freelance
+            if (af.should_apply !== '') q.should_apply = af.should_apply
             if (af.date_from) q.date_from = af.date_from
             if (af.date_to) q.date_to = af.date_to
             if (af.checked_by) q.checked_by = af.checked_by
@@ -330,6 +335,8 @@ export default function CompaniesPage() {
                 if (applied.rank_op && applied.rank_val !== '') { q.rank_op = applied.rank_op; q.rank_val = applied.rank_val }
                 if (applied.manual_check_done !== '') q.manual_check_done = applied.manual_check_done
                 if (applied.has_it_jobs !== '') q.has_it_jobs = applied.has_it_jobs
+                if (applied.offers_freelance !== '') q.offers_freelance = applied.offers_freelance
+                if (applied.should_apply !== '') q.should_apply = applied.should_apply
                 if (applied.date_from) q.date_from = applied.date_from
                 if (applied.date_to) q.date_to = applied.date_to
                 if (applied.checked_by) q.checked_by = applied.checked_by
@@ -536,6 +543,27 @@ export default function CompaniesPage() {
                     </div>
 
                     <div className="flex flex-col gap-0.5">
+                        <label className="text-[10px] text-gray-400 uppercase">Offers Freelance</label>
+                        <select value={filters.offers_freelance} onChange={e => setFilters(f => ({ ...f, offers_freelance: e.target.value }))}
+                            className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none">
+                            <option value="">All</option>
+                            <option value="true">Yes</option>
+                            <option value="false">No</option>
+                            <option value="unknown">Unknown</option>
+                        </select>
+                    </div>
+
+                    <div className="flex flex-col gap-0.5">
+                        <label className="text-[10px] text-gray-400 uppercase">Should Apply</label>
+                        <select value={filters.should_apply} onChange={e => setFilters(f => ({ ...f, should_apply: e.target.value }))}
+                            className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none">
+                            <option value="">All</option>
+                            <option value="true">Yes</option>
+                            <option value="false">No</option>
+                        </select>
+                    </div>
+
+                    <div className="flex flex-col gap-0.5">
                         <label className="text-[10px] text-gray-400 uppercase">Check Date From</label>
                         <input type="date" value={filters.date_from} onChange={e => setFilters(f => ({ ...f, date_from: e.target.value }))}
                             className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none" />
@@ -713,6 +741,9 @@ export default function CompaniesPage() {
                             {col('checked_by_col')    && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Checked By</th>}
                             {col('overall_jobs')      && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Total Jobs</th>}
                             {col('it_jobs_count')     && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">IT Jobs</th>}
+                            {col('assigned_to_col')   && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Assigned To</th>}
+                            {col('offers_freelance')  && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Freelance</th>}
+                            {col('should_apply')      && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Should Apply</th>}
                             <th className="px-1 py-1 font-medium text-gray-600">
                                 <div className="flex items-center justify-end gap-1.5 pr-1">
                                     {/* Refresh */}
@@ -945,6 +976,31 @@ export default function CompaniesPage() {
                                             {row.it_jobs_count > 0
                                                 ? <span className="text-[10px] font-medium text-blue-700">{row.it_jobs_count}</span>
                                                 : <span className="text-[9px] text-gray-300">0</span>}
+                                        </td>
+                                    )}
+                                    {col('assigned_to_col') && (
+                                        <td className="px-2 py-1 border-r border-gray-100">
+                                            {row.assigned_to && userMap[row.assigned_to]
+                                                ? <span className="text-[10px] text-gray-600">{userMap[row.assigned_to]}</span>
+                                                : row.assigned_to
+                                                ? <span className="text-[10px] text-gray-400 font-mono truncate block max-w-[80px]" title={row.assigned_to}>{row.assigned_to}</span>
+                                                : <span className="text-[9px] text-gray-300">—</span>}
+                                        </td>
+                                    )}
+                                    {col('offers_freelance') && (
+                                        <td className="px-2 py-1 border-r border-gray-100">
+                                            {row.offers_freelance === true
+                                                ? <span className="text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium">Yes</span>
+                                                : row.offers_freelance === false
+                                                ? <span className="text-[9px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-medium">No</span>
+                                                : <span className="text-[9px] text-gray-300">—</span>}
+                                        </td>
+                                    )}
+                                    {col('should_apply') && (
+                                        <td className="px-2 py-1 border-r border-gray-100">
+                                            {row.should_apply
+                                                ? <span className="text-[9px] bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded font-medium">Yes</span>
+                                                : <span className="text-[9px] text-gray-300">—</span>}
                                         </td>
                                     )}
                                     <td className="px-2 py-1">
