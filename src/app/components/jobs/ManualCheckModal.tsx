@@ -8,6 +8,7 @@ import { getCompanyCategories, createCompanyCategory, updateCompanyCategory, del
 interface Props {
     company: any
     currentUserId: string
+    currentUserUUID?: string
     onClose: () => void
     onSaved: () => void
 }
@@ -16,7 +17,7 @@ function decodeToken(token: string): any {
     try { return JSON.parse(atob(token.split('.')[1])) } catch { return {} }
 }
 
-export default function ManualCheckModal({ company, currentUserId, onClose, onSaved }: Props) {
+export default function ManualCheckModal({ company, currentUserId, currentUserUUID, onClose, onSaved }: Props) {
     const today = new Date().toISOString().split('T')[0]
 
     const [form, setForm] = useState({
@@ -42,6 +43,7 @@ export default function ManualCheckModal({ company, currentUserId, onClose, onSa
     const [editingCatId, setEditingCatId] = useState<string | null>(null)
     const [editingCatName, setEditingCatName] = useState('')
     const [catLoading, setCatLoading] = useState(false)
+    const [error, setError] = useState<string | null>(null)
 
     useEffect(() => { loadCategories() }, [])
 
@@ -88,18 +90,31 @@ export default function ManualCheckModal({ company, currentUserId, onClose, onSa
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         setSaving(true)
+        setError(null)
         try {
-            await manualCheckCompany(company.id, {
-                ...form,
-                estimated_it_jobs: form.estimated_it_jobs !== '' ? Number(form.estimated_it_jobs) : null,
-                category_id: form.category_id || null,
-                offers_freelance: form.offers_freelance ?? null,
-                should_apply: Boolean(form.should_apply),
-                website: form.website || null,
-                career_page: form.career_page || null,
-                checked_by: currentUserId || null,
-            })
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Request timeout - please try again')), 10000)
+            )
+            const res = await Promise.race([
+                manualCheckCompany(company.id, {
+                    ...form,
+                    estimated_it_jobs: form.estimated_it_jobs !== '' ? Number(form.estimated_it_jobs) : null,
+                    category_id: form.category_id || null,
+                    offers_freelance: form.offers_freelance ?? null,
+                    should_apply: Boolean(form.should_apply),
+                    website: form.website || null,
+                    career_page: form.career_page || null,
+                    checked_by: currentUserUUID || currentUserId || null,
+                }),
+                timeoutPromise
+            ])
+            if (!res || res.APIStatus === 'error') {
+                setError(res?.message || 'Failed to save manual check')
+                return
+            }
             onSaved()
+        } catch (err: any) {
+            setError(err?.message || 'An error occurred while saving')
         } finally { setSaving(false) }
     }
 
@@ -109,8 +124,8 @@ export default function ManualCheckModal({ company, currentUserId, onClose, onSa
     const labelCls = 'text-[10px] text-gray-400 uppercase font-medium mb-0.5 block'
 
     return (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
-            <div className="bg-white rounded-lg shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 shrink-0">
                     <div>
                         <span className="text-sm font-semibold text-gray-800">Apply Manual Check</span>
@@ -121,6 +136,11 @@ export default function ManualCheckModal({ company, currentUserId, onClose, onSa
 
                 <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto">
                     <div className="p-4 space-y-4">
+                        {error && (
+                            <div className="bg-red-50 border border-red-200 rounded px-3 py-2">
+                                <p className="text-[10px] font-semibold text-red-700">{error}</p>
+                            </div>
+                        )}
 
                         {/* Last Manual Check Date */}
                         <div>

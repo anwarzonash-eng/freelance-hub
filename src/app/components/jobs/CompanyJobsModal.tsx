@@ -83,8 +83,8 @@ export default function CompanyJobsModal({ company, onClose }: Props) {
     const hasResult = result && (result.added.length > 0 || result.already_exists.length > 0 || result.errors.length > 0)
 
     return (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
-            <div className="bg-white rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 shrink-0">
                     <div>
                         <span className="text-sm font-semibold text-gray-800">Add Jobs</span>

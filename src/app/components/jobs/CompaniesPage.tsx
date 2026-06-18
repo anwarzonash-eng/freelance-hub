@@ -119,8 +119,12 @@ export default function CompaniesPage() {
     const [showViewDd, setShowViewDd] = useState(false)
     const viewDdRef = useRef<HTMLDivElement>(null)
 
-    // Table column visibility
-    const [visibleCols, setVisibleCols] = useState<Set<string>>(new Set(DEFAULT_TABLE_COLS))
+    // Table column visibility (persisted to localStorage)
+    const [visibleCols, setVisibleCols] = useState<Set<string>>(() => {
+        if (typeof window === 'undefined') return new Set(DEFAULT_TABLE_COLS)
+        const saved = localStorage.getItem('companies_visible_cols')
+        return saved ? new Set(JSON.parse(saved)) : new Set(DEFAULT_TABLE_COLS)
+    })
     const [showColDd, setShowColDd] = useState(false)
     const colDdRef = useRef<HTMLDivElement>(null)
 
@@ -141,6 +145,11 @@ export default function CompaniesPage() {
         })
 
     const showSqlPanel = visiblePanels.has('sql')
+
+    // Save visible columns to localStorage
+    useEffect(() => {
+        localStorage.setItem('companies_visible_cols', JSON.stringify(Array.from(visibleCols)))
+    }, [visibleCols])
 
     useEffect(() => {
         const handler = (e: MouseEvent) => {
@@ -839,7 +848,10 @@ export default function CompaniesPage() {
                                     )}
                                     {col('id') && (
                                         <td className="px-2 py-1 border-r border-gray-100">
-                                            <span className="text-[9px] font-mono text-gray-400 truncate block max-w-[80px]" title={row.id}>{row.id}</span>
+                                            <div className="flex items-center gap-1">
+                                                <span className="text-[9px] font-mono text-gray-400 truncate flex-1 max-w-[60px]" title={row.id}>{row.id}</span>
+                                                <CopyBtn value={row.id} />
+                                            </div>
                                         </td>
                                     )}
                                     {col('rank') && (
@@ -1070,6 +1082,7 @@ export default function CompaniesPage() {
                 <ManualCheckModal
                     company={manualChecking}
                     currentUserId={currentUserId}
+                    currentUserUUID={userList.find(u => u.userid === currentUserId)?.id}
                     onClose={() => setManualChecking(null)}
                     onSaved={() => { setManualChecking(null); refresh() }}
                 />

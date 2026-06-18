@@ -78,8 +78,8 @@ export default function AssignModal({ filters, totalFiltered, users, onClose, on
     const inputCls = 'border border-gray-300 rounded px-2 py-0.5 text-xs w-20 text-right focus:outline-none focus:border-gray-500'
 
     return (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
-            <div className="bg-white rounded-lg shadow-2xl w-full max-w-md flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg shadow-2xl w-full max-w-md flex flex-col max-h-[85vh]">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 shrink-0">
                     <div className="flex items-center gap-2">
                         <Users size={15} className="text-indigo-500" />

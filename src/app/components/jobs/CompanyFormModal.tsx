@@ -92,8 +92,8 @@ export default function CompanyFormModal({ company, onClose, onSaved }: Props) {
     const labelCls = 'text-[10px] text-gray-400 uppercase font-medium mb-0.5 block'
 
     return (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
-            <div className="bg-white rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 shrink-0">
                     <span className="text-sm font-semibold text-gray-800">{isEdit ? 'Edit Company' : 'Add Company'}</span>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={16} /></button>
