@@ -25,7 +25,7 @@ interface ValidationError { job: string; missingKeys: string[] }
 interface UpsertResult {
     added: string[]
     already_exists: string[]
-    errors: { job: string; missing_keys: string[] }[]
+    errors: { job: string; issues: string[] }[]
 }
 
 const SAMPLE_SINGLE_JOB = `{
@@ -453,7 +453,7 @@ export default function CompanyJobsModal({ company, onClose }: Props) {
                                             <div key={i} className="bg-red-50 border border-red-200 rounded p-2">
                                                 <p className="text-[10px] font-medium text-red-700 mb-1">{e.job}</p>
                                                 <ul className="space-y-0.5">
-                                                    {(e.issues || (e as any).missing_keys || []).map((issue: string, idx: number) => (
+                                                    {e.issues.map((issue: string, idx: number) => (
                                                         <li key={idx} className="text-[10px] text-red-600 flex gap-1.5">
                                                             <span className="text-red-400 shrink-0">•</span>
                                                             <span>{issue}</span>
