@@ -254,6 +254,7 @@ const INIT_FORM = {
     applicant_name: '',
     target_job_title: '',
     job_description: '',
+    raw_description: '',
     job_link: '',
     organization_name: '',
     sponsorship: '',
@@ -321,6 +322,7 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
                 applicant_name: cv.applicant_name ?? '',
                 target_job_title: cv.target_job_title ?? '',
                 job_description: cv.job_description ?? '',
+                raw_description: cv.raw_description ?? '',
                 job_link: cv.job_link ?? '',
                 organization_name: cv.organization_name ?? '',
                 sponsorship: cv.sponsorship ?? '',
@@ -343,7 +345,8 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
                 ...f,
                 cv_title: job.job_title ?? '',
                 target_job_title: job.job_title ?? '',
-                job_description: job.job_complete_description ?? '',
+                job_description: '',
+                raw_description: job.raw_description ?? '',
                 job_link: job.link ?? '',
                 organization_name: job.company_name ?? '',
                 sponsorship: job.is_job_sponsored ?? '',
@@ -461,7 +464,7 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
     const copyPrompt = () => {
         const prompt = buildPrompt(
             form.target_job_title.trim(),
-            form.job_description.trim() || '(No job description provided)',
+            form.raw_description.trim() || '(No job description provided)',
             experienceItems.length,
         )
         navigator.clipboard.writeText(prompt).then(() => {
@@ -539,15 +542,18 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
         projects,
     }
 
-    const buildPayload = () => ({
-        ...form,
-        job_id: job?.id ?? cv?.job_id ?? null,
-        applicant_id: selectedApplicantId || cv?.applicant_id || null,
-        portfolios,
-        experience_items: experienceItems,
-        education,
-        projects: projects.filter(p => p.title.trim()),
-    })
+    const buildPayload = () => {
+        const payload = { ...form }
+        return {
+            ...payload,
+            job_id: job?.id ?? cv?.job_id ?? null,
+            applicant_id: selectedApplicantId || cv?.applicant_id || null,
+            portfolios,
+            experience_items: experienceItems,
+            education,
+            projects: projects.filter(p => p.title.trim()),
+        }
+    }
 
     const handleSave = async (openAfter = false) => {
         setSaving(true)
@@ -594,12 +600,16 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
                             View CV <ExternalLink size={10} />
                         </a>
                     )}
-                    <button onClick={() => handleSave(false)} disabled={saving || !form.applicant_name.trim()}
-                        className="px-3 py-1.5 text-xs border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40">
+                    <button onClick={() => handleSave(false)}
+                        disabled={saving || !form.applicant_name.trim() || !form.target_job_title.trim() || !form.raw_description.trim()}
+                        title={!form.target_job_title.trim() ? 'Target Job Title is required' : !form.raw_description.trim() ? 'Job Description is required' : !form.applicant_name.trim() ? 'Applicant name is required' : ''}
+                        className="px-3 py-1.5 text-xs border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">
                         {saving ? 'Saving…' : 'Save Draft'}
                     </button>
-                    <button onClick={() => handleSave(true)} disabled={saving || !form.applicant_name.trim()}
-                        className="flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-800 text-white rounded hover:bg-gray-700 disabled:opacity-40">
+                    <button onClick={() => handleSave(true)}
+                        disabled={saving || !form.applicant_name.trim() || !form.target_job_title.trim() || !form.raw_description.trim()}
+                        title={!form.target_job_title.trim() ? 'Target Job Title is required' : !form.raw_description.trim() ? 'Job Description is required' : !form.applicant_name.trim() ? 'Applicant name is required' : ''}
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-800 text-white rounded hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed">
                         <ExternalLink size={11} />
                         {saving ? 'Saving…' : 'Save & View'}
                     </button>
@@ -662,11 +672,11 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
                                     onChange={e => set('job_link', e.target.value)} />
                             </div>
                             <div>
-                                <label className={labelCls}>Job Description</label>
-                                <textarea rows={5} className={`${inputCls} resize-y`}
-                                    placeholder="Paste the full job description here…"
-                                    value={form.job_description}
-                                    onChange={e => set('job_description', e.target.value)} />
+                                <label className={labelCls + ' bg-blue-50 border border-blue-200 px-2 py-0.5 rounded block'}>Job Description (for CV) *</label>
+                                <textarea rows={5} className={`${inputCls} resize-y bg-blue-50 border-blue-200`}
+                                    placeholder="Raw job description text for CV generation (required)…"
+                                    value={form.raw_description}
+                                    onChange={e => set('raw_description', e.target.value)} />
                             </div>
                             <button
                                 onClick={copyPrompt}

@@ -49,3 +49,8 @@ export async function importAlignerJobs(payload: any) {
 export async function syncMercorReferrals(token: string) {
     return await apiClient(AiJobsAPIRoutes.SYNC_MERCOR, ApiMethod.POST, { token }, undefined, undefined, true, false)
 }
+
+export async function saveJobsForCompany(companyId: string, jobs: any[]) {
+    const route = `ai-jobs/company/${companyId}/jobs`
+    return await apiClient(route, ApiMethod.POST, { jobs }, undefined, undefined, true, true)
+}

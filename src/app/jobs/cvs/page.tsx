@@ -84,7 +84,7 @@ export default function CvsPage() {
                 <div className="relative flex-1 max-w-xs">
                     <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
-                        className="w-full border border-gray-300 rounded pl-6 pr-6 py-1 text-xs bg-white focus:outline-none"
+                        className={`w-full border rounded pl-6 pr-6 py-1 text-xs focus:outline-none transition-colors ${keyword ? 'border-blue-300 bg-blue-50' : 'border-gray-300 bg-white'}`}
                         placeholder="Search by CV title or applicant name…"
                         value={keyword}
                         onChange={e => handleKeywordChange(e.target.value)}
@@ -116,7 +116,17 @@ export default function CvsPage() {
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Email</th>
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Exp (yrs)</th>
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Created</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600">Actions</th>
+                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 flex items-center justify-between">
+                                <span>Actions</span>
+                                <button
+                                    onClick={() => applyFilter(keyword)}
+                                    disabled={loading}
+                                    title="Refresh results with current filter"
+                                    className="p-0.5 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded transition-colors disabled:opacity-50"
+                                >
+                                    <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+                                </button>
+                            </th>
                         </tr>
                     </thead>
                     <tbody>

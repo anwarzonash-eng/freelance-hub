@@ -22,3 +22,14 @@ export async function upsertJobsForCompany(companyId: string, payload: any) {
         true,
     )
 }
+
+export async function updateJob(jobId: number, payload: any) {
+    return apiClient(
+        SponsoredJobsAPIRoutes.UPDATE.replace(':id', String(jobId)),
+        ApiMethod.PUT,
+        payload,
+        undefined,
+        {},
+        true,
+    )
+}

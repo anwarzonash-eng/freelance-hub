@@ -307,6 +307,15 @@ export default function CompaniesPage() {
         setFilters(f => ({ ...f, [field]: next.join(',') }))
     }
 
+    const isFiltersChanged = () => {
+        for (const key in EMPTY_FILTERS) {
+            if (filters[key as keyof typeof EMPTY_FILTERS] !== EMPTY_FILTERS[key as keyof typeof EMPTY_FILTERS]) {
+                return true
+            }
+        }
+        return false
+    }
+
     const handleDelete = async (id: string) => {
         if (!confirm('Delete this company?')) return
         setDeleting(id)
@@ -389,14 +398,14 @@ export default function CompaniesPage() {
             {visiblePanels.has('upload') && <CompanyJsonPanel onDone={refresh} />}
 
             {/* Filter bar */}
-            <div className={`${visiblePanels.has('filters') ? '' : 'hidden'} border border-gray-200 rounded p-2 mb-2 bg-gray-50 transition-opacity ${sqlMode ? 'opacity-40 pointer-events-none select-none' : ''}`}>
+            <div className={`${visiblePanels.has('filters') ? '' : 'hidden'} border border-gray-200 rounded p-2 mb-2 bg-gray-50 ${sqlMode ? 'opacity-40 pointer-events-none select-none' : ''}`}>
                 <div className="flex items-end gap-1.5 flex-wrap">
                     <div className="flex flex-col gap-0.5">
                         <label className="text-[10px] text-gray-400 uppercase">Search</label>
                         <div className="relative">
                             <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
                             <input
-                                className="border border-gray-300 rounded pl-6 pr-2 py-1 text-xs bg-white focus:outline-none w-44"
+                                className={`border rounded pl-6 pr-2 py-1 text-xs focus:outline-none w-44 transition-colors ${filters.keyword ? 'border-blue-300 bg-blue-50' : 'border-gray-300 bg-white'}`}
                                 placeholder="Name, website, career page…"
                                 value={filters.keyword}
                                 onChange={e => setFilters(f => ({ ...f, keyword: e.target.value }))}
@@ -409,7 +418,7 @@ export default function CompaniesPage() {
                     <div className="flex flex-col gap-0.5 relative">
                         <label className="text-[10px] text-gray-400 uppercase">Sponsor Type</label>
                         <button onClick={() => { setShowTypeDd(p => !p); setShowRouteDd(false) }}
-                            className="flex items-center gap-1 border border-gray-300 rounded px-2 py-1 text-xs bg-white hover:bg-gray-50 text-gray-700 min-w-[140px]">
+                            className={`flex items-center gap-1 border rounded px-2 py-1 text-xs text-gray-700 min-w-[140px] transition-colors ${filters.sponsor_type ? 'border-blue-300 bg-blue-50 hover:bg-blue-100' : 'border-gray-300 bg-white hover:bg-gray-50'}`}>
                             Type{filters.sponsor_type ? ` (${filters.sponsor_type.split(',').length})` : ''}
                             <ChevronDown size={11} className="ml-auto text-gray-400" />
                         </button>
@@ -435,7 +444,7 @@ export default function CompaniesPage() {
                     <div className="flex flex-col gap-0.5 relative">
                         <label className="text-[10px] text-gray-400 uppercase">Sponsor Route</label>
                         <button onClick={() => { setShowRouteDd(p => !p); setShowTypeDd(false) }}
-                            className="flex items-center gap-1 border border-gray-300 rounded px-2 py-1 text-xs bg-white hover:bg-gray-50 text-gray-700 min-w-[140px]">
+                            className={`flex items-center gap-1 border rounded px-2 py-1 text-xs text-gray-700 min-w-[140px] transition-colors ${filters.sponsor_route ? 'border-blue-300 bg-blue-50 hover:bg-blue-100' : 'border-gray-300 bg-white hover:bg-gray-50'}`}>
                             Route{filters.sponsor_route ? ` (${filters.sponsor_route.split(',').length})` : ''}
                             <ChevronDown size={11} className="ml-auto text-gray-400" />
                         </button>
@@ -460,7 +469,7 @@ export default function CompaniesPage() {
                     <div className="flex flex-col gap-0.5">
                         <label className="text-[10px] text-gray-400 uppercase">Is Deleted</label>
                         <select value={filters.is_deleted} onChange={e => setFilters(f => ({ ...f, is_deleted: e.target.value }))}
-                            className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none">
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.is_deleted !== EMPTY_FILTERS.is_deleted ? 'border-blue-300 bg-blue-50' : 'border-gray-300 bg-white'}`}>
                             <option value="">All</option>
                             <option value="false">Active</option>
                             <option value="true">Deleted</option>
@@ -470,7 +479,7 @@ export default function CompaniesPage() {
                     <div className="flex flex-col gap-0.5">
                         <label className="text-[10px] text-gray-400 uppercase">Visa Mentioned</label>
                         <select value={filters.visa_mentioned} onChange={e => setFilters(f => ({ ...f, visa_mentioned: e.target.value }))}
-                            className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none">
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.visa_mentioned ? 'border-blue-300 bg-blue-50' : 'border-gray-300 bg-white'}`}>
                             <option value="">All</option>
                             <option value="true">Yes</option>
                             <option value="false">No</option>
@@ -480,7 +489,7 @@ export default function CompaniesPage() {
                     <div className="flex flex-col gap-0.5">
                         <label className="text-[10px] text-gray-400 uppercase">Domain Found</label>
                         <select value={filters.has_website} onChange={e => setFilters(f => ({ ...f, has_website: e.target.value }))}
-                            className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none">
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.has_website ? 'border-blue-300 bg-blue-50' : 'border-gray-300 bg-white'}`}>
                             <option value="">All</option>
                             <option value="true">Yes</option>
                             <option value="false">No</option>
@@ -933,7 +942,15 @@ export default function CompaniesPage() {
                                     )}
                                     {col('visa') && (
                                         <td className="px-2 py-1 border-r border-gray-100">
-                                            <Badge value={row.visa_mentioned} on="bg-teal-100 text-teal-700" off="bg-gray-100 text-gray-500" />
+                                            <div className="flex items-center gap-1.5">
+                                                <Badge value={row.visa_mentioned} on="bg-teal-100 text-teal-700" off="bg-gray-100 text-gray-500" />
+                                                {row.visa_mentioned && row.visa_example_job_url && (
+                                                    <a href={row.visa_example_job_url} target="_blank" rel="noopener noreferrer"
+                                                        className="text-blue-600 hover:text-blue-800" title="View visa example job">
+                                                        <ExternalLink size={12} />
+                                                    </a>
+                                                )}
+                                            </div>
                                         </td>
                                     )}
                                     {col('checked') && (

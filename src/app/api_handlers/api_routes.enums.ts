@@ -218,6 +218,7 @@ export enum SponsoredJobsAPIRoutes {
     GET_ALL = 'sponsored-jobs',
     GET_DISTINCT = 'sponsored-jobs/distinct-values',
     UPSERT_FOR_COMPANY = 'sponsored-jobs/upsert-for-company/:companyId',
+    UPDATE = 'sponsored-jobs/:id',
 }
 
 export enum JobApplicantsAPIRoutes {

@@ -20,6 +20,7 @@ const EMPTY_FORM = {
     website: '',
     career_page: '',
     hr_email: '',
+    visa_example_job_url: '',
     is_deleted: false,
     visa_mentioned: false,
     offers_freelance: null as boolean | null,
@@ -33,7 +34,9 @@ export default function CompanyFormModal({ company, onClose, onSaved }: Props) {
     const isEdit = !!company
     const [form, setForm] = useState({ ...EMPTY_FORM })
     const [metaRows, setMetaRows] = useState<{ key: string; value: string }[]>([])
+    const [credentials, setCredentials] = useState<any[]>([])
     const [saving, setSaving] = useState(false)
+    const [activeTab, setActiveTab] = useState<'general' | 'credentials'>('general')
 
     useEffect(() => {
         if (company) {
@@ -47,6 +50,7 @@ export default function CompanyFormModal({ company, onClose, onSaved }: Props) {
                 website: company.website ?? '',
                 career_page: company.career_page ?? '',
                 hr_email: company.hr_email ?? '',
+                visa_example_job_url: company.visa_example_job_url ?? '',
                 is_deleted: Boolean(company.is_deleted),
                 visa_mentioned: Boolean(company.visa_mentioned),
                 offers_freelance: company.offers_freelance ?? null,
@@ -59,10 +63,31 @@ export default function CompanyFormModal({ company, onClose, onSaved }: Props) {
             if (meta && typeof meta === 'object' && !Array.isArray(meta)) {
                 setMetaRows(Object.entries(meta).map(([key, value]) => ({ key, value: String(value ?? '') })))
             }
+            const creds = company.credentials
+            if (Array.isArray(creds)) {
+                setCredentials(creds)
+            }
         }
     }, [company])
 
-    const set = (field: string, value: any) => setForm(f => ({ ...f, [field]: value }))
+    const generateSlug = (orgName: string): string => {
+        const slug = orgName
+            .toLowerCase()
+            .replace(/\s+/g, '')
+            .replace(/[^a-z0-9]/g, '')
+        const timestamp = Date.now()
+        return `${slug}${timestamp}`
+    }
+
+    const set = (field: string, value: any) => {
+        setForm(f => {
+            const updated = { ...f, [field]: value }
+            if (!isEdit && field === 'organisation_name') {
+                updated.id = generateSlug(value)
+            }
+            return updated
+        })
+    }
 
     const addMetaRow = () => setMetaRows(r => [...r, { key: '', value: '' }])
     const removeMetaRow = (i: number) => setMetaRows(r => r.filter((_, idx) => idx !== i))
@@ -76,7 +101,8 @@ export default function CompanyFormModal({ company, onClose, onSaved }: Props) {
             const meta_data = metaRows.length > 0
                 ? Object.fromEntries(metaRows.filter(r => r.key.trim()).map(r => [r.key.trim(), r.value]))
                 : null
-            const payload = { ...form, rank: form.rank !== '' ? Number(form.rank) : null, meta_data }
+            const credsData = credentials.filter(c => c.application_url || c.username || c.password).length > 0 ? credentials : null
+            const payload = { ...form, rank: form.rank !== '' ? Number(form.rank) : null, meta_data, credentials: credsData }
             if (isEdit) {
                 await updateCompany(company.id, payload)
             } else {
@@ -91,22 +117,66 @@ export default function CompanyFormModal({ company, onClose, onSaved }: Props) {
     const inputCls = 'w-full border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-gray-500'
     const labelCls = 'text-[10px] text-gray-400 uppercase font-medium mb-0.5 block'
 
+    const addCredential = () => {
+        setCredentials([...credentials, { application_url: '', username: '', password: '' }])
+    }
+
+    const removeCredential = (idx: number) => {
+        setCredentials(credentials.filter((_, i) => i !== idx))
+    }
+
+    const updateCredential = (idx: number, field: string, value: string) => {
+        const newCreds = [...credentials]
+        newCreds[idx] = { ...newCreds[idx], [field]: value }
+        setCredentials(newCreds)
+    }
+
     return (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
-                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 shrink-0">
-                    <span className="text-sm font-semibold text-gray-800">{isEdit ? 'Edit Company' : 'Add Company'}</span>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={16} /></button>
+                <div className="px-4 py-3 border-b border-gray-200 shrink-0">
+                    <div className="flex items-center justify-between mb-3">
+                        <span className="text-sm font-semibold text-gray-800">{isEdit ? 'Edit Company' : 'Add Company'}</span>
+                        <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={16} /></button>
+                    </div>
+                    <div className="flex gap-4 border-t border-gray-200 pt-2">
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('general')}
+                            className={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${
+                                activeTab === 'general'
+                                    ? 'border-gray-800 text-gray-800'
+                                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                            }`}
+                        >
+                            General
+                        </button>
+                        {isEdit && (
+                            <button
+                                type="button"
+                                onClick={() => setActiveTab('credentials')}
+                                className={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${
+                                    activeTab === 'credentials'
+                                        ? 'border-gray-800 text-gray-800'
+                                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                                }`}
+                            >
+                                Credentials
+                            </button>
+                        )}
+                    </div>
                 </div>
 
                 <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto">
                     <div className="p-4 space-y-4">
+                        {activeTab === 'general' && (
+                            <>
                         {/* Core fields */}
                         <div className="grid grid-cols-2 gap-3">
                             <div className="col-span-2">
-                                <label className={labelCls}>ID (slug) *</label>
-                                <input required className={inputCls} value={form.id} onChange={e => set('id', e.target.value)}
-                                    disabled={isEdit} placeholder="e.g. hsbc_holdings_plc" />
+                                <label className={labelCls}>ID (slug) * {!isEdit && <span className="text-[9px] text-gray-500">(auto-generated)</span>}</label>
+                                <input required className={`${inputCls} ${!isEdit ? 'bg-gray-100 cursor-not-allowed' : ''}`} value={form.id} onChange={e => isEdit && set('id', e.target.value)}
+                                    disabled={!isEdit} placeholder={isEdit ? "e.g. hsbc_holdings_plc" : ""} />
                             </div>
                             <div className="col-span-2">
                                 <label className={labelCls}>Organisation Name *</label>
@@ -139,6 +209,10 @@ export default function CompanyFormModal({ company, onClose, onSaved }: Props) {
                             <div className="col-span-2">
                                 <label className={labelCls}>HR Email</label>
                                 <input className={inputCls} type="email" value={form.hr_email} onChange={e => set('hr_email', e.target.value)} />
+                            </div>
+                            <div className="col-span-2">
+                                <label className={labelCls}>Visa Example Job URL</label>
+                                <input className={inputCls} value={form.visa_example_job_url} onChange={e => set('visa_example_job_url', e.target.value)} placeholder="https://" />
                             </div>
                             <div>
                                 <label className={labelCls}>Rank</label>
@@ -217,6 +291,72 @@ export default function CompanyFormModal({ company, onClose, onSaved }: Props) {
                                 ))}
                             </div>
                         </div>
+                            </>
+                        )}
+
+                        {activeTab === 'credentials' && (
+                            <div>
+                                <div className="flex items-center justify-between mb-3">
+                                    <h3 className="text-sm font-semibold text-gray-800">Career Page Credentials</h3>
+                                    <button
+                                        type="button"
+                                        onClick={addCredential}
+                                        className="flex items-center gap-1 text-[10px] text-teal-600 hover:text-teal-800 border border-teal-200 rounded px-2 py-1"
+                                    >
+                                        <Plus size={10} /> Add Credential
+                                    </button>
+                                </div>
+                                {credentials.length === 0 && (
+                                    <p className="text-[10px] text-gray-400 italic py-4">No credentials added. Click "Add Credential" to add login information for career pages.</p>
+                                )}
+                                <div className="space-y-3">
+                                    {credentials.map((cred, idx) => (
+                                        <div key={idx} className="border border-gray-200 rounded p-3 space-y-2">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <p className="text-[10px] text-gray-400 uppercase font-semibold">Credential #{idx + 1}</p>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeCredential(idx)}
+                                                    className="text-gray-400 hover:text-red-600"
+                                                >
+                                                    <Trash2 size={13} />
+                                                </button>
+                                            </div>
+                                            <div>
+                                                <label className={labelCls}>Application URL *</label>
+                                                <input
+                                                    type="url"
+                                                    className={inputCls}
+                                                    placeholder="https://careers.company.com/login"
+                                                    value={cred.application_url || ''}
+                                                    onChange={e => updateCredential(idx, 'application_url', e.target.value)}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className={labelCls}>Username</label>
+                                                <input
+                                                    type="text"
+                                                    className={inputCls}
+                                                    placeholder="Your username"
+                                                    value={cred.username || ''}
+                                                    onChange={e => updateCredential(idx, 'username', e.target.value)}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className={labelCls}>Password</label>
+                                                <input
+                                                    type="password"
+                                                    className={inputCls}
+                                                    placeholder="Your password"
+                                                    value={cred.password || ''}
+                                                    onChange={e => updateCredential(idx, 'password', e.target.value)}
+                                                />
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <div className="px-4 py-3 border-t border-gray-100 flex justify-end gap-2 shrink-0">

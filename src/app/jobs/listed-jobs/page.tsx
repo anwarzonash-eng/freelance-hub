@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { RefreshCw, ExternalLink, Search, ChevronDown, Briefcase, FileText } from 'lucide-react'
+import { RefreshCw, ExternalLink, Search, ChevronDown, Briefcase, FileText, Eye } from 'lucide-react'
 import { getAllJobs, getDistinctJobValues } from '@/app/api_handlers/api/sponsored-jobs.api'
 import { getAllCVs } from '@/app/api_handlers/api/job-cvs.api'
 import JobCVModal from '@/app/components/jobs/JobCVModal'
+import JobViewModal from '@/app/components/jobs/JobViewModal'
 
 const LIMIT_OPTIONS = [25, 50, 100, 200]
 const EMPTY_FILTERS = { keyword: '', is_job_sponsored: '', type: '', job_category: '', has_cv: false }
@@ -33,6 +34,7 @@ export default function ListedJobsPage() {
     const [loading, setLoading] = useState(false)
 
     const [cvJob, setCvJob] = useState<any | null>(null)
+    const [viewingJob, setViewingJob] = useState<any | null>(null)
     const [cvMap, setCvMap] = useState<Record<number, any>>({})
 
     const [filters, setFilters] = useState({ ...EMPTY_FILTERS })
@@ -130,7 +132,7 @@ export default function ListedJobsPage() {
                         <div className="relative">
                             <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
                             <input
-                                className="border border-gray-300 rounded pl-6 pr-2 py-1 text-xs bg-white focus:outline-none w-52"
+                                className={`border rounded pl-6 pr-2 py-1 text-xs focus:outline-none w-52 transition-colors ${filters.keyword ? 'border-blue-300 bg-blue-50' : 'border-gray-300 bg-white'}`}
                                 placeholder="Title, description, company, location…"
                                 value={filters.keyword}
                                 onChange={e => setFilters(f => ({ ...f, keyword: e.target.value }))}
@@ -143,7 +145,7 @@ export default function ListedJobsPage() {
                         <label className="text-[10px] text-gray-400 uppercase">Sponsorship</label>
                         <select value={filters.is_job_sponsored}
                             onChange={e => setFilters(f => ({ ...f, is_job_sponsored: e.target.value }))}
-                            className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none">
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.is_job_sponsored ? 'border-blue-300 bg-blue-50' : 'border-gray-300 bg-white'}`}>
                             <option value="">All</option>
                             <option value="yes">Yes</option>
                             <option value="no">No</option>
@@ -154,7 +156,7 @@ export default function ListedJobsPage() {
                     <div className="flex flex-col gap-0.5 relative">
                         <label className="text-[10px] text-gray-400 uppercase">Type</label>
                         <button onClick={() => { setShowTypeDd(p => !p); setShowCatDd(false) }}
-                            className="flex items-center gap-1 border border-gray-300 rounded px-2 py-1 text-xs bg-white hover:bg-gray-50 text-gray-700 min-w-[120px]">
+                            className={`flex items-center gap-1 border rounded px-2 py-1 text-xs text-gray-700 min-w-[120px] transition-colors ${filters.type ? 'border-blue-300 bg-blue-50 hover:bg-blue-100' : 'border-gray-300 bg-white hover:bg-gray-50'}`}>
                             Type{filters.type ? ` (${filters.type.split(',').filter(Boolean).length})` : ''}
                             <ChevronDown size={11} className="ml-auto text-gray-400" />
                         </button>
@@ -179,7 +181,7 @@ export default function ListedJobsPage() {
                     <div className="flex flex-col gap-0.5 relative">
                         <label className="text-[10px] text-gray-400 uppercase">Category</label>
                         <button onClick={() => { setShowCatDd(p => !p); setShowTypeDd(false) }}
-                            className="flex items-center gap-1 border border-gray-300 rounded px-2 py-1 text-xs bg-white hover:bg-gray-50 text-gray-700 min-w-[140px]">
+                            className={`flex items-center gap-1 border rounded px-2 py-1 text-xs text-gray-700 min-w-[140px] transition-colors ${filters.job_category ? 'border-blue-300 bg-blue-50 hover:bg-blue-100' : 'border-gray-300 bg-white hover:bg-gray-50'}`}>
                             Category{filters.job_category ? ` (${filters.job_category.split(',').filter(Boolean).length})` : ''}
                             <ChevronDown size={11} className="ml-auto text-gray-400" />
                         </button>
@@ -202,8 +204,8 @@ export default function ListedJobsPage() {
                         )}
                     </div>
 
-                    <div className="flex flex-col gap-0.5 mt-auto">
-                        <label className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-700 py-1">
+                    <div className={`flex flex-col gap-0.5 mt-auto px-2 py-1 rounded transition-colors ${filters.has_cv ? 'bg-blue-50' : ''}`}>
+                        <label className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-700">
                             <input type="checkbox" className="w-3.5 h-3.5"
                                 checked={filters.has_cv}
                                 onChange={e => setFilters(f => ({ ...f, has_cv: e.target.checked }))} />
@@ -238,7 +240,17 @@ export default function ListedJobsPage() {
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Sponsored</th>
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Tech Skills</th>
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Closes</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600"></th>
+                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 flex items-center justify-between">
+                                <span>Actions</span>
+                                <button
+                                    onClick={() => load(page, limit, applied)}
+                                    disabled={loading}
+                                    title="Refresh results with current filter"
+                                    className="p-0.5 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded transition-colors disabled:opacity-50"
+                                >
+                                    <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+                                </button>
+                            </th>
                         </tr>
                     </thead>
                     <tbody>
@@ -297,6 +309,12 @@ export default function ListedJobsPage() {
                                     <td className="px-2 py-1.5 whitespace-nowrap">
                                         <div className="flex items-center gap-1">
                                             <button
+                                                onClick={() => setViewingJob(row)}
+                                                title="View job details"
+                                                className="flex items-center gap-1 text-[10px] px-2 py-1 border border-gray-300 rounded hover:bg-gray-50 text-gray-600">
+                                                <Eye size={10} /> View
+                                            </button>
+                                            <button
                                                 onClick={() => setCvJob(row)}
                                                 title="Create CV for this job"
                                                 className="flex items-center gap-1 text-[10px] px-2 py-1 border border-gray-300 rounded hover:bg-gray-50 text-gray-600">
@@ -320,6 +338,14 @@ export default function ListedJobsPage() {
                     </tbody>
                 </table>
             </div>
+
+            {viewingJob && (
+                <JobViewModal
+                    job={viewingJob}
+                    onClose={() => setViewingJob(null)}
+                    onJobSaved={() => { setViewingJob(null); load(page, limit, applied) }}
+                />
+            )}
 
             {cvJob && (
                 <JobCVModal

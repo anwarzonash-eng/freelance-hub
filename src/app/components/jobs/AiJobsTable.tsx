@@ -802,7 +802,13 @@ export default function AiJobsTable() {
         <div className="p-3 bg-white min-h-screen">
             {/* Header */}
             <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-                <h1 className="text-sm font-semibold text-gray-800">AI Jobs</h1>
+                <div className="flex items-center gap-1.5">
+                    <h1 className="text-sm font-semibold text-gray-800">AI Jobs</h1>
+                    <button onClick={() => load(page, limit, appliedFilters)} title="Refresh jobs list" disabled={loading}
+                        className="flex items-center justify-center text-gray-600 hover:text-gray-800 disabled:opacity-50">
+                        <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+                    </button>
+                </div>
                 <div className="flex items-center gap-1.5 flex-wrap">
                     <button onClick={() => setImportSource("mercor")}
                         className="flex items-center gap-1 text-xs border border-violet-300 text-violet-700 bg-violet-50 px-2 py-1 rounded hover:bg-violet-100">
