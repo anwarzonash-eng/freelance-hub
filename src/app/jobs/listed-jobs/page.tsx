@@ -6,9 +6,22 @@ import { getAllJobs, getDistinctJobValues } from '@/app/api_handlers/api/sponsor
 import { getAllCVs } from '@/app/api_handlers/api/job-cvs.api'
 import JobCVModal from '@/app/components/jobs/JobCVModal'
 import JobViewModal from '@/app/components/jobs/JobViewModal'
+import { timeAgo } from '@/app/utils/time'
 
 const LIMIT_OPTIONS = [25, 50, 100, 200]
-const EMPTY_FILTERS = { keyword: '', is_job_sponsored: '', type: '', job_category: '', has_cv: false }
+const EMPTY_FILTERS = { keyword: '', is_job_sponsored: '', type: '', job_category: '', has_cv: false, cv_submitted: '' }
+
+function SubmissionBadge({ row }: { row: any }) {
+    if (!row.is_cv_submitted) {
+        return <span className="text-[9px] bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded font-medium">Not submitted</span>
+    }
+    const ago = timeAgo(row.cv_submitted_at)
+    return (
+        <span className="text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium whitespace-nowrap" title={row.cv_email_sent || ''}>
+            Submitted{ago ? ` · ${ago}` : ''}
+        </span>
+    )
+}
 
 function SponsorBadge({ value }: { value: string }) {
     const v = value?.toLowerCase()
@@ -62,6 +75,7 @@ export default function ListedJobsPage() {
             if (af.is_job_sponsored) q.is_job_sponsored = af.is_job_sponsored
             if (af.type) q.type = af.type
             if (af.job_category) q.job_category = af.job_category
+            if (af.cv_submitted) q.cv_submitted = af.cv_submitted
             if (af.has_cv) {
                 const map = latestCvMap ?? cvMap
                 const ids = Object.keys(map).join(',')
@@ -213,6 +227,17 @@ export default function ListedJobsPage() {
                         </label>
                     </div>
 
+                    <div className="flex flex-col gap-0.5">
+                        <label className="text-[10px] text-gray-400 uppercase">CV Submission</label>
+                        <select value={filters.cv_submitted}
+                            onChange={e => setFilters(f => ({ ...f, cv_submitted: e.target.value }))}
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.cv_submitted ? 'border-blue-300 bg-blue-50' : 'border-gray-300 bg-white'}`}>
+                            <option value="">All</option>
+                            <option value="true">Submitted</option>
+                            <option value="false">Not Submitted</option>
+                        </select>
+                    </div>
+
                     <button onClick={applyFilters} className="px-3 py-1 text-xs bg-gray-800 text-white rounded hover:bg-gray-700 mt-auto">Filter</button>
                     <button onClick={clearFilters} className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-white mt-auto">Clear</button>
 
@@ -240,6 +265,7 @@ export default function ListedJobsPage() {
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Sponsored</th>
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Tech Skills</th>
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Closes</th>
+                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Submission</th>
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 flex items-center justify-between">
                                 <span>Actions</span>
                                 <button
@@ -255,12 +281,12 @@ export default function ListedJobsPage() {
                     </thead>
                     <tbody>
                         {loading && (
-                            <tr><td colSpan={10} className="text-center py-10 text-gray-400">
+                            <tr><td colSpan={11} className="text-center py-10 text-gray-400">
                                 <div className="flex items-center justify-center gap-2"><RefreshCw size={13} className="animate-spin" /> Loading…</div>
                             </td></tr>
                         )}
                         {!loading && data.length === 0 && (
-                            <tr><td colSpan={10} className="text-center py-10 text-gray-400">No jobs found.</td></tr>
+                            <tr><td colSpan={11} className="text-center py-10 text-gray-400">No jobs found.</td></tr>
                         )}
                         {!loading && data.map((row, idx) => {
                             const rowNum = (page - 1) * limit + idx + 1
@@ -305,6 +331,9 @@ export default function ListedJobsPage() {
                                     </td>
                                     <td className="px-2 py-1.5 text-gray-500 whitespace-nowrap text-[10px] border-r border-gray-100">
                                         {row.application_closing_date || '—'}
+                                    </td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap border-r border-gray-100">
+                                        <SubmissionBadge row={row} />
                                     </td>
                                     <td className="px-2 py-1.5 whitespace-nowrap">
                                         <div className="flex items-center gap-1">

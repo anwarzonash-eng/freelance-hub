@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { X, Plus, Pencil, Trash2, Check } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { X, Plus, Pencil, Trash2, Check, ChevronDown, Search } from 'lucide-react'
 import { manualCheckCompany } from '@/app/api_handlers/api/sponsored-companies.api'
 import { getCompanyCategories, createCompanyCategory, updateCompanyCategory, deleteCompanyCategory } from '@/app/api_handlers/api/company-categories.api'
 
@@ -44,6 +44,18 @@ export default function ManualCheckModal({ company, currentUserId, currentUserUU
     const [editingCatName, setEditingCatName] = useState('')
     const [catLoading, setCatLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const [categoryDdOpen, setCategoryDdOpen] = useState(false)
+    const [categorySearch, setCategorySearch] = useState('')
+    const [manageCatSearch, setManageCatSearch] = useState('')
+    const categoryDdRef = useRef<HTMLDivElement>(null)
+
+    useEffect(() => {
+        const handler = (e: MouseEvent) => {
+            if (categoryDdRef.current && !categoryDdRef.current.contains(e.target as Node)) setCategoryDdOpen(false)
+        }
+        document.addEventListener('mousedown', handler)
+        return () => document.removeEventListener('mousedown', handler)
+    }, [])
 
     useEffect(() => { loadCategories() }, [])
 
@@ -176,17 +188,57 @@ export default function ManualCheckModal({ company, currentUserId, currentUserUU
                         {/* Category */}
                         <div>
                             <label className={labelCls}>Category</label>
-                            <select className={inputCls} value={form.category_id} onChange={e => set('category_id', e.target.value)}>
-                                <option value="">— None —</option>
-                                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                            </select>
+                            <div className="relative" ref={categoryDdRef}>
+                                <button type="button" onClick={() => setCategoryDdOpen(p => !p)}
+                                    className="w-full flex items-center justify-between border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none hover:border-gray-400">
+                                    <span className={form.category_id ? 'text-gray-800' : 'text-gray-400'}>
+                                        {form.category_id ? categories.find(c => c.id === form.category_id)?.name ?? '— None —' : '— None —'}
+                                    </span>
+                                    <ChevronDown size={12} className="text-gray-400 shrink-0" />
+                                </button>
+                                {categoryDdOpen && (
+                                    <div className="absolute z-30 top-full mt-1 left-0 right-0 bg-white border border-gray-200 rounded shadow-lg max-h-56 overflow-y-auto">
+                                        <div className="sticky top-0 bg-white p-1.5 border-b border-gray-100">
+                                            <div className="relative">
+                                                <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
+                                                <input autoFocus className="w-full border border-gray-300 rounded pl-6 pr-2 py-1 text-xs focus:outline-none"
+                                                    placeholder="Search categories…" value={categorySearch}
+                                                    onChange={e => setCategorySearch(e.target.value)} />
+                                            </div>
+                                        </div>
+                                        <button type="button" onClick={() => { set('category_id', ''); setCategoryDdOpen(false); setCategorySearch('') }}
+                                            className="w-full text-left px-2 py-1 text-xs text-gray-500 hover:bg-gray-50">— None —</button>
+                                        {categories.filter(c => c.name.toLowerCase().includes(categorySearch.toLowerCase())).map(c => (
+                                            <button key={c.id} type="button"
+                                                onClick={() => { set('category_id', c.id); setCategoryDdOpen(false); setCategorySearch('') }}
+                                                className={`w-full text-left px-2 py-1 text-xs hover:bg-gray-50 ${form.category_id === c.id ? 'bg-teal-50 text-teal-700 font-medium' : 'text-gray-700'}`}>
+                                                {c.name}
+                                            </button>
+                                        ))}
+                                        {categories.filter(c => c.name.toLowerCase().includes(categorySearch.toLowerCase())).length === 0 && (
+                                            <p className="px-2 py-1.5 text-[10px] text-gray-400 italic">No matching categories</p>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
 
                             {/* Inline category management */}
                             <div className="mt-1.5 border border-gray-100 rounded bg-gray-50 p-2">
                                 <p className="text-[10px] text-gray-400 uppercase font-medium mb-1.5">Manage Categories</p>
+                                {categories.length > 0 && (
+                                    <div className="relative mb-1.5">
+                                        <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
+                                        <input className="w-full border border-gray-300 rounded pl-6 pr-2 py-1 text-xs focus:outline-none bg-white"
+                                            placeholder="Search to edit or delete…" value={manageCatSearch}
+                                            onChange={e => setManageCatSearch(e.target.value)} />
+                                    </div>
+                                )}
                                 <div className="space-y-1 mb-2 max-h-28 overflow-y-auto">
                                     {categories.length === 0 && <p className="text-[10px] text-gray-400 italic">No categories yet</p>}
-                                    {categories.map(c => (
+                                    {categories.length > 0 && categories.filter(c => c.name.toLowerCase().includes(manageCatSearch.toLowerCase())).length === 0 && (
+                                        <p className="text-[10px] text-gray-400 italic">No matching categories</p>
+                                    )}
+                                    {categories.filter(c => c.name.toLowerCase().includes(manageCatSearch.toLowerCase())).map(c => (
                                         <div key={c.id} className="flex items-center gap-1.5">
                                             {editingCatId === c.id ? (
                                                 <>

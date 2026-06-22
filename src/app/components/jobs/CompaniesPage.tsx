@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Plus, RefreshCw, Pencil, Trash2, ExternalLink, ChevronDown, ChevronUp, Search, Building2, BriefcaseBusiness, Terminal, Download, X, SlidersHorizontal, ClipboardCheck, Users, Copy, Check } from 'lucide-react'
 import { getAllCompanies, getDistinctCompanyValues, deleteCompany, rawQueryCompanies, rawQueryCompaniesOrError } from '@/app/api_handlers/api/sponsored-companies.api'
+import { timeAgo } from '@/app/utils/time'
 import { getCompanyCategories } from '@/app/api_handlers/api/company-categories.api'
 import { listAuthUsers } from '@/app/api_handlers/api/auth.api'
 import CompanyFormModal from './CompanyFormModal'
@@ -12,7 +13,7 @@ import ManualCheckModal from './ManualCheckModal'
 import AssignModal from './AssignModal'
 
 const LIMIT_OPTIONS = [25, 50, 100, 200, 500, 1000, 2000, 3000, 4000, 5000]
-const EMPTY_FILTERS = { sponsor_type: '', sponsor_route: '', is_deleted: 'false', visa_mentioned: '', keyword: '', has_website: '', has_career_page: '', ranked: '', rank_op: '', rank_val: '', manual_check_done: '', has_it_jobs: '', offers_freelance: '', should_apply: '', date_from: '', date_to: '', checked_by: '', category_id: '', assigned: '', assigned_to: '' }
+const EMPTY_FILTERS = { sponsor_type: '', sponsor_route: '', is_deleted: 'false', visa_mentioned: '', keyword: '', has_website: '', has_career_page: '', ranked: '', rank_op: '', rank_val: '', manual_check_done: '', has_it_jobs: '', offers_freelance: '', should_apply: '', date_from: '', date_to: '', checked_by: '', category_id: '', assigned: '', assigned_to: '', cv_submitted: '' }
 
 const ALL_COLUMNS = [
     { key: 'id', label: 'ID' },
@@ -56,6 +57,7 @@ const TABLE_COLS = [
     { key: 'assigned_to_col',   label: 'Assigned To',   default: false },
     { key: 'offers_freelance',  label: 'Freelance',     default: false },
     { key: 'should_apply',      label: 'Should Apply',  default: false },
+    { key: 'cv_submitted',      label: 'CV Submitted',  default: true  },
 ]
 const DEFAULT_TABLE_COLS = new Set(TABLE_COLS.filter(c => c.default).map(c => c.key))
 
@@ -198,6 +200,7 @@ export default function CompaniesPage() {
             if (af.category_id) q.category_id = af.category_id
             if (af.assigned !== '') q.assigned = af.assigned
             if (af.assigned_to) q.assigned_to = af.assigned_to
+            if (af.cv_submitted !== '') q.cv_submitted = af.cv_submitted
             const res: any = await getAllCompanies(q)
             const payload = res?.data ?? res
             setData(Array.isArray(payload?.data) ? payload.data : [])
@@ -361,6 +364,7 @@ export default function CompaniesPage() {
                 if (applied.category_id) q.category_id = applied.category_id
                 if (applied.assigned !== '') q.assigned = applied.assigned
                 if (applied.assigned_to) q.assigned_to = applied.assigned_to
+                if (applied.cv_submitted !== '') q.cv_submitted = applied.cv_submitted
                 const res: any = await getAllCompanies(q)
                 const payload = res?.data ?? res
                 allData = Array.isArray(payload?.data) ? payload.data : []
@@ -634,6 +638,16 @@ export default function CompaniesPage() {
                         </select>
                     </div>
 
+                    <div className="flex flex-col gap-0.5">
+                        <label className="text-[10px] text-gray-400 uppercase">CV Submitted</label>
+                        <select value={filters.cv_submitted} onChange={e => setFilters(f => ({ ...f, cv_submitted: e.target.value }))}
+                            className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none">
+                            <option value="">All</option>
+                            <option value="true">Yes</option>
+                            <option value="false">No</option>
+                        </select>
+                    </div>
+
                     <button onClick={applyFilters} className="px-3 py-1 text-xs bg-gray-800 text-white rounded hover:bg-gray-700 mt-auto">Filter</button>
                     <button onClick={clearFilters} className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-white mt-auto">Clear</button>
                 </div>
@@ -762,6 +776,7 @@ export default function CompaniesPage() {
                             {col('assigned_to_col')   && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Assigned To</th>}
                             {col('offers_freelance')  && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Freelance</th>}
                             {col('should_apply')      && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Should Apply</th>}
+                            {col('cv_submitted')      && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">CV Submitted</th>}
                             <th className="px-1 py-1 font-medium text-gray-600">
                                 <div className="flex items-center justify-end gap-1.5 pr-1">
                                     {/* Refresh */}
@@ -1029,6 +1044,15 @@ export default function CompaniesPage() {
                                         <td className="px-2 py-1 border-r border-gray-100">
                                             {row.should_apply
                                                 ? <span className="text-[9px] bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded font-medium">Yes</span>
+                                                : <span className="text-[9px] text-gray-300">—</span>}
+                                        </td>
+                                    )}
+                                    {col('cv_submitted') && (
+                                        <td className="px-2 py-1 border-r border-gray-100 whitespace-nowrap">
+                                            {row.cv_submitted_count > 0
+                                                ? <span className="text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium">
+                                                    {row.cv_submitted_count} job{row.cv_submitted_count > 1 ? 's' : ''}{row.cv_submitted_at ? ` · ${timeAgo(row.cv_submitted_at)}` : ''}
+                                                  </span>
                                                 : <span className="text-[9px] text-gray-300">—</span>}
                                         </td>
                                     )}

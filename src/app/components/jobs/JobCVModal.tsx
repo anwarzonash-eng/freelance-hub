@@ -17,6 +17,8 @@ import {
 } from "lucide-react";
 import { getAllApplicants } from "@/app/api_handlers/api/job-applicants.api";
 import { createCV, updateCV } from "@/app/api_handlers/api/job-cvs.api";
+import { getAllJobs } from "@/app/api_handlers/api/sponsored-jobs.api";
+import { timeAgo } from "@/app/utils/time";
 import CVPreview, {
   CVData,
   CVExpItem,
@@ -566,6 +568,31 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
   const jobDescRef = useRef<HTMLDivElement>(null);
   const fullScreenRef = useRef<HTMLDivElement>(null);
 
+  // ── Prior CV submission history for this company ────────────────────────
+  const [companySubmission, setCompanySubmission] = useState<{
+    count: number;
+    latest: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (cv || !job?.company_id) return;
+    getAllJobs({ company_id: job.company_id, cv_submitted: "true", limit: 50 })
+      .then((res: any) => {
+        const payload = res?.data ?? res;
+        const rows: any[] = Array.isArray(payload?.data) ? payload.data : [];
+        if (rows.length === 0) return;
+        const latest = rows.reduce(
+          (acc: string | null, r: any) =>
+            r.cv_submitted_at && (!acc || r.cv_submitted_at > acc)
+              ? r.cv_submitted_at
+              : acc,
+          null as string | null,
+        );
+        if (latest) setCompanySubmission({ count: rows.length, latest });
+      })
+      .catch(() => {});
+  }, [cv, job?.company_id]);
+
   // ── Resizable left panel ─────────────────────────────────────────────────
   const [leftPanelWidth, setLeftPanelWidth] = useState(480);
   const resizingRef = useRef(false);
@@ -1108,6 +1135,18 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
               View Job →
             </a>
           )}
+        </div>
+      )}
+
+      {/* ── Prior submission warning ── */}
+      {companySubmission && (
+        <div className="flex items-center gap-2 px-4 py-1.5 border-b border-amber-200 shrink-0 bg-amber-50 text-[11px] text-amber-800">
+          <span>
+            ⚠️ Already submitted {companySubmission.count} CV
+            {companySubmission.count > 1 ? "s" : ""} to{" "}
+            <strong>{form.organization_name || "this company"}</strong> —
+            most recently {timeAgo(companySubmission.latest)}
+          </span>
         </div>
       )}
 
