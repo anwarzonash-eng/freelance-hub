@@ -585,9 +585,23 @@ const Header: React.FC<HeaderProps> = ({
   expandedWidth,
   useData,
 }) => {
-  const [activeMenu, setActiveMenu] = useState<string[]>([]);
+  const [activeMenu, setActiveMenu] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem("sidebar_expanded_menus");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [popoverMenuTitle, setPopoverMenuTitle] = useState<string | null>(null);
   const pathname = usePathname();
+
+  // Persist which submenus are expanded so they stay open across navigations/reloads.
+  useEffect(() => {
+    try {
+      localStorage.setItem("sidebar_expanded_menus", JSON.stringify(activeMenu));
+    } catch {}
+  }, [activeMenu]);
 
   const roles = JSON.parse(localStorage.getItem("roles")) || ["*"];
 

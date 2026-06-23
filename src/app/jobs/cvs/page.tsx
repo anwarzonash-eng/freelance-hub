@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback, Suspense } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { RefreshCw, ExternalLink, Pencil, Trash2, FileText, Search, X, Plus, Link, Briefcase, Building2 } from 'lucide-react'
 
 function SponsorBadge({ value }: { value: string }) {
@@ -12,64 +12,116 @@ function SponsorBadge({ value }: { value: string }) {
     return <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${cls}`}>{value}</span>
 }
 import { getAllCVs, deleteCV } from '@/app/api_handlers/api/job-cvs.api'
+import { getAllApplicants } from '@/app/api_handlers/api/job-applicants.api'
 import { listAuthUsers } from '@/app/api_handlers/api/auth.api'
 import JobCVModal from '@/app/components/jobs/JobCVModal'
 
-function filterCvs(list: any[], kw: string) {
-    const q = kw.trim().toLowerCase()
-    if (!q) return list
-    const qNum = Number(q)
-    const isExactNumber = q !== '' && Number.isInteger(qNum)
-    return list.filter(cv =>
-        cv.cv_title?.toLowerCase().includes(q) ||
-        cv.applicant_name?.toLowerCase().includes(q) ||
-        cv.organization_name?.toLowerCase().includes(q) ||
-        (cv.company_id && String(cv.company_id).toLowerCase() === q) ||
-        (isExactNumber && (cv.id === qNum || cv.job_id === qNum))
-    )
+const EMPTY_FILTERS = {
+    keyword: '',
+    applicant_id: '',
+    org_id: '',
+    org_name: '',
+    email: '',
+    exp_yrs: '',
+    created_by: '',
+}
+type CvFilters = typeof EMPTY_FILTERS
+
+function filterCvs(list: any[], f: CvFilters) {
+    let out = list
+
+    const kw = f.keyword.trim().toLowerCase()
+    if (kw) {
+        const kwNum = Number(kw)
+        const isExactNumber = kw !== '' && Number.isInteger(kwNum)
+        out = out.filter(cv =>
+            cv.cv_title?.toLowerCase().includes(kw) ||
+            cv.applicant_name?.toLowerCase().includes(kw) ||
+            cv.organization_name?.toLowerCase().includes(kw) ||
+            (cv.company_id && String(cv.company_id).toLowerCase() === kw) ||
+            (isExactNumber && (cv.id === kwNum || cv.job_id === kwNum))
+        )
+    }
+
+    if (f.applicant_id) {
+        out = out.filter(cv => String(cv.applicant_id ?? '') === f.applicant_id)
+    }
+
+    if (f.org_id) {
+        out = out.filter(cv => String(cv.company_id ?? '') === f.org_id)
+    } else if (f.org_name) {
+        const q = f.org_name.trim().toLowerCase()
+        out = out.filter(cv => cv.organization_name?.toLowerCase().includes(q))
+    }
+
+    if (f.email.trim()) {
+        const q = f.email.trim().toLowerCase()
+        out = out.filter(cv => cv.selected_email?.toLowerCase().includes(q))
+    }
+
+    if (f.exp_yrs !== '') {
+        const n = Number(f.exp_yrs)
+        out = out.filter(cv => cv.years_of_experience === n)
+    }
+
+    if (f.created_by) {
+        out = out.filter(cv => cv.created_by === f.created_by)
+    }
+
+    return out
+}
+
+function buildQueryString(f: CvFilters): string {
+    const params = new URLSearchParams()
+    Object.entries(f).forEach(([k, v]) => { if (v) params.set(k, v) })
+    return params.toString()
 }
 
 export default function CvsPage() {
-    return (
-        <Suspense fallback={null}>
-            <CvsPageInner />
-        </Suspense>
-    )
-}
-
-function CvsPageInner() {
     const router = useRouter()
-    const searchParams = useSearchParams()
     const [allData, setAllData] = useState<any[]>([])
     const [data, setData] = useState<any[]>([])
     const [loading, setLoading] = useState(false)
     const [editingCV, setEditingCV] = useState<any | null>(null)
     const [creatingNew, setCreatingNew] = useState(false)
-    const [keyword, setKeyword] = useState('')
     const [userMap, setUserMap] = useState<Record<string, string>>({})
+    const [applicants, setApplicants] = useState<{ id: string; name: string }[]>([])
 
-    const load = useCallback(async (resetKeyword = true) => {
+    const [filters, setFilters] = useState<CvFilters>({ ...EMPTY_FILTERS })
+    const [orgQuery, setOrgQuery] = useState('')
+    const [showOrgDd, setShowOrgDd] = useState(false)
+    const orgDdRef = useRef<HTMLDivElement>(null)
+    const hydratedFromUrl = useRef(false)
+
+    const load = useCallback(async () => {
         setLoading(true)
         try {
             const res: any = await getAllCVs()
             const payload = res?.data ?? res
             const list = Array.isArray(payload) ? payload : []
             setAllData(list)
-            setData(list)
-            if (resetKeyword) setKeyword('')
             return list
         } finally {
             setLoading(false)
         }
     }, [])
 
+    // Hydrate filters from the URL on first load (so a copied link reproduces the same view).
     useEffect(() => {
-        load(false).then(list => {
-            const urlKeyword = searchParams.get('id') || searchParams.get('company_id') || searchParams.get('job_id')
-            if (urlKeyword) {
-                setKeyword(urlKeyword)
-                setData(filterCvs(list, urlKeyword))
+        load().then(() => {
+            const searchParams = new URLSearchParams(window.location.search)
+            const fromUrl: CvFilters = {
+                keyword: searchParams.get('keyword') || searchParams.get('id') || searchParams.get('company_id') || searchParams.get('job_id') || '',
+                applicant_id: searchParams.get('applicant_id') || '',
+                org_id: searchParams.get('org_id') || searchParams.get('company_id') || '',
+                org_name: searchParams.get('org_name') || '',
+                email: searchParams.get('email') || '',
+                exp_yrs: searchParams.get('exp_yrs') || '',
+                created_by: searchParams.get('created_by') || '',
             }
+            hydratedFromUrl.current = true
+            setFilters(fromUrl)
+            if (fromUrl.org_name) setOrgQuery(fromUrl.org_name)
         })
     }, [])
 
@@ -82,21 +134,72 @@ function CvsPageInner() {
                 setUserMap(map)
             }
         }).catch(() => { })
+
+        getAllApplicants().then((res: any) => {
+            const list = res?.data ?? res
+            if (Array.isArray(list)) {
+                setApplicants(
+                    list
+                        .map((a: any) => ({ id: String(a.id), name: a.name || `Applicant #${a.id}` }))
+                        .sort((a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name))
+                )
+            }
+        }).catch(() => { })
     }, [])
 
-    const applyFilter = (kw: string) => setData(filterCvs(allData, kw))
-
-    const handleKeywordChange = (v: string) => {
-        setKeyword(v)
-        applyFilter(v)
-    }
-
-    const clearFilter = () => {
-        handleKeywordChange('')
-        if (searchParams.get('id') || searchParams.get('company_id') || searchParams.get('job_id')) {
-            router.replace('/jobs/cvs')
+    useEffect(() => {
+        const handler = (e: MouseEvent) => {
+            if (orgDdRef.current && !orgDdRef.current.contains(e.target as Node)) setShowOrgDd(false)
         }
+        document.addEventListener('mousedown', handler)
+        return () => document.removeEventListener('mousedown', handler)
+    }, [])
+
+    // Recompute the visible rows + keep the URL in sync whenever a filter changes.
+    useEffect(() => {
+        setData(filterCvs(allData, filters))
+        if (!hydratedFromUrl.current) return
+        const qs = buildQueryString(filters)
+        router.replace(qs ? `/jobs/cvs?${qs}` : '/jobs/cvs')
+    }, [allData, filters, router])
+
+    // Organizations seen across all loaded CVs, for the search-as-you-type dropdown.
+    const orgOptions = useMemo(() => {
+        const map = new Map<string, { id: string; name: string }>()
+        allData.forEach(cv => {
+            if (!cv.company_id && !cv.organization_name) return
+            const key = cv.company_id || cv.organization_name
+            if (!map.has(key)) map.set(key, { id: cv.company_id || '', name: cv.organization_name || cv.company_id })
+        })
+        return Array.from(map.values())
+    }, [allData])
+
+    const orgMatches = useMemo(() => {
+        const q = orgQuery.trim().toLowerCase()
+        if (!q) return orgOptions.slice(0, 20)
+        return orgOptions
+            .filter(o => o.name.toLowerCase().includes(q) || o.id.toLowerCase().includes(q))
+            .slice(0, 20)
+    }, [orgOptions, orgQuery])
+
+    const selectOrg = (o: { id: string; name: string }) => {
+        setFilters(f => ({ ...f, org_id: o.id, org_name: o.id ? '' : o.name }))
+        setOrgQuery(o.name)
+        setShowOrgDd(false)
     }
+
+    const clearOrg = () => {
+        setFilters(f => ({ ...f, org_id: '', org_name: '' }))
+        setOrgQuery('')
+    }
+
+    const clearAllFilters = () => {
+        setFilters({ ...EMPTY_FILTERS })
+        setOrgQuery('')
+        router.replace('/jobs/cvs')
+    }
+
+    const activeFilterCount = Object.values(filters).filter(Boolean).length
 
     const handleDelete = async (id: number) => {
         if (!confirm('Delete this CV?')) return
@@ -125,30 +228,122 @@ function CvsPageInner() {
             </div>
 
             {/* Filter bar */}
-            <div className="border border-gray-200 rounded p-2 mb-2 bg-gray-50 flex items-center gap-2">
-                <div className="relative flex-1 max-w-xs">
-                    <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input
-                        className={`w-full border rounded pl-6 pr-6 py-1 text-xs focus:outline-none transition-colors ${keyword ? 'border-blue-300 bg-blue-50' : 'border-gray-300 bg-white'}`}
-                        placeholder="Search by CV title, applicant, company, job/company ID…"
-                        value={keyword}
-                        onChange={e => handleKeywordChange(e.target.value)}
-                    />
-                    {keyword && (
-                        <button onClick={clearFilter}
-                            className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                            <X size={11} />
+            <div className="border border-gray-200 rounded p-2 mb-2 bg-gray-50">
+                <div className="flex items-end gap-1.5 flex-wrap">
+                    <div className="flex flex-col gap-0.5">
+                        <label className="text-[10px] text-gray-400 uppercase">Search</label>
+                        <div className="relative">
+                            <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
+                            <input
+                                className={`border rounded pl-6 pr-2 py-1 text-xs focus:outline-none w-56 transition-colors ${filters.keyword ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}
+                                placeholder="CV title, applicant, company, job/company ID…"
+                                value={filters.keyword}
+                                onChange={e => setFilters(f => ({ ...f, keyword: e.target.value }))}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col gap-0.5">
+                        <label className="text-[10px] text-gray-400 uppercase">Applicant</label>
+                        <select
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none min-w-[140px] transition-colors ${filters.applicant_id ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}
+                            value={filters.applicant_id}
+                            onChange={e => setFilters(f => ({ ...f, applicant_id: e.target.value }))}
+                        >
+                            <option value="">All</option>
+                            {applicants.map(a => (
+                                <option key={a.id} value={a.id}>{a.name}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="flex flex-col gap-0.5 relative" ref={orgDdRef}>
+                        <label className="text-[10px] text-gray-400 uppercase">Organization</label>
+                        <div className="relative">
+                            <input
+                                className={`border rounded pl-2 pr-6 py-1 text-xs focus:outline-none w-44 transition-colors ${filters.org_id || filters.org_name ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}
+                                placeholder="Search org by id or name…"
+                                value={orgQuery}
+                                onFocus={() => setShowOrgDd(true)}
+                                onChange={e => {
+                                    setOrgQuery(e.target.value)
+                                    setShowOrgDd(true)
+                                    if (filters.org_id || filters.org_name) setFilters(f => ({ ...f, org_id: '', org_name: '' }))
+                                }}
+                            />
+                            {(orgQuery || filters.org_id || filters.org_name) && (
+                                <button onClick={clearOrg} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                    <X size={11} />
+                                </button>
+                            )}
+                        </div>
+                        {showOrgDd && (
+                            <div className="absolute z-20 top-full mt-1 left-0 bg-white border border-gray-200 rounded shadow-lg p-1 min-w-[220px] max-h-60 overflow-y-auto">
+                                {orgMatches.length === 0 && (
+                                    <p className="text-[10px] text-gray-400 px-2 py-1">No matching organizations</p>
+                                )}
+                                {orgMatches.map(o => (
+                                    <button key={o.id || o.name} type="button" onClick={() => selectOrg(o)}
+                                        className="w-full text-left px-2 py-1 text-xs text-gray-700 hover:bg-gray-50 rounded truncate">
+                                        {o.name}
+                                        {o.id && <span className="text-[9px] text-gray-400 ml-1">({o.id})</span>}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="flex flex-col gap-0.5">
+                        <label className="text-[10px] text-gray-400 uppercase">Email</label>
+                        <input
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none w-40 transition-colors ${filters.email ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}
+                            placeholder="email@example.com"
+                            value={filters.email}
+                            onChange={e => setFilters(f => ({ ...f, email: e.target.value }))}
+                        />
+                    </div>
+
+                    <div className="flex flex-col gap-0.5">
+                        <label className="text-[10px] text-gray-400 uppercase">Exp (yrs)</label>
+                        <input
+                            type="number"
+                            min={0}
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none w-20 transition-colors ${filters.exp_yrs ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}
+                            placeholder="e.g. 5"
+                            value={filters.exp_yrs}
+                            onChange={e => setFilters(f => ({ ...f, exp_yrs: e.target.value }))}
+                        />
+                    </div>
+
+                    <div className="flex flex-col gap-0.5">
+                        <label className="text-[10px] text-gray-400 uppercase">Created By</label>
+                        <select
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none min-w-[110px] transition-colors ${filters.created_by ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}
+                            value={filters.created_by}
+                            onChange={e => setFilters(f => ({ ...f, created_by: e.target.value }))}
+                        >
+                            <option value="">All</option>
+                            {Object.entries(userMap).map(([id, name]) => (
+                                <option key={id} value={id}>{name}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {activeFilterCount > 0 && (
+                        <button onClick={clearAllFilters} className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-white mt-auto">
+                            Clear ({activeFilterCount})
                         </button>
                     )}
+
+                    {activeFilterCount > 0 && (
+                        <span className="text-[10px] text-gray-400 mt-auto">
+                            {data.length} result{data.length !== 1 ? 's' : ''}
+                        </span>
+                    )}
                 </div>
-                {keyword && (
-                    <span className="text-[10px] text-gray-400">
-                        {data.length} result{data.length !== 1 ? 's' : ''}
-                    </span>
-                )}
             </div>
 
-            <div className="border border-gray-200 rounded overflow-x-auto">
+            <div className="border border-gray-200 rounded overflow-x-auto min-h-[60vh]">
                 <table className="w-full text-xs border-collapse">
                     <thead>
                         <tr className="bg-gray-100 border-b border-gray-300">
@@ -165,7 +360,7 @@ function CvsPageInner() {
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 flex items-center justify-between">
                                 <span>Actions</span>
                                 <button
-                                    onClick={() => applyFilter(keyword)}
+                                    onClick={() => setData(filterCvs(allData, filters))}
                                     disabled={loading}
                                     title="Refresh results with current filter"
                                     className="p-0.5 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded transition-colors disabled:opacity-50"
@@ -183,7 +378,7 @@ function CvsPageInner() {
                         )}
                         {!loading && data.length === 0 && (
                             <tr><td colSpan={11} className="text-center py-10 text-gray-400">
-                                {keyword ? 'No CVs match your search.' : 'No CVs yet. Click "New CV" to create one.'}
+                                {activeFilterCount > 0 ? 'No CVs match your filters.' : 'No CVs yet. Click "New CV" to create one.'}
                             </td></tr>
                         )}
                         {!loading && data.map((row, idx) => (

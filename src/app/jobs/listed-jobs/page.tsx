@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect, useCallback, Suspense } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
-import { RefreshCw, ExternalLink, Search, ChevronDown, Briefcase, FileText, Eye, Building2 } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { useRouter } from 'next/navigation'
+import { RefreshCw, ExternalLink, Search, ChevronDown, Briefcase, FileText, Eye, Building2, X } from 'lucide-react'
 import { getAllJobs, getDistinctJobValues } from '@/app/api_handlers/api/sponsored-jobs.api'
+import { getAllCompanies } from '@/app/api_handlers/api/sponsored-companies.api'
 import { getAllCVs } from '@/app/api_handlers/api/job-cvs.api'
 import { listAuthUsers } from '@/app/api_handlers/api/auth.api'
 import JobCVModal from '@/app/components/jobs/JobCVModal'
@@ -11,7 +12,21 @@ import JobViewModal from '@/app/components/jobs/JobViewModal'
 import { timeAgo } from '@/app/utils/time'
 
 const LIMIT_OPTIONS = [25, 50, 100, 200]
-const EMPTY_FILTERS = { keyword: '', is_job_sponsored: '', type: '', job_category: '', has_cv: false, cv_submitted: '' }
+const EMPTY_FILTERS = { keyword: '', is_job_sponsored: '', type: '', job_category: '', company_id: '', has_cv: false, cv_submitted: '' }
+
+function filtersToParams(f: typeof EMPTY_FILTERS, page: number, limit: number): URLSearchParams {
+    const params = new URLSearchParams()
+    if (f.keyword) params.set('keyword', f.keyword)
+    if (f.is_job_sponsored) params.set('is_job_sponsored', f.is_job_sponsored)
+    if (f.type) params.set('type', f.type)
+    if (f.job_category) params.set('job_category', f.job_category)
+    if (f.company_id) params.set('company_id', f.company_id)
+    if (f.has_cv) params.set('has_cv', 'true')
+    if (f.cv_submitted) params.set('cv_submitted', f.cv_submitted)
+    if (page !== 1) params.set('page', String(page))
+    if (limit !== 50) params.set('limit', String(limit))
+    return params
+}
 
 function SubmissionBadge({ row, userMap }: { row: any; userMap: Record<string, string> }) {
     if (!row.is_cv_submitted) {
@@ -42,16 +57,7 @@ function TypeBadge({ value }: { value: string }) {
 }
 
 export default function ListedJobsPage() {
-    return (
-        <Suspense fallback={null}>
-            <ListedJobsPageInner />
-        </Suspense>
-    )
-}
-
-function ListedJobsPageInner() {
     const router = useRouter()
-    const searchParams = useSearchParams()
     const [data, setData] = useState<any[]>([])
     const [total, setTotal] = useState(0)
     const [page, setPage] = useState(1)
@@ -66,11 +72,17 @@ function ListedJobsPageInner() {
 
     const [filters, setFilters] = useState({ ...EMPTY_FILTERS })
     const [applied, setApplied] = useState({ ...EMPTY_FILTERS })
+    const hydratedFromUrl = useRef(false)
 
     const [categories, setCategories] = useState<string[]>([])
     const [jobTypes, setJobTypes] = useState<string[]>([])
     const [showCatDd, setShowCatDd] = useState(false)
     const [showTypeDd, setShowTypeDd] = useState(false)
+
+    const [companyQuery, setCompanyQuery] = useState('')
+    const [companyResults, setCompanyResults] = useState<{ id: string; name: string }[]>([])
+    const [showCompanyDd, setShowCompanyDd] = useState(false)
+    const companyDdRef = useRef<HTMLDivElement>(null)
 
     const loadCVs = useCallback(async () => {
         const res: any = await getAllCVs()
@@ -89,6 +101,7 @@ function ListedJobsPageInner() {
             if (af.is_job_sponsored) q.is_job_sponsored = af.is_job_sponsored
             if (af.type) q.type = af.type
             if (af.job_category) q.job_category = af.job_category
+            if (af.company_id) q.company_id = af.company_id
             if (af.cv_submitted) q.cv_submitted = af.cv_submitted
             if (af.has_cv) {
                 const map = latestCvMap ?? cvMap
@@ -106,21 +119,47 @@ function ListedJobsPageInner() {
         }
     }, [cvMap])
 
+    // Hydrate filters/page/limit from the URL on first load (so a copied link reproduces the same view),
+    // falling back to id / company_id for cross-page navigation links.
     useEffect(() => {
-        loadCVs().then(map => load(page, limit, applied, map))
-    }, [])
-
-    // Pick up id / company_id from the URL (cross-page navigation) and drop it into the keyword search.
-    useEffect(() => {
-        const urlKeyword = searchParams.get('id') || searchParams.get('company_id')
-        if (urlKeyword) {
-            setFilters(f => ({ ...f, keyword: urlKeyword }))
-            setApplied(a => ({ ...a, keyword: urlKeyword }))
-            setPage(1)
+        const searchParams = new URLSearchParams(window.location.search)
+        const hydratedCompanyId = searchParams.get('company_id') || ''
+        const hydrated = {
+            keyword: searchParams.get('keyword') || searchParams.get('id') || '',
+            is_job_sponsored: searchParams.get('is_job_sponsored') || '',
+            type: searchParams.get('type') || '',
+            job_category: searchParams.get('job_category') || '',
+            company_id: hydratedCompanyId,
+            has_cv: searchParams.get('has_cv') === 'true',
+            cv_submitted: searchParams.get('cv_submitted') || '',
         }
+        const hydratedPage = Number(searchParams.get('page')) || 1
+        const hydratedLimit = Number(searchParams.get('limit')) || 50
+
+        setFilters(hydrated)
+        setApplied(hydrated)
+        setPage(hydratedPage)
+        setLimit(hydratedLimit)
+
+        if (hydratedCompanyId) {
+            getAllCompanies({ keyword: hydratedCompanyId, limit: 1 }).then((res: any) => {
+                const payload = res?.data ?? res
+                const found = (payload?.data ?? [])[0]
+                setCompanyQuery(found?.organisation_name || hydratedCompanyId)
+            }).catch(() => setCompanyQuery(hydratedCompanyId))
+        }
+
+        loadCVs().then(map => load(hydratedPage, hydratedLimit, hydrated, map)).finally(() => {
+            hydratedFromUrl.current = true
+        })
     }, [])
 
-    useEffect(() => { load(page, limit, applied) }, [page, limit, applied, load])
+    useEffect(() => {
+        if (!hydratedFromUrl.current) return
+        load(page, limit, applied)
+        const qs = filtersToParams(applied, page, limit).toString()
+        router.replace(qs ? `/jobs/listed-jobs?${qs}` : '/jobs/listed-jobs')
+    }, [page, limit, applied, load, router])
 
     useEffect(() => {
         getDistinctJobValues().then((res: any) => {
@@ -139,11 +178,44 @@ function ListedJobsPageInner() {
         }).catch(() => { })
     }, [])
 
+    useEffect(() => {
+        const handler = (e: MouseEvent) => {
+            if (companyDdRef.current && !companyDdRef.current.contains(e.target as Node)) setShowCompanyDd(false)
+        }
+        document.addEventListener('mousedown', handler)
+        return () => document.removeEventListener('mousedown', handler)
+    }, [])
+
+    // Debounced company search-as-you-type (queries the backend so it works even with a huge company list).
+    useEffect(() => {
+        if (!showCompanyDd) return
+        const q = companyQuery.trim()
+        const t = setTimeout(() => {
+            getAllCompanies({ keyword: q, limit: 20 }).then((res: any) => {
+                const payload = res?.data ?? res
+                const rows = Array.isArray(payload?.data) ? payload.data : []
+                setCompanyResults(rows.map((c: any) => ({ id: c.id, name: c.organisation_name || c.id })))
+            }).catch(() => setCompanyResults([]))
+        }, 250)
+        return () => clearTimeout(t)
+    }, [companyQuery, showCompanyDd])
+
+    const selectCompany = (c: { id: string; name: string }) => {
+        setFilters(f => ({ ...f, company_id: c.id }))
+        setCompanyQuery(c.name)
+        setShowCompanyDd(false)
+    }
+
+    const clearCompany = () => {
+        setFilters(f => ({ ...f, company_id: '' }))
+        setCompanyQuery('')
+    }
+
     const applyFilters = () => { setPage(1); setApplied({ ...filters }) }
     const clearFilters = () => {
         const e = { ...EMPTY_FILTERS }
-        setFilters(e); setApplied(e); setPage(1)
-        if (searchParams.get('id') || searchParams.get('company_id')) router.replace('/jobs/listed-jobs')
+        setFilters(e); setApplied(e); setPage(1); setLimit(50)
+        setCompanyQuery('')
     }
 
     const toggleType = (value: string) => {
@@ -183,7 +255,7 @@ function ListedJobsPageInner() {
                         <div className="relative">
                             <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
                             <input
-                                className={`border rounded pl-6 pr-2 py-1 text-xs focus:outline-none w-52 transition-colors ${filters.keyword ? 'border-blue-300 bg-blue-50' : 'border-gray-300 bg-white'}`}
+                                className={`border rounded pl-6 pr-2 py-1 text-xs focus:outline-none w-52 transition-colors ${filters.keyword ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}
                                 placeholder="Title, description, company, location…"
                                 value={filters.keyword}
                                 onChange={e => setFilters(f => ({ ...f, keyword: e.target.value }))}
@@ -196,7 +268,7 @@ function ListedJobsPageInner() {
                         <label className="text-[10px] text-gray-400 uppercase">Sponsorship</label>
                         <select value={filters.is_job_sponsored}
                             onChange={e => setFilters(f => ({ ...f, is_job_sponsored: e.target.value }))}
-                            className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.is_job_sponsored ? 'border-blue-300 bg-blue-50' : 'border-gray-300 bg-white'}`}>
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.is_job_sponsored ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
                             <option value="">All</option>
                             <option value="yes">Yes</option>
                             <option value="no">No</option>
@@ -207,7 +279,7 @@ function ListedJobsPageInner() {
                     <div className="flex flex-col gap-0.5 relative">
                         <label className="text-[10px] text-gray-400 uppercase">Type</label>
                         <button onClick={() => { setShowTypeDd(p => !p); setShowCatDd(false) }}
-                            className={`flex items-center gap-1 border rounded px-2 py-1 text-xs text-gray-700 min-w-[120px] transition-colors ${filters.type ? 'border-blue-300 bg-blue-50 hover:bg-blue-100' : 'border-gray-300 bg-white hover:bg-gray-50'}`}>
+                            className={`flex items-center gap-1 border rounded px-2 py-1 text-xs text-gray-700 min-w-[120px] transition-colors ${filters.type ? 'border-blue-500 bg-blue-100 hover:bg-blue-100' : 'border-gray-300 bg-white hover:bg-gray-50'}`}>
                             Type{filters.type ? ` (${filters.type.split(',').filter(Boolean).length})` : ''}
                             <ChevronDown size={11} className="ml-auto text-gray-400" />
                         </button>
@@ -232,7 +304,7 @@ function ListedJobsPageInner() {
                     <div className="flex flex-col gap-0.5 relative">
                         <label className="text-[10px] text-gray-400 uppercase">Category</label>
                         <button onClick={() => { setShowCatDd(p => !p); setShowTypeDd(false) }}
-                            className={`flex items-center gap-1 border rounded px-2 py-1 text-xs text-gray-700 min-w-[140px] transition-colors ${filters.job_category ? 'border-blue-300 bg-blue-50 hover:bg-blue-100' : 'border-gray-300 bg-white hover:bg-gray-50'}`}>
+                            className={`flex items-center gap-1 border rounded px-2 py-1 text-xs text-gray-700 min-w-[140px] transition-colors ${filters.job_category ? 'border-blue-500 bg-blue-100 hover:bg-blue-100' : 'border-gray-300 bg-white hover:bg-gray-50'}`}>
                             Category{filters.job_category ? ` (${filters.job_category.split(',').filter(Boolean).length})` : ''}
                             <ChevronDown size={11} className="ml-auto text-gray-400" />
                         </button>
@@ -255,7 +327,43 @@ function ListedJobsPageInner() {
                         )}
                     </div>
 
-                    <div className={`flex flex-col gap-0.5 mt-auto px-2 py-1 rounded transition-colors ${filters.has_cv ? 'bg-blue-50' : ''}`}>
+                    <div className="flex flex-col gap-0.5 relative" ref={companyDdRef}>
+                        <label className="text-[10px] text-gray-400 uppercase">Company</label>
+                        <div className="relative">
+                            <input
+                                className={`border rounded pl-2 pr-6 py-1 text-xs focus:outline-none w-44 transition-colors ${filters.company_id ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}
+                                placeholder="Search company by id or name…"
+                                value={companyQuery}
+                                onFocus={() => setShowCompanyDd(true)}
+                                onChange={e => {
+                                    setCompanyQuery(e.target.value)
+                                    setShowCompanyDd(true)
+                                    if (filters.company_id) setFilters(f => ({ ...f, company_id: '' }))
+                                }}
+                            />
+                            {(companyQuery || filters.company_id) && (
+                                <button onClick={clearCompany} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                    <X size={11} />
+                                </button>
+                            )}
+                        </div>
+                        {showCompanyDd && (
+                            <div className="absolute z-20 top-full mt-1 left-0 bg-white border border-gray-200 rounded shadow-lg p-1 min-w-[220px] max-h-60 overflow-y-auto">
+                                {companyResults.length === 0 && (
+                                    <p className="text-[10px] text-gray-400 px-2 py-1">No matching companies</p>
+                                )}
+                                {companyResults.map(c => (
+                                    <button key={c.id} type="button" onClick={() => selectCompany(c)}
+                                        className="w-full text-left px-2 py-1 text-xs text-gray-700 hover:bg-gray-50 rounded truncate">
+                                        {c.name}
+                                        <span className="text-[9px] text-gray-400 ml-1">({c.id})</span>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className={`flex flex-col gap-0.5 mt-auto px-2 py-1 rounded transition-colors ${filters.has_cv ? 'bg-blue-100' : ''}`}>
                         <label className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-700">
                             <input type="checkbox" className="w-3.5 h-3.5"
                                 checked={filters.has_cv}
@@ -268,7 +376,7 @@ function ListedJobsPageInner() {
                         <label className="text-[10px] text-gray-400 uppercase">CV Submission</label>
                         <select value={filters.cv_submitted}
                             onChange={e => setFilters(f => ({ ...f, cv_submitted: e.target.value }))}
-                            className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.cv_submitted ? 'border-blue-300 bg-blue-50' : 'border-gray-300 bg-white'}`}>
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.cv_submitted ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
                             <option value="">All</option>
                             <option value="true">Submitted</option>
                             <option value="false">Not Submitted</option>
@@ -289,7 +397,7 @@ function ListedJobsPageInner() {
             </div>
 
             {/* Table */}
-            <div className="border border-gray-200 rounded overflow-x-auto">
+            <div className="border border-gray-200 rounded overflow-x-auto min-h-[60vh]">
                 <table className="w-full text-xs border-collapse">
                     <thead>
                         <tr className="bg-gray-100 border-b border-gray-300">
@@ -384,7 +492,7 @@ function ListedJobsPageInner() {
                                                 onClick={() => setCvJob(row)}
                                                 title="Create CV for this job"
                                                 className="flex items-center gap-1 text-[10px] px-2 py-1 border border-gray-300 rounded hover:bg-gray-50 text-gray-600">
-                                                <FileText size={10} /> CV
+                                                <FileText size={10} /> Create CV
                                             </button>
                                             {row.company_id && (
                                                 <a

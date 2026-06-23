@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { Plus, RefreshCw, Pencil, Trash2, ExternalLink, ChevronDown, ChevronUp, Search, Building2, BriefcaseBusiness, Terminal, Download, X, SlidersHorizontal, ClipboardCheck, Users, Copy, Check, FileText, ListChecks } from 'lucide-react'
 import { getAllCompanies, getDistinctCompanyValues, deleteCompany, rawQueryCompanies, rawQueryCompaniesOrError } from '@/app/api_handlers/api/sponsored-companies.api'
 import { timeAgo } from '@/app/utils/time'
@@ -15,6 +15,22 @@ import AssignModal from './AssignModal'
 
 const LIMIT_OPTIONS = [25, 50, 100, 200, 500, 1000, 2000, 3000, 4000, 5000]
 const EMPTY_FILTERS = { sponsor_type: '', sponsor_route: '', is_deleted: 'false', visa_mentioned: '', keyword: '', has_website: '', has_career_page: '', ranked: '', rank_op: '', rank_val: '', manual_check_done: '', has_it_jobs: '', offers_freelance: '', should_apply: '', date_from: '', date_to: '', checked_by: '', category_id: '', assigned: '', assigned_to: '', cv_submitted: '' }
+
+function companyFiltersToParams(
+    f: typeof EMPTY_FILTERS, page: number, limit: number, sqlMode: boolean, sqlWhere: string,
+): URLSearchParams {
+    const params = new URLSearchParams()
+    Object.entries(f).forEach(([k, v]) => {
+        if (v !== EMPTY_FILTERS[k as keyof typeof EMPTY_FILTERS]) params.set(k, v)
+    })
+    if (page !== 1) params.set('page', String(page))
+    if (limit !== 50) params.set('limit', String(limit))
+    if (sqlMode) {
+        params.set('sql_mode', 'true')
+        if (sqlWhere) params.set('sql_where', sqlWhere)
+    }
+    return params
+}
 
 const ALL_COLUMNS = [
     { key: 'id', label: 'ID' },
@@ -90,7 +106,6 @@ function CopyBtn({ value }: { value: string }) {
 
 export default function CompaniesPage() {
     const router = useRouter()
-    const searchParams = useSearchParams()
 
     // Shared data state (filled by either filter or SQL mode)
     const [data, setData] = useState<any[]>([])
@@ -105,6 +120,7 @@ export default function CompaniesPage() {
     // Filter mode
     const [filters, setFilters] = useState({ ...EMPTY_FILTERS })
     const [applied, setApplied] = useState({ ...EMPTY_FILTERS })
+    const hydratedFromUrl = useRef(false)
     const [sponsorTypes, setSponsorTypes] = useState<string[]>([])
     const [sponsorRoutes, setSponsorRoutes] = useState<string[]>([])
     const [showTypeDd, setShowTypeDd] = useState(false)
@@ -120,8 +136,12 @@ export default function CompaniesPage() {
     const [exportCols, setExportCols] = useState<string[]>(DEFAULT_EXPORT_COLS)
     const [exporting, setExporting] = useState(false)
 
-    // Panel visibility (all hidden by default)
-    const [visiblePanels, setVisiblePanels] = useState<Set<string>>(new Set())
+    // Panel visibility (persisted to localStorage so open/closed panels survive reloads)
+    const [visiblePanels, setVisiblePanels] = useState<Set<string>>(() => {
+        if (typeof window === 'undefined') return new Set()
+        const saved = localStorage.getItem('companies_visible_panels')
+        return saved ? new Set(JSON.parse(saved)) : new Set()
+    })
     const [showViewDd, setShowViewDd] = useState(false)
     const viewDdRef = useRef<HTMLDivElement>(null)
 
@@ -156,6 +176,11 @@ export default function CompaniesPage() {
     useEffect(() => {
         localStorage.setItem('companies_visible_cols', JSON.stringify(Array.from(visibleCols)))
     }, [visibleCols])
+
+    // Save visible panels (Filters, SQL Query, Upload JSON, Export JSON) to localStorage
+    useEffect(() => {
+        localStorage.setItem('companies_visible_panels', JSON.stringify(Array.from(visiblePanels)))
+    }, [visiblePanels])
 
     useEffect(() => {
         const handler = (e: MouseEvent) => {
@@ -238,12 +263,15 @@ export default function CompaniesPage() {
     }, [])
 
     useEffect(() => {
+        if (!hydratedFromUrl.current) return
         if (sqlMode && sqlApplied !== null) {
             loadSql(page, limit, sqlApplied)
         } else if (!sqlMode) {
             loadFilter(page, limit, applied)
         }
-    }, [page, limit, applied, sqlApplied, sqlMode, loadFilter, loadSql])
+        const qs = companyFiltersToParams(applied, page, limit, sqlMode, sqlApplied ?? '').toString()
+        router.replace(qs ? `/jobs/companies?${qs}` : '/jobs/companies')
+    }, [page, limit, applied, sqlApplied, sqlMode, loadFilter, loadSql, router])
 
     useEffect(() => {
         getDistinctCompanyValues().then((res: any) => {
@@ -279,14 +307,33 @@ export default function CompaniesPage() {
         } catch { }
     }, [])
 
-    // Pick up id from the URL (cross-page navigation) and drop it into the keyword search.
+    // Hydrate filters/page/limit/SQL mode from the URL on first load (so a copied link reproduces
+    // the same view), falling back to id for cross-page navigation links into the keyword search.
     useEffect(() => {
-        const urlKeyword = searchParams.get('id')
-        if (urlKeyword) {
-            setFilters(f => ({ ...f, keyword: urlKeyword }))
-            setApplied(a => ({ ...a, keyword: urlKeyword }))
-            setPage(1)
-        }
+        const searchParams = new URLSearchParams(window.location.search)
+        const hydrated = { ...EMPTY_FILTERS }
+        Object.keys(EMPTY_FILTERS).forEach(k => {
+            const v = searchParams.get(k)
+            if (v !== null) (hydrated as any)[k] = v
+        })
+        if (!searchParams.get('keyword') && searchParams.get('id')) hydrated.keyword = searchParams.get('id')!
+
+        const hydratedPage = Number(searchParams.get('page')) || 1
+        const hydratedLimit = Number(searchParams.get('limit')) || 50
+        const hydratedSqlMode = searchParams.get('sql_mode') === 'true'
+        const hydratedSqlWhere = searchParams.get('sql_where') || ''
+
+        setFilters(hydrated)
+        setApplied(hydrated)
+        setPage(hydratedPage)
+        setLimit(hydratedLimit)
+        setSqlMode(hydratedSqlMode)
+        setSqlWhere(hydratedSqlWhere)
+        setSqlApplied(hydratedSqlMode ? hydratedSqlWhere : null)
+
+        const finish = () => { hydratedFromUrl.current = true }
+        if (hydratedSqlMode) loadSql(hydratedPage, hydratedLimit, hydratedSqlWhere).finally(finish)
+        else loadFilter(hydratedPage, hydratedLimit, hydrated).finally(finish)
     }, [])
 
     const applyFilters = () => {
@@ -302,7 +349,7 @@ export default function CompaniesPage() {
         setSqlMode(false)
         setSqlApplied(null)
         setPage(1)
-        if (searchParams.get('id')) router.replace('/jobs/companies')
+        setLimit(50)
     }
 
     const executeSql = () => {
@@ -424,7 +471,7 @@ export default function CompaniesPage() {
                         <div className="relative">
                             <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
                             <input
-                                className={`border rounded pl-6 pr-2 py-1 text-xs focus:outline-none w-44 transition-colors ${filters.keyword ? 'border-blue-300 bg-blue-50' : 'border-gray-300 bg-white'}`}
+                                className={`border rounded pl-6 pr-2 py-1 text-xs focus:outline-none w-44 transition-colors ${filters.keyword ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}
                                 placeholder="Name, website, career page…"
                                 value={filters.keyword}
                                 onChange={e => setFilters(f => ({ ...f, keyword: e.target.value }))}
@@ -437,7 +484,7 @@ export default function CompaniesPage() {
                     <div className="flex flex-col gap-0.5 relative">
                         <label className="text-[10px] text-gray-400 uppercase">Sponsor Type</label>
                         <button onClick={() => { setShowTypeDd(p => !p); setShowRouteDd(false) }}
-                            className={`flex items-center gap-1 border rounded px-2 py-1 text-xs text-gray-700 min-w-[140px] transition-colors ${filters.sponsor_type ? 'border-blue-300 bg-blue-50 hover:bg-blue-100' : 'border-gray-300 bg-white hover:bg-gray-50'}`}>
+                            className={`flex items-center gap-1 border rounded px-2 py-1 text-xs text-gray-700 min-w-[140px] transition-colors ${filters.sponsor_type ? 'border-blue-500 bg-blue-100 hover:bg-blue-100' : 'border-gray-300 bg-white hover:bg-gray-50'}`}>
                             Type{filters.sponsor_type ? ` (${filters.sponsor_type.split(',').length})` : ''}
                             <ChevronDown size={11} className="ml-auto text-gray-400" />
                         </button>
@@ -463,7 +510,7 @@ export default function CompaniesPage() {
                     <div className="flex flex-col gap-0.5 relative">
                         <label className="text-[10px] text-gray-400 uppercase">Sponsor Route</label>
                         <button onClick={() => { setShowRouteDd(p => !p); setShowTypeDd(false) }}
-                            className={`flex items-center gap-1 border rounded px-2 py-1 text-xs text-gray-700 min-w-[140px] transition-colors ${filters.sponsor_route ? 'border-blue-300 bg-blue-50 hover:bg-blue-100' : 'border-gray-300 bg-white hover:bg-gray-50'}`}>
+                            className={`flex items-center gap-1 border rounded px-2 py-1 text-xs text-gray-700 min-w-[140px] transition-colors ${filters.sponsor_route ? 'border-blue-500 bg-blue-100 hover:bg-blue-100' : 'border-gray-300 bg-white hover:bg-gray-50'}`}>
                             Route{filters.sponsor_route ? ` (${filters.sponsor_route.split(',').length})` : ''}
                             <ChevronDown size={11} className="ml-auto text-gray-400" />
                         </button>
@@ -488,7 +535,7 @@ export default function CompaniesPage() {
                     <div className="flex flex-col gap-0.5">
                         <label className="text-[10px] text-gray-400 uppercase">Is Deleted</label>
                         <select value={filters.is_deleted} onChange={e => setFilters(f => ({ ...f, is_deleted: e.target.value }))}
-                            className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.is_deleted !== EMPTY_FILTERS.is_deleted ? 'border-blue-300 bg-blue-50' : 'border-gray-300 bg-white'}`}>
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.is_deleted !== EMPTY_FILTERS.is_deleted ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
                             <option value="">All</option>
                             <option value="false">Active</option>
                             <option value="true">Deleted</option>
@@ -498,7 +545,7 @@ export default function CompaniesPage() {
                     <div className="flex flex-col gap-0.5">
                         <label className="text-[10px] text-gray-400 uppercase">Visa Mentioned</label>
                         <select value={filters.visa_mentioned} onChange={e => setFilters(f => ({ ...f, visa_mentioned: e.target.value }))}
-                            className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.visa_mentioned ? 'border-blue-300 bg-blue-50' : 'border-gray-300 bg-white'}`}>
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.visa_mentioned ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
                             <option value="">All</option>
                             <option value="true">Yes</option>
                             <option value="false">No</option>
@@ -508,7 +555,7 @@ export default function CompaniesPage() {
                     <div className="flex flex-col gap-0.5">
                         <label className="text-[10px] text-gray-400 uppercase">Domain Found</label>
                         <select value={filters.has_website} onChange={e => setFilters(f => ({ ...f, has_website: e.target.value }))}
-                            className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.has_website ? 'border-blue-300 bg-blue-50' : 'border-gray-300 bg-white'}`}>
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.has_website ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
                             <option value="">All</option>
                             <option value="true">Yes</option>
                             <option value="false">No</option>
@@ -518,7 +565,7 @@ export default function CompaniesPage() {
                     <div className="flex flex-col gap-0.5">
                         <label className="text-[10px] text-gray-400 uppercase">Career Page Found</label>
                         <select value={filters.has_career_page} onChange={e => setFilters(f => ({ ...f, has_career_page: e.target.value }))}
-                            className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none">
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.has_career_page ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
                             <option value="">All</option>
                             <option value="true">Yes</option>
                             <option value="false">No</option>
@@ -528,7 +575,7 @@ export default function CompaniesPage() {
                     <div className="flex flex-col gap-0.5">
                         <label className="text-[10px] text-gray-400 uppercase">Ranked</label>
                         <select value={filters.ranked} onChange={e => setFilters(f => ({ ...f, ranked: e.target.value }))}
-                            className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none">
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.ranked ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
                             <option value="">All</option>
                             <option value="true">Ranked only</option>
                             <option value="false">Unranked only</option>
@@ -539,7 +586,7 @@ export default function CompaniesPage() {
                         <label className="text-[10px] text-gray-400 uppercase">Rank</label>
                         <div className="flex items-center gap-1">
                             <select value={filters.rank_op} onChange={e => setFilters(f => ({ ...f, rank_op: e.target.value }))}
-                                className="border border-gray-300 rounded px-1.5 py-1 text-xs bg-white focus:outline-none w-14">
+                                className={`border rounded px-1.5 py-1 text-xs focus:outline-none w-14 transition-colors ${filters.rank_op ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
                                 <option value="">—</option>
                                 <option value="eq">=</option>
                                 <option value="lt">&lt;</option>
@@ -549,7 +596,7 @@ export default function CompaniesPage() {
                             </select>
                             <input
                                 type="number" min={1}
-                                className="border border-gray-300 rounded px-1.5 py-1 text-xs bg-white focus:outline-none w-16"
+                                className={`border rounded px-1.5 py-1 text-xs focus:outline-none w-16 transition-colors ${filters.rank_val ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}
                                 placeholder="value"
                                 value={filters.rank_val}
                                 onChange={e => setFilters(f => ({ ...f, rank_val: e.target.value }))}
@@ -561,7 +608,7 @@ export default function CompaniesPage() {
                     <div className="flex flex-col gap-0.5">
                         <label className="text-[10px] text-gray-400 uppercase">Manual Checked</label>
                         <select value={filters.manual_check_done} onChange={e => setFilters(f => ({ ...f, manual_check_done: e.target.value }))}
-                            className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none">
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.manual_check_done ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
                             <option value="">All</option>
                             <option value="true">Done</option>
                             <option value="false">Not Done</option>
@@ -571,7 +618,7 @@ export default function CompaniesPage() {
                     <div className="flex flex-col gap-0.5">
                         <label className="text-[10px] text-gray-400 uppercase">Has IT Jobs</label>
                         <select value={filters.has_it_jobs} onChange={e => setFilters(f => ({ ...f, has_it_jobs: e.target.value }))}
-                            className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none">
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.has_it_jobs ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
                             <option value="">All</option>
                             <option value="true">Yes</option>
                             <option value="false">No</option>
@@ -582,7 +629,7 @@ export default function CompaniesPage() {
                     <div className="flex flex-col gap-0.5">
                         <label className="text-[10px] text-gray-400 uppercase">Offers Freelance</label>
                         <select value={filters.offers_freelance} onChange={e => setFilters(f => ({ ...f, offers_freelance: e.target.value }))}
-                            className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none">
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.offers_freelance ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
                             <option value="">All</option>
                             <option value="true">Yes</option>
                             <option value="false">No</option>
@@ -593,7 +640,7 @@ export default function CompaniesPage() {
                     <div className="flex flex-col gap-0.5">
                         <label className="text-[10px] text-gray-400 uppercase">Should Apply</label>
                         <select value={filters.should_apply} onChange={e => setFilters(f => ({ ...f, should_apply: e.target.value }))}
-                            className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none">
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.should_apply ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
                             <option value="">All</option>
                             <option value="true">Yes</option>
                             <option value="false">No</option>
@@ -603,19 +650,19 @@ export default function CompaniesPage() {
                     <div className="flex flex-col gap-0.5">
                         <label className="text-[10px] text-gray-400 uppercase">Check Date From</label>
                         <input type="date" value={filters.date_from} onChange={e => setFilters(f => ({ ...f, date_from: e.target.value }))}
-                            className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none" />
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.date_from ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`} />
                     </div>
 
                     <div className="flex flex-col gap-0.5">
                         <label className="text-[10px] text-gray-400 uppercase">Check Date To</label>
                         <input type="date" value={filters.date_to} onChange={e => setFilters(f => ({ ...f, date_to: e.target.value }))}
-                            className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none" />
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.date_to ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`} />
                     </div>
 
                     <div className="flex flex-col gap-0.5">
                         <label className="text-[10px] text-gray-400 uppercase">Checked By</label>
                         <select value={filters.checked_by} onChange={e => setFilters(f => ({ ...f, checked_by: e.target.value }))}
-                            className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none min-w-[100px]">
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none min-w-[100px] transition-colors ${filters.checked_by ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
                             <option value="">All</option>
                             {Object.entries(userMap).map(([id, name]) => (
                                 <option key={id} value={id}>{name}</option>
@@ -626,7 +673,7 @@ export default function CompaniesPage() {
                     <div className="flex flex-col gap-0.5">
                         <label className="text-[10px] text-gray-400 uppercase">Category</label>
                         <select value={filters.category_id} onChange={e => setFilters(f => ({ ...f, category_id: e.target.value }))}
-                            className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none min-w-[110px]">
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none min-w-[110px] transition-colors ${filters.category_id ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
                             <option value="">All</option>
                             {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                         </select>
@@ -635,7 +682,7 @@ export default function CompaniesPage() {
                     <div className="flex flex-col gap-0.5">
                         <label className="text-[10px] text-gray-400 uppercase">Assigned</label>
                         <select value={filters.assigned} onChange={e => setFilters(f => ({ ...f, assigned: e.target.value }))}
-                            className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none">
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.assigned ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
                             <option value="">All</option>
                             <option value="true">Assigned</option>
                             <option value="false">Unassigned</option>
@@ -645,7 +692,7 @@ export default function CompaniesPage() {
                     <div className="flex flex-col gap-0.5">
                         <label className="text-[10px] text-gray-400 uppercase">Assigned To</label>
                         <select value={filters.assigned_to} onChange={e => setFilters(f => ({ ...f, assigned_to: e.target.value }))}
-                            className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none min-w-[100px]">
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none min-w-[100px] transition-colors ${filters.assigned_to ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
                             <option value="">All</option>
                             {Object.entries(userMap).map(([id, name]) => (
                                 <option key={id} value={id}>{name}</option>
@@ -656,7 +703,7 @@ export default function CompaniesPage() {
                     <div className="flex flex-col gap-0.5">
                         <label className="text-[10px] text-gray-400 uppercase">CV Submitted</label>
                         <select value={filters.cv_submitted} onChange={e => setFilters(f => ({ ...f, cv_submitted: e.target.value }))}
-                            className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none">
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.cv_submitted ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
                             <option value="">All</option>
                             <option value="true">Yes</option>
                             <option value="false">No</option>
@@ -767,7 +814,7 @@ export default function CompaniesPage() {
             </div>}
 
             {/* Table */}
-            <div className="border border-gray-200 rounded overflow-x-auto">
+            <div className="border border-gray-200 rounded overflow-x-auto min-h-[60vh]">
                 <table className="w-full text-xs border-collapse">
                     <thead>
                         <tr className="bg-gray-100 border-b border-gray-300">
@@ -1077,9 +1124,9 @@ export default function CompaniesPage() {
                                                 className="text-gray-400 hover:text-teal-600"><ClipboardCheck size={12} /></button>
                                             <button onClick={() => setAddingJobsFor(row)} title="Add Jobs"
                                                 className="text-gray-400 hover:text-teal-600"><BriefcaseBusiness size={12} /></button>
-                                            <a href={`/jobs/listed-jobs?company_id=${encodeURIComponent(row.id)}`} title="View all jobs for this company"
+                                            <a href={`/jobs/listed-jobs?company_id=${encodeURIComponent(row.id)}`} target="_blank" rel="noopener noreferrer" title="View all jobs for this company"
                                                 className="text-gray-400 hover:text-indigo-600"><ListChecks size={12} /></a>
-                                            <a href={`/jobs/cvs?company_id=${encodeURIComponent(row.id)}`} title="View all CVs for this company"
+                                            <a href={`/jobs/cvs?company_id=${encodeURIComponent(row.id)}`} target="_blank" rel="noopener noreferrer" title="View all CVs for this company"
                                                 className="text-gray-400 hover:text-purple-600"><FileText size={12} /></a>
                                             <button onClick={() => setEditing(row)} title="Edit"
                                                 className="text-gray-400 hover:text-blue-600"><Pencil size={12} /></button>
