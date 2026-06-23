@@ -486,7 +486,7 @@ export default function ListedJobsPage() {
                                                 onClick={() => setViewingJob(row)}
                                                 title="View job details"
                                                 className="flex items-center gap-1 text-[10px] px-2 py-1 border border-gray-300 rounded hover:bg-gray-50 text-gray-600">
-                                                <Eye size={10} /> View
+                                                <Eye size={10} /> View Job
                                             </button>
                                             <button
                                                 onClick={() => setCvJob(row)}
@@ -509,7 +509,7 @@ export default function ListedJobsPage() {
                                                     rel="noopener noreferrer"
                                                     title={`View CV — ${cvMap[row.id].applicant_name}`}
                                                     className="flex items-center gap-1 text-[10px] px-2 py-1 bg-teal-50 border border-teal-300 text-teal-700 rounded hover:bg-teal-100">
-                                                    <ExternalLink size={10} /> View
+                                                    <ExternalLink size={10} /> View CV
                                                 </a>
                                             )}
                                         </div>

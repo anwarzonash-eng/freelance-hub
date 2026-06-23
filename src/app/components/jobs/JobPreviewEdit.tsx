@@ -64,14 +64,17 @@ export function JobPreview({ job, userMap }: { job: any; userMap?: Record<string
                     { label: 'Qualification Required', value: job.qualification_required },
                     { label: 'Security Clearance Required', value: job.is_security_cleared_required ? 'Yes' : 'No' },
                     { label: 'Certifications Required', value: job.is_certifications_required ? 'Yes' : 'No' },
-                ].map((field: any, idx) => (
-                    <div key={idx} className={field.highlight ? 'col-span-2 bg-amber-50 border-2 border-amber-300 rounded-lg p-3' : ''}>
-                        <p className="text-[10px] text-gray-400 uppercase font-semibold">{field.label}</p>
-                        <p className={`text-xs mt-0.5 ${field.highlight ? 'text-amber-900 font-semibold' : 'text-gray-700'}`}>
-                            {field.value || '—'}
-                        </p>
-                    </div>
-                ))}
+                ].map((field: any, idx) => {
+                    const highlighted = field.highlight && field.value
+                    return (
+                        <div key={idx} className={highlighted ? 'bg-amber-50 border border-amber-300 rounded p-1.5' : ''}>
+                            <p className="text-[10px] text-gray-400 uppercase font-semibold">{field.label}</p>
+                            <p className={`text-xs mt-0.5 ${highlighted ? 'text-amber-900 font-semibold' : 'text-gray-700'}`}>
+                                {field.value || '—'}
+                            </p>
+                        </div>
+                    )
+                })}
             </div>
 
             {/* Description (HTML) */}
