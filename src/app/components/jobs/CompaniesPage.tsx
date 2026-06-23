@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Plus, RefreshCw, Pencil, Trash2, ExternalLink, ChevronDown, ChevronUp, Search, Building2, BriefcaseBusiness, Terminal, Download, X, SlidersHorizontal, ClipboardCheck, Users, Copy, Check } from 'lucide-react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { Plus, RefreshCw, Pencil, Trash2, ExternalLink, ChevronDown, ChevronUp, Search, Building2, BriefcaseBusiness, Terminal, Download, X, SlidersHorizontal, ClipboardCheck, Users, Copy, Check, FileText, ListChecks } from 'lucide-react'
 import { getAllCompanies, getDistinctCompanyValues, deleteCompany, rawQueryCompanies, rawQueryCompaniesOrError } from '@/app/api_handlers/api/sponsored-companies.api'
 import { timeAgo } from '@/app/utils/time'
 import { getCompanyCategories } from '@/app/api_handlers/api/company-categories.api'
@@ -88,6 +89,9 @@ function CopyBtn({ value }: { value: string }) {
 }
 
 export default function CompaniesPage() {
+    const router = useRouter()
+    const searchParams = useSearchParams()
+
     // Shared data state (filled by either filter or SQL mode)
     const [data, setData] = useState<any[]>([])
     const [total, setTotal] = useState(0)
@@ -275,6 +279,16 @@ export default function CompaniesPage() {
         } catch { }
     }, [])
 
+    // Pick up id from the URL (cross-page navigation) and drop it into the keyword search.
+    useEffect(() => {
+        const urlKeyword = searchParams.get('id')
+        if (urlKeyword) {
+            setFilters(f => ({ ...f, keyword: urlKeyword }))
+            setApplied(a => ({ ...a, keyword: urlKeyword }))
+            setPage(1)
+        }
+    }, [])
+
     const applyFilters = () => {
         setSqlMode(false)
         setSqlApplied(null)
@@ -288,6 +302,7 @@ export default function CompaniesPage() {
         setSqlMode(false)
         setSqlApplied(null)
         setPage(1)
+        if (searchParams.get('id')) router.replace('/jobs/companies')
     }
 
     const executeSql = () => {
@@ -1062,6 +1077,10 @@ export default function CompaniesPage() {
                                                 className="text-gray-400 hover:text-teal-600"><ClipboardCheck size={12} /></button>
                                             <button onClick={() => setAddingJobsFor(row)} title="Add Jobs"
                                                 className="text-gray-400 hover:text-teal-600"><BriefcaseBusiness size={12} /></button>
+                                            <a href={`/jobs/listed-jobs?company_id=${encodeURIComponent(row.id)}`} title="View all jobs for this company"
+                                                className="text-gray-400 hover:text-indigo-600"><ListChecks size={12} /></a>
+                                            <a href={`/jobs/cvs?company_id=${encodeURIComponent(row.id)}`} title="View all CVs for this company"
+                                                className="text-gray-400 hover:text-purple-600"><FileText size={12} /></a>
                                             <button onClick={() => setEditing(row)} title="Edit"
                                                 className="text-gray-400 hover:text-blue-600"><Pencil size={12} /></button>
                                             <button onClick={() => handleDelete(row.id)} disabled={deleting === row.id} title="Delete"
@@ -1117,6 +1136,7 @@ export default function CompaniesPage() {
                 <CompanyJobsModal
                     company={addingJobsFor}
                     onClose={() => setAddingJobsFor(null)}
+                    userMap={userMap}
                 />
             )}
             {manualChecking && (

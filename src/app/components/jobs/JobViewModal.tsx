@@ -9,9 +9,10 @@ interface Props {
     job: any
     onClose: () => void
     onJobSaved?: () => void
+    userMap?: Record<string, string>
 }
 
-export default function JobViewModal({ job, onClose, onJobSaved }: Props) {
+export default function JobViewModal({ job, onClose, onJobSaved, userMap }: Props) {
     const [stage, setStage] = useState<'preview' | 'edit'>('preview')
     const [editingJob, setEditingJob] = useState<any>(null)
     const [currentJob, setCurrentJob] = useState<any>(job)
@@ -94,7 +95,7 @@ export default function JobViewModal({ job, onClose, onJobSaved }: Props) {
                     )}
                     {stage === 'preview' && (
                         <div className="space-y-4">
-                            <JobPreview job={currentJob} />
+                            <JobPreview job={currentJob} userMap={userMap} />
                             <div className="border-t pt-4 flex gap-2">
                                 <button
                                     onClick={handleEditClick}
@@ -107,7 +108,7 @@ export default function JobViewModal({ job, onClose, onJobSaved }: Props) {
                     )}
 
                     {stage === 'edit' && editingJob && (
-                        <JobEditForm job={editingJob} setJob={setEditingJob} />
+                        <JobEditForm job={editingJob} setJob={setEditingJob} userMap={userMap} />
                     )}
                 </div>
 

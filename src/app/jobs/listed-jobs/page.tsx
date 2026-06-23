@@ -1,9 +1,11 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { RefreshCw, ExternalLink, Search, ChevronDown, Briefcase, FileText, Eye } from 'lucide-react'
+import { useState, useEffect, useCallback, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { RefreshCw, ExternalLink, Search, ChevronDown, Briefcase, FileText, Eye, Building2 } from 'lucide-react'
 import { getAllJobs, getDistinctJobValues } from '@/app/api_handlers/api/sponsored-jobs.api'
 import { getAllCVs } from '@/app/api_handlers/api/job-cvs.api'
+import { listAuthUsers } from '@/app/api_handlers/api/auth.api'
 import JobCVModal from '@/app/components/jobs/JobCVModal'
 import JobViewModal from '@/app/components/jobs/JobViewModal'
 import { timeAgo } from '@/app/utils/time'
@@ -11,14 +13,15 @@ import { timeAgo } from '@/app/utils/time'
 const LIMIT_OPTIONS = [25, 50, 100, 200]
 const EMPTY_FILTERS = { keyword: '', is_job_sponsored: '', type: '', job_category: '', has_cv: false, cv_submitted: '' }
 
-function SubmissionBadge({ row }: { row: any }) {
+function SubmissionBadge({ row, userMap }: { row: any; userMap: Record<string, string> }) {
     if (!row.is_cv_submitted) {
         return <span className="text-[9px] bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded font-medium">Not submitted</span>
     }
     const ago = timeAgo(row.cv_submitted_at)
+    const submitterName = row.cv_submitted_by ? userMap[row.cv_submitted_by] : null
     return (
         <span className="text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium whitespace-nowrap" title={row.cv_email_sent || ''}>
-            Submitted{ago ? ` · ${ago}` : ''}
+            Submitted{ago ? ` · ${ago}` : ''}{submitterName ? ` · ${submitterName}` : ''}
         </span>
     )
 }
@@ -39,6 +42,16 @@ function TypeBadge({ value }: { value: string }) {
 }
 
 export default function ListedJobsPage() {
+    return (
+        <Suspense fallback={null}>
+            <ListedJobsPageInner />
+        </Suspense>
+    )
+}
+
+function ListedJobsPageInner() {
+    const router = useRouter()
+    const searchParams = useSearchParams()
     const [data, setData] = useState<any[]>([])
     const [total, setTotal] = useState(0)
     const [page, setPage] = useState(1)
@@ -49,6 +62,7 @@ export default function ListedJobsPage() {
     const [cvJob, setCvJob] = useState<any | null>(null)
     const [viewingJob, setViewingJob] = useState<any | null>(null)
     const [cvMap, setCvMap] = useState<Record<number, any>>({})
+    const [userMap, setUserMap] = useState<Record<string, string>>({})
 
     const [filters, setFilters] = useState({ ...EMPTY_FILTERS })
     const [applied, setApplied] = useState({ ...EMPTY_FILTERS })
@@ -96,6 +110,16 @@ export default function ListedJobsPage() {
         loadCVs().then(map => load(page, limit, applied, map))
     }, [])
 
+    // Pick up id / company_id from the URL (cross-page navigation) and drop it into the keyword search.
+    useEffect(() => {
+        const urlKeyword = searchParams.get('id') || searchParams.get('company_id')
+        if (urlKeyword) {
+            setFilters(f => ({ ...f, keyword: urlKeyword }))
+            setApplied(a => ({ ...a, keyword: urlKeyword }))
+            setPage(1)
+        }
+    }, [])
+
     useEffect(() => { load(page, limit, applied) }, [page, limit, applied, load])
 
     useEffect(() => {
@@ -104,10 +128,23 @@ export default function ListedJobsPage() {
             setCategories(p?.job_categories ?? [])
             setJobTypes(p?.types ?? [])
         }).catch(() => { })
+
+        listAuthUsers().then((res: any) => {
+            const list = res?.data ?? res
+            if (Array.isArray(list)) {
+                const map: Record<string, string> = {}
+                list.forEach((u: any) => { if (u.id) map[u.id] = u.userid || u.id })
+                setUserMap(map)
+            }
+        }).catch(() => { })
     }, [])
 
     const applyFilters = () => { setPage(1); setApplied({ ...filters }) }
-    const clearFilters = () => { const e = { ...EMPTY_FILTERS }; setFilters(e); setApplied(e); setPage(1) }
+    const clearFilters = () => {
+        const e = { ...EMPTY_FILTERS }
+        setFilters(e); setApplied(e); setPage(1)
+        if (searchParams.get('id') || searchParams.get('company_id')) router.replace('/jobs/listed-jobs')
+    }
 
     const toggleType = (value: string) => {
         const cur = filters.type.split(',').filter(Boolean)
@@ -333,7 +370,7 @@ export default function ListedJobsPage() {
                                         {row.application_closing_date || '—'}
                                     </td>
                                     <td className="px-2 py-1.5 whitespace-nowrap border-r border-gray-100">
-                                        <SubmissionBadge row={row} />
+                                        <SubmissionBadge row={row} userMap={userMap} />
                                     </td>
                                     <td className="px-2 py-1.5 whitespace-nowrap">
                                         <div className="flex items-center gap-1">
@@ -349,6 +386,14 @@ export default function ListedJobsPage() {
                                                 className="flex items-center gap-1 text-[10px] px-2 py-1 border border-gray-300 rounded hover:bg-gray-50 text-gray-600">
                                                 <FileText size={10} /> CV
                                             </button>
+                                            {row.company_id && (
+                                                <a
+                                                    href={`/jobs/companies?id=${encodeURIComponent(row.company_id)}`}
+                                                    title="View this company"
+                                                    className="flex items-center p-1 border border-gray-300 rounded hover:bg-gray-50 text-gray-500">
+                                                    <Building2 size={10} />
+                                                </a>
+                                            )}
                                             {cvMap[row.id] && (
                                                 <a
                                                     href={`/viewCV/${cvMap[row.id].id}`}
@@ -373,6 +418,7 @@ export default function ListedJobsPage() {
                     job={viewingJob}
                     onClose={() => setViewingJob(null)}
                     onJobSaved={() => { setViewingJob(null); load(page, limit, applied) }}
+                    userMap={userMap}
                 />
             )}
 

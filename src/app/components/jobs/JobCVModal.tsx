@@ -998,6 +998,7 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
     return {
       ...payload,
       job_id: job?.id ?? cv?.job_id ?? null,
+      company_id: job?.company_id ?? cv?.company_id ?? null,
       applicant_id: selectedApplicantId || cv?.applicant_id || null,
       portfolios,
       experience_items: experienceItems,

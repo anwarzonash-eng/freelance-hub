@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { ExternalLink, ChevronDown, ChevronUp } from 'lucide-react'
 import { timeAgo } from '@/app/utils/time'
 
-export function CvSubmissionBadge({ job }: { job: any }) {
+export function CvSubmissionBadge({ job, userMap }: { job: any; userMap?: Record<string, string> }) {
     if (!job.is_cv_submitted) {
         return (
             <span className="inline-flex items-center gap-1 text-[10px] bg-gray-100 text-gray-500 px-2 py-1 rounded font-medium">
@@ -13,15 +13,17 @@ export function CvSubmissionBadge({ job }: { job: any }) {
         )
     }
     const ago = timeAgo(job.cv_submitted_at)
+    const submitterName = job.cv_submitted_by ? userMap?.[job.cv_submitted_by] : null
     return (
         <span className="inline-flex items-center gap-1 text-[10px] bg-green-100 text-green-700 px-2 py-1 rounded font-medium">
             CV Submitted{ago ? ` — ${ago}` : ''}
+            {submitterName ? ` by ${submitterName}` : ''}
             {job.cv_email_sent ? ` · ${job.cv_email_sent}` : ''}
         </span>
     )
 }
 
-export function JobPreview({ job }: { job: any }) {
+export function JobPreview({ job, userMap }: { job: any; userMap?: Record<string, string> }) {
     const [expandedDescription, setExpandedDescription] = useState(true)
     const [expandedRawDescription, setExpandedRawDescription] = useState(false)
 
@@ -33,7 +35,7 @@ export function JobPreview({ job }: { job: any }) {
                         <h3 className="text-lg font-bold text-gray-900">{job.job_title}</h3>
                         <p className="text-sm text-gray-600 mt-1">{job.company_name} • {job.location}</p>
                         <div className="mt-2">
-                            <CvSubmissionBadge job={job} />
+                            <CvSubmissionBadge job={job} userMap={userMap} />
                         </div>
                     </div>
                     {job.link && (
@@ -200,7 +202,7 @@ function SkillsFoundInDescription({ skills, description, label }: { skills: stri
     )
 }
 
-export function JobEditForm({ job, setJob }: { job: any; setJob: (job: any) => void }) {
+export function JobEditForm({ job, setJob, userMap }: { job: any; setJob: (job: any) => void; userMap?: Record<string, string> }) {
     const inputCls = 'w-full border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-gray-500'
     const labelCls = 'text-[10px] text-gray-400 uppercase font-medium mb-0.5 block'
     const textareaCls = 'w-full border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-gray-500 resize-none'
@@ -365,7 +367,10 @@ export function JobEditForm({ job, setJob }: { job: any; setJob: (job: any) => v
                             <span className="text-xs text-gray-700">CV Submitted</span>
                         </label>
                         {job.is_cv_submitted && job.cv_submitted_at && (
-                            <p className="text-[10px] text-gray-400 pl-5">Submitted {timeAgo(job.cv_submitted_at)}</p>
+                            <p className="text-[10px] text-gray-400 pl-5">
+                                Submitted {timeAgo(job.cv_submitted_at)}
+                                {job.cv_submitted_by && userMap?.[job.cv_submitted_by] ? ` by ${userMap[job.cv_submitted_by]}` : ''}
+                            </p>
                         )}
                         <div>
                             <label className={labelCls}>Email CV Sent To</label>

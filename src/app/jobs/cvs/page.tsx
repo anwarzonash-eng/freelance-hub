@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { RefreshCw, ExternalLink, Pencil, Trash2, FileText, Search, X, Plus, Link } from 'lucide-react'
+import { useState, useEffect, useCallback, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { RefreshCw, ExternalLink, Pencil, Trash2, FileText, Search, X, Plus, Link, Briefcase, Building2 } from 'lucide-react'
 
 function SponsorBadge({ value }: { value: string }) {
     const v = value?.toLowerCase()
@@ -11,17 +12,43 @@ function SponsorBadge({ value }: { value: string }) {
     return <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${cls}`}>{value}</span>
 }
 import { getAllCVs, deleteCV } from '@/app/api_handlers/api/job-cvs.api'
+import { listAuthUsers } from '@/app/api_handlers/api/auth.api'
 import JobCVModal from '@/app/components/jobs/JobCVModal'
 
+function filterCvs(list: any[], kw: string) {
+    const q = kw.trim().toLowerCase()
+    if (!q) return list
+    const qNum = Number(q)
+    const isExactNumber = q !== '' && Number.isInteger(qNum)
+    return list.filter(cv =>
+        cv.cv_title?.toLowerCase().includes(q) ||
+        cv.applicant_name?.toLowerCase().includes(q) ||
+        cv.organization_name?.toLowerCase().includes(q) ||
+        (cv.company_id && String(cv.company_id).toLowerCase() === q) ||
+        (isExactNumber && (cv.id === qNum || cv.job_id === qNum))
+    )
+}
+
 export default function CvsPage() {
+    return (
+        <Suspense fallback={null}>
+            <CvsPageInner />
+        </Suspense>
+    )
+}
+
+function CvsPageInner() {
+    const router = useRouter()
+    const searchParams = useSearchParams()
     const [allData, setAllData] = useState<any[]>([])
     const [data, setData] = useState<any[]>([])
     const [loading, setLoading] = useState(false)
     const [editingCV, setEditingCV] = useState<any | null>(null)
     const [creatingNew, setCreatingNew] = useState(false)
     const [keyword, setKeyword] = useState('')
+    const [userMap, setUserMap] = useState<Record<string, string>>({})
 
-    const load = useCallback(async () => {
+    const load = useCallback(async (resetKeyword = true) => {
         setLoading(true)
         try {
             const res: any = await getAllCVs()
@@ -29,29 +56,47 @@ export default function CvsPage() {
             const list = Array.isArray(payload) ? payload : []
             setAllData(list)
             setData(list)
-            setKeyword('')
+            if (resetKeyword) setKeyword('')
+            return list
         } finally {
             setLoading(false)
         }
     }, [])
 
-    useEffect(() => { load() }, [load])
+    useEffect(() => {
+        load(false).then(list => {
+            const urlKeyword = searchParams.get('id') || searchParams.get('company_id') || searchParams.get('job_id')
+            if (urlKeyword) {
+                setKeyword(urlKeyword)
+                setData(filterCvs(list, urlKeyword))
+            }
+        })
+    }, [])
 
-    const applyFilter = (kw: string) => {
-        const q = kw.trim().toLowerCase()
-        if (!q) { setData(allData); return }
-        setData(allData.filter(cv =>
-            cv.cv_title?.toLowerCase().includes(q) ||
-            cv.applicant_name?.toLowerCase().includes(q)
-        ))
-    }
+    useEffect(() => {
+        listAuthUsers().then((res: any) => {
+            const list = res?.data ?? res
+            if (Array.isArray(list)) {
+                const map: Record<string, string> = {}
+                list.forEach((u: any) => { if (u.id) map[u.id] = u.userid || u.id })
+                setUserMap(map)
+            }
+        }).catch(() => { })
+    }, [])
+
+    const applyFilter = (kw: string) => setData(filterCvs(allData, kw))
 
     const handleKeywordChange = (v: string) => {
         setKeyword(v)
         applyFilter(v)
     }
 
-    const clearFilter = () => handleKeywordChange('')
+    const clearFilter = () => {
+        handleKeywordChange('')
+        if (searchParams.get('id') || searchParams.get('company_id') || searchParams.get('job_id')) {
+            router.replace('/jobs/cvs')
+        }
+    }
 
     const handleDelete = async (id: number) => {
         if (!confirm('Delete this CV?')) return
@@ -72,7 +117,7 @@ export default function CvsPage() {
                         className="flex items-center gap-1 text-xs bg-gray-800 text-white rounded px-2 py-1 hover:bg-gray-700">
                         <Plus size={11} /> New CV
                     </button>
-                    <button onClick={load} disabled={loading}
+                    <button onClick={() => load()} disabled={loading}
                         className="flex items-center gap-1 text-xs border border-gray-300 rounded px-2 py-1 hover:bg-gray-50 disabled:opacity-50 text-gray-600">
                         <RefreshCw size={11} className={loading ? 'animate-spin' : ''} /> Refresh
                     </button>
@@ -85,7 +130,7 @@ export default function CvsPage() {
                     <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
                         className={`w-full border rounded pl-6 pr-6 py-1 text-xs focus:outline-none transition-colors ${keyword ? 'border-blue-300 bg-blue-50' : 'border-gray-300 bg-white'}`}
-                        placeholder="Search by CV title or applicant name…"
+                        placeholder="Search by CV title, applicant, company, job/company ID…"
                         value={keyword}
                         onChange={e => handleKeywordChange(e.target.value)}
                     />
@@ -116,6 +161,7 @@ export default function CvsPage() {
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Email</th>
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Exp (yrs)</th>
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Created</th>
+                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Created By</th>
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 flex items-center justify-between">
                                 <span>Actions</span>
                                 <button
@@ -131,12 +177,12 @@ export default function CvsPage() {
                     </thead>
                     <tbody>
                         {loading && (
-                            <tr><td colSpan={10} className="text-center py-10 text-gray-400">
+                            <tr><td colSpan={11} className="text-center py-10 text-gray-400">
                                 <div className="flex items-center justify-center gap-2"><RefreshCw size={13} className="animate-spin" /> Loading…</div>
                             </td></tr>
                         )}
                         {!loading && data.length === 0 && (
-                            <tr><td colSpan={10} className="text-center py-10 text-gray-400">
+                            <tr><td colSpan={11} className="text-center py-10 text-gray-400">
                                 {keyword ? 'No CVs match your search.' : 'No CVs yet. Click "New CV" to create one.'}
                             </td></tr>
                         )}
@@ -172,6 +218,9 @@ export default function CvsPage() {
                                 <td className="px-2 py-1.5 border-r border-gray-100 text-gray-400 text-[10px] whitespace-nowrap">
                                     {row.createdAt ? new Date(row.createdAt).toLocaleDateString() : '—'}
                                 </td>
+                                <td className="px-2 py-1.5 border-r border-gray-100 text-gray-600 text-[10px] whitespace-nowrap">
+                                    {row.created_by ? (userMap[row.created_by] || row.created_by) : '—'}
+                                </td>
                                 <td className="px-2 py-1.5">
                                     <div className="flex items-center gap-1">
                                         <a href={`/viewCV/${row.id}`} target="_blank" rel="noopener noreferrer"
@@ -183,6 +232,18 @@ export default function CvsPage() {
                                             className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded">
                                             <Pencil size={12} />
                                         </button>
+                                        {row.job_id && (
+                                            <a href={`/jobs/listed-jobs?id=${row.job_id}`} title="View this job"
+                                                className="p-1 text-gray-500 hover:text-teal-700 hover:bg-teal-50 rounded">
+                                                <Briefcase size={12} />
+                                            </a>
+                                        )}
+                                        {row.company_id && (
+                                            <a href={`/jobs/companies?id=${encodeURIComponent(row.company_id)}`} title="View this company"
+                                                className="p-1 text-gray-500 hover:text-indigo-700 hover:bg-indigo-50 rounded">
+                                                <Building2 size={12} />
+                                            </a>
+                                        )}
                                         <button onClick={() => handleDelete(row.id)} title="Delete CV"
                                             className="p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded">
                                             <Trash2 size={12} />

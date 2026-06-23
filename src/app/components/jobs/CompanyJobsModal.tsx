@@ -20,6 +20,7 @@ function parseLooseJson(input: string): any {
 interface Props {
     company: any
     onClose: () => void
+    userMap?: Record<string, string>
 }
 
 interface ValidationError { job: string; missingKeys: string[] }
@@ -98,7 +99,7 @@ const SAMPLE_MULTIPLE_JOBS = `{
   ]
 }`
 
-export default function CompanyJobsModal({ company, onClose }: Props) {
+export default function CompanyJobsModal({ company, onClose, userMap }: Props) {
     const [tab, setTab] = useState<'single' | 'multiple'>('single')
     const [stage, setStage] = useState<'input' | 'preview' | 'edit' | 'result'>('input')
     const [text, setText] = useState('')
@@ -375,7 +376,7 @@ export default function CompanyJobsModal({ company, onClose }: Props) {
 
                             {tab === 'single' && currentJob && (
                                 <div className="border border-gray-200 rounded p-4 space-y-4">
-                                    <JobPreview job={currentJob} />
+                                    <JobPreview job={currentJob} userMap={userMap} />
                                     <div className="border-t pt-3 flex gap-2">
                                         <button
                                             onClick={() => handleEditJob(0)}
@@ -398,7 +399,7 @@ export default function CompanyJobsModal({ company, onClose }: Props) {
                                             ← Back to List
                                         </button>
                                     </div>
-                                    <JobPreview job={parsedData.jobs[selectedJobIndex]} />
+                                    <JobPreview job={parsedData.jobs[selectedJobIndex]} userMap={userMap} />
                                     <div className="border-t pt-3 flex gap-2">
                                         <button
                                             onClick={() => handleEditJob(selectedJobIndex)}
@@ -414,7 +415,7 @@ export default function CompanyJobsModal({ company, onClose }: Props) {
 
                     {/* EDIT STAGE */}
                     {stage === 'edit' && editingJob && (
-                        <JobEditForm job={editingJob} setJob={setEditingJob} />
+                        <JobEditForm job={editingJob} setJob={setEditingJob} userMap={userMap} />
                     )}
 
                     {/* RESULT STAGE */}
@@ -427,7 +428,17 @@ export default function CompanyJobsModal({ company, onClose }: Props) {
                                     </div>
                                     <ul className="space-y-0.5 max-h-28 overflow-y-auto">
                                         {result!.added.map((link, i) => (
-                                            <li key={i} className="text-[10px] text-green-700 font-mono truncate">{link}</li>
+                                            <li key={i} className="flex items-center gap-2 text-[10px] text-green-700">
+                                                <span className="font-mono truncate flex-1">{link}</span>
+                                                <a
+                                                    href={`/jobs/listed-jobs?id=${encodeURIComponent(link)}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="shrink-0 underline hover:text-green-900"
+                                                >
+                                                    View Job
+                                                </a>
+                                            </li>
                                         ))}
                                     </ul>
                                 </div>
