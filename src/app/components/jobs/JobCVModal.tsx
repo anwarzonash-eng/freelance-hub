@@ -14,6 +14,8 @@ import {
   ChevronUp,
   Sparkles,
   Maximize2,
+  Type,
+  RotateCcw,
 } from "lucide-react";
 import { getAllApplicants } from "@/app/api_handlers/api/job-applicants.api";
 import { createCV, updateCV } from "@/app/api_handlers/api/job-cvs.api";
@@ -24,6 +26,9 @@ import CVPreview, {
   CVExpItem,
   CVEduItem,
   CVProjectItem,
+  CVFontSettings,
+  DEFAULT_FONT_SETTINGS,
+  FONT_SETTING_FIELDS,
   FULL_MATCH_COLOR,
   PARTIAL_MATCH_COLOR,
   extractKeywords,
@@ -542,6 +547,10 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
   const [projects, setProjects] = useState<CVProjectItem[]>([]);
   const [saving, setSaving] = useState(false);
   const [savedId, setSavedId] = useState<number | null>(null);
+  const [fontSettings, setFontSettings] = useState<CVFontSettings>({
+    ...DEFAULT_FONT_SETTINGS,
+  });
+  const [showFontPanel, setShowFontPanel] = useState(false);
 
   // Prompt / AI state
   const [promptCopied, setPromptCopied] = useState(false);
@@ -678,6 +687,7 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
       setExperienceItems(cv.experience_items ?? []);
       setEducation(cv.education ?? []);
       setProjects(cv.projects ?? []);
+      setFontSettings({ ...DEFAULT_FONT_SETTINGS, ...(cv.font_settings ?? {}) });
       if (cv.applicant_id) setSelectedApplicantId(cv.applicant_id);
     } else if (job) {
       setForm((f) => ({
@@ -1004,6 +1014,7 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
       experience_items: experienceItems,
       education,
       projects: projects.filter((p) => p.title.trim()),
+      font_settings: fontSettings,
     };
   };
 
@@ -1060,6 +1071,18 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
             </a>
           )}
           <button
+            onClick={() => setShowFontPanel((p) => !p)}
+            title="Adjust font sizes"
+            className={`flex items-center gap-1 px-2 py-1.5 text-xs rounded border transition-colors ${
+              showFontPanel
+                ? "border-blue-400 bg-blue-50 text-blue-700"
+                : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            <Type size={12} />
+            Adjust Size
+          </button>
+          <button
             onClick={() => handleSave(false)}
             disabled={
               saving ||
@@ -1104,6 +1127,43 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
           </button>
         </div>
       </div>
+
+      {/* ── Font size adjustment panel ── */}
+      {showFontPanel && (
+        <div className="flex items-center gap-4 flex-wrap px-4 py-2 border-b border-gray-200 shrink-0 bg-blue-50/40">
+          {FONT_SETTING_FIELDS.map((f) => (
+            <div key={f.key} className="flex flex-col gap-0.5">
+              <label className="text-[10px] text-gray-500 font-medium" title={f.hint}>
+                {f.label}
+              </label>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  step={0.5}
+                  min={6}
+                  max={28}
+                  value={fontSettings[f.key]}
+                  onChange={(e) =>
+                    setFontSettings((s) => ({
+                      ...s,
+                      [f.key]: Number(e.target.value) || DEFAULT_FONT_SETTINGS[f.key],
+                    }))
+                  }
+                  className="w-16 border border-gray-300 rounded px-1.5 py-1 text-xs focus:outline-none focus:border-gray-500 bg-white"
+                />
+                <span className="text-[10px] text-gray-400">pt</span>
+              </div>
+            </div>
+          ))}
+          <button
+            onClick={() => setFontSettings({ ...DEFAULT_FONT_SETTINGS })}
+            title="Reset to defaults"
+            className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-gray-700 border border-gray-300 rounded px-2 py-1 mt-auto hover:bg-white"
+          >
+            <RotateCcw size={10} /> Reset
+          </button>
+        </div>
+      )}
 
       {/* ── Job Context bar ── */}
       {(form.organization_name || form.sponsorship || form.job_link) && (
@@ -2016,6 +2076,7 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
             <CVPreview
               data={cvData}
               highlightEnabled={atsHighlightOn}
+              fontSettings={fontSettings}
               onSkillsReorder={(newSkills) => set("skills", newSkills)}
               onBulletEdit={(expIdx, bulletIdx, val) =>
                 setBullet(expIdx, bulletIdx, val)
@@ -2078,6 +2139,7 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
               <CVPreview
                 data={cvData}
                 highlightEnabled={atsHighlightOn}
+              fontSettings={fontSettings}
                 onSkillsReorder={(newSkills) => set("skills", newSkills)}
                 onBulletEdit={(expIdx, bulletIdx, val) =>
                   setBullet(expIdx, bulletIdx, val)

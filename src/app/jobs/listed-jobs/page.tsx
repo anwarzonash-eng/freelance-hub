@@ -521,25 +521,25 @@ export default function ListedJobsPage() {
                                         <ApplicationStatusIcon job={row} />
                                     </td>
                                     <td className="px-2 py-1.5 whitespace-nowrap">
-                                        <div className="flex items-center gap-1">
+                                        <div className="flex items-center gap-0.5">
                                             <button
                                                 onClick={() => setViewingJob(row)}
                                                 title="View job details"
-                                                className="flex items-center gap-1 text-[10px] px-2 py-1 border border-gray-300 rounded hover:bg-gray-50 text-gray-600">
-                                                <Eye size={10} /> View Job
+                                                className="flex items-center p-1.5 border border-gray-300 rounded hover:bg-gray-50 text-gray-600">
+                                                <Eye size={12} />
                                             </button>
                                             <button
                                                 onClick={() => setCvJob(row)}
                                                 title="Create CV for this job"
-                                                className="flex items-center gap-1 text-[10px] px-2 py-1 border border-gray-300 rounded hover:bg-gray-50 text-gray-600">
-                                                <FileText size={10} /> Create CV
+                                                className="flex items-center p-1.5 border border-gray-300 rounded hover:bg-gray-50 text-gray-600">
+                                                <FileText size={12} />
                                             </button>
                                             {row.company_id && (
                                                 <a
                                                     href={`/jobs/companies?id=${encodeURIComponent(row.company_id)}`}
                                                     title="View this company"
-                                                    className="flex items-center p-1 border border-gray-300 rounded hover:bg-gray-50 text-gray-500">
-                                                    <Building2 size={10} />
+                                                    className="flex items-center p-1.5 border border-gray-300 rounded hover:bg-gray-50 text-gray-500">
+                                                    <Building2 size={12} />
                                                 </a>
                                             )}
                                             {cvMap[row.id] && (
@@ -548,8 +548,8 @@ export default function ListedJobsPage() {
                                                     target="_blank"
                                                     rel="noopener noreferrer"
                                                     title={`View CV — ${cvMap[row.id].applicant_name}`}
-                                                    className="flex items-center gap-1 text-[10px] px-2 py-1 bg-teal-50 border border-teal-300 text-teal-700 rounded hover:bg-teal-100">
-                                                    <ExternalLink size={10} /> View CV
+                                                    className="flex items-center p-1.5 bg-teal-50 border border-teal-300 text-teal-700 rounded hover:bg-teal-100">
+                                                    <ExternalLink size={12} />
                                                 </a>
                                             )}
                                         </div>

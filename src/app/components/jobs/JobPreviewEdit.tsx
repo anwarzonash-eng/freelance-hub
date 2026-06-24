@@ -4,6 +4,18 @@ import { useState } from 'react'
 import { ExternalLink, ChevronDown, ChevronUp, Clock, CheckCircle2, XCircle } from 'lucide-react'
 import { timeAgo } from '@/app/utils/time'
 
+// Some uploaded job JSON has stray nested objects in fields expected to be plain
+// strings (e.g. a notice-period object dropped into application_closing_date) — render
+// those safely instead of letting React throw "Objects are not valid as a React child".
+function renderFieldValue(value: any): string {
+    if (value === null || value === undefined || value === '') return '—'
+    if (typeof value === 'object') {
+        if (Array.isArray(value)) return value.join(', ') || '—'
+        return Object.entries(value).map(([k, v]) => `${k}: ${v}`).join(', ') || '—'
+    }
+    return String(value)
+}
+
 export const APPLICATION_STATUS_OPTIONS = [
     { value: '', label: 'Not tracked' },
     { value: 'in_progress', label: 'In Progress' },
@@ -99,7 +111,7 @@ export function JobPreview({ job, userMap }: { job: any; userMap?: Record<string
                         <div key={idx} className={highlighted ? 'bg-amber-50 border border-amber-300 rounded p-1.5' : ''}>
                             <p className="text-[10px] text-gray-400 uppercase font-semibold">{field.label}</p>
                             <p className={`text-xs mt-0.5 ${highlighted ? 'text-amber-900 font-semibold' : 'text-gray-700'}`}>
-                                {field.value || '—'}
+                                {renderFieldValue(field.value)}
                             </p>
                         </div>
                     )
@@ -196,7 +208,7 @@ export function JobPreview({ job, userMap }: { job: any; userMap?: Record<string
                                 {Array.isArray(value) ? (
                                     <ul className="text-xs text-gray-700 mt-1 list-disc list-inside">
                                         {value.map((item, i) => (
-                                            <li key={i}>{item}</li>
+                                            <li key={i}>{renderFieldValue(item)}</li>
                                         ))}
                                     </ul>
                                 ) : typeof value === 'object' ? (
@@ -492,7 +504,7 @@ export function JobEditForm({ job, setJob, userMap }: { job: any; setJob: (job: 
                                         ✕
                                     </button>
                                 </div>
-                                {Array.isArray(value) ? (
+                                {Array.isArray(value) && value.every(item => typeof item !== 'object' || item === null) ? (
                                     <textarea
                                         value={value.join('\n')}
                                         onChange={e => handleAdditionalFieldChange(key, e.target.value.split('\n').filter(Boolean))}

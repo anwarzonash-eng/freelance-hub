@@ -137,22 +137,24 @@ export default function CompaniesPage() {
     const [exporting, setExporting] = useState(false)
 
     // Panel visibility (persisted to localStorage so open/closed panels survive reloads)
-    const [visiblePanels, setVisiblePanels] = useState<Set<string>>(() => {
-        if (typeof window === 'undefined') return new Set()
-        const saved = localStorage.getItem('companies_visible_panels')
-        return saved ? new Set(JSON.parse(saved)) : new Set()
-    })
+    // Start from the SSR-safe default on both server and first client render, then
+    // load the persisted value in a post-mount effect — branching the initializer on
+    // `typeof window` caused a server/client markup mismatch (hydration error).
+    const [visiblePanels, setVisiblePanels] = useState<Set<string>>(() => new Set())
     const [showViewDd, setShowViewDd] = useState(false)
     const viewDdRef = useRef<HTMLDivElement>(null)
 
     // Table column visibility (persisted to localStorage)
-    const [visibleCols, setVisibleCols] = useState<Set<string>>(() => {
-        if (typeof window === 'undefined') return new Set(DEFAULT_TABLE_COLS)
-        const saved = localStorage.getItem('companies_visible_cols')
-        return saved ? new Set(JSON.parse(saved)) : new Set(DEFAULT_TABLE_COLS)
-    })
+    const [visibleCols, setVisibleCols] = useState<Set<string>>(() => new Set(DEFAULT_TABLE_COLS))
     const [showColDd, setShowColDd] = useState(false)
     const colDdRef = useRef<HTMLDivElement>(null)
+
+    useEffect(() => {
+        const savedPanels = localStorage.getItem('companies_visible_panels')
+        if (savedPanels) setVisiblePanels(new Set(JSON.parse(savedPanels)))
+        const savedCols = localStorage.getItem('companies_visible_cols')
+        if (savedCols) setVisibleCols(new Set(JSON.parse(savedCols)))
+    }, [])
 
     const col = (key: string) => visibleCols.has(key)
 
