@@ -9,10 +9,12 @@ import { getAllCVs } from '@/app/api_handlers/api/job-cvs.api'
 import { listAuthUsers } from '@/app/api_handlers/api/auth.api'
 import JobCVModal from '@/app/components/jobs/JobCVModal'
 import JobViewModal from '@/app/components/jobs/JobViewModal'
+import { ApplicationStatusIcon, APPLICATION_STATUS_OPTIONS } from '@/app/components/jobs/JobPreviewEdit'
 import { timeAgo } from '@/app/utils/time'
 
 const LIMIT_OPTIONS = [25, 50, 100, 200]
-const EMPTY_FILTERS = { keyword: '', is_job_sponsored: '', type: '', job_category: '', company_id: '', has_cv: false, cv_submitted: '' }
+const EMPTY_FILTERS = { keyword: '', is_job_sponsored: '', type: '', job_category: '', company_id: '', has_cv: false, cv_submitted: '', application_status: '' }
+const APP_STATUS_FILTER_OPTIONS = [{ value: 'none', label: 'Not tracked' }, ...APPLICATION_STATUS_OPTIONS.filter(o => o.value)]
 
 function filtersToParams(f: typeof EMPTY_FILTERS, page: number, limit: number): URLSearchParams {
     const params = new URLSearchParams()
@@ -23,6 +25,7 @@ function filtersToParams(f: typeof EMPTY_FILTERS, page: number, limit: number): 
     if (f.company_id) params.set('company_id', f.company_id)
     if (f.has_cv) params.set('has_cv', 'true')
     if (f.cv_submitted) params.set('cv_submitted', f.cv_submitted)
+    if (f.application_status) params.set('application_status', f.application_status)
     if (page !== 1) params.set('page', String(page))
     if (limit !== 50) params.set('limit', String(limit))
     return params
@@ -78,6 +81,7 @@ export default function ListedJobsPage() {
     const [jobTypes, setJobTypes] = useState<string[]>([])
     const [showCatDd, setShowCatDd] = useState(false)
     const [showTypeDd, setShowTypeDd] = useState(false)
+    const [showAppStatusDd, setShowAppStatusDd] = useState(false)
 
     const [companyQuery, setCompanyQuery] = useState('')
     const [companyResults, setCompanyResults] = useState<{ id: string; name: string }[]>([])
@@ -103,6 +107,7 @@ export default function ListedJobsPage() {
             if (af.job_category) q.job_category = af.job_category
             if (af.company_id) q.company_id = af.company_id
             if (af.cv_submitted) q.cv_submitted = af.cv_submitted
+            if (af.application_status) q.application_status = af.application_status
             if (af.has_cv) {
                 const map = latestCvMap ?? cvMap
                 const ids = Object.keys(map).join(',')
@@ -132,6 +137,7 @@ export default function ListedJobsPage() {
             company_id: hydratedCompanyId,
             has_cv: searchParams.get('has_cv') === 'true',
             cv_submitted: searchParams.get('cv_submitted') || '',
+            application_status: searchParams.get('application_status') || '',
         }
         const hydratedPage = Number(searchParams.get('page')) || 1
         const hydratedLimit = Number(searchParams.get('limit')) || 50
@@ -228,6 +234,11 @@ export default function ListedJobsPage() {
         const next = cur.includes(value) ? cur.filter(v => v !== value) : [...cur, value]
         setFilters(f => ({ ...f, job_category: next.join(',') }))
     }
+    const toggleAppStatus = (value: string) => {
+        const cur = filters.application_status.split(',').filter(Boolean)
+        const next = cur.includes(value) ? cur.filter(v => v !== value) : [...cur, value]
+        setFilters(f => ({ ...f, application_status: next.join(',') }))
+    }
 
     const ddCls = 'absolute z-20 top-full mt-1 left-0 bg-white border border-gray-200 rounded shadow-lg p-2 space-y-1 min-w-[180px] max-h-60 overflow-y-auto'
     const knownTypes = ['hybrid', 'remote', 'onsite']
@@ -278,7 +289,7 @@ export default function ListedJobsPage() {
 
                     <div className="flex flex-col gap-0.5 relative">
                         <label className="text-[10px] text-gray-400 uppercase">Type</label>
-                        <button onClick={() => { setShowTypeDd(p => !p); setShowCatDd(false) }}
+                        <button onClick={() => { setShowTypeDd(p => !p); setShowCatDd(false); setShowAppStatusDd(false) }}
                             className={`flex items-center gap-1 border rounded px-2 py-1 text-xs text-gray-700 min-w-[120px] transition-colors ${filters.type ? 'border-blue-500 bg-blue-100 hover:bg-blue-100' : 'border-gray-300 bg-white hover:bg-gray-50'}`}>
                             Type{filters.type ? ` (${filters.type.split(',').filter(Boolean).length})` : ''}
                             <ChevronDown size={11} className="ml-auto text-gray-400" />
@@ -303,7 +314,7 @@ export default function ListedJobsPage() {
 
                     <div className="flex flex-col gap-0.5 relative">
                         <label className="text-[10px] text-gray-400 uppercase">Category</label>
-                        <button onClick={() => { setShowCatDd(p => !p); setShowTypeDd(false) }}
+                        <button onClick={() => { setShowCatDd(p => !p); setShowTypeDd(false); setShowAppStatusDd(false) }}
                             className={`flex items-center gap-1 border rounded px-2 py-1 text-xs text-gray-700 min-w-[140px] transition-colors ${filters.job_category ? 'border-blue-500 bg-blue-100 hover:bg-blue-100' : 'border-gray-300 bg-white hover:bg-gray-50'}`}>
                             Category{filters.job_category ? ` (${filters.job_category.split(',').filter(Boolean).length})` : ''}
                             <ChevronDown size={11} className="ml-auto text-gray-400" />
@@ -383,6 +394,31 @@ export default function ListedJobsPage() {
                         </select>
                     </div>
 
+                    <div className="flex flex-col gap-0.5 relative">
+                        <label className="text-[10px] text-gray-400 uppercase">App. Status</label>
+                        <button onClick={() => { setShowAppStatusDd(p => !p); setShowTypeDd(false); setShowCatDd(false) }}
+                            className={`flex items-center gap-1 border rounded px-2 py-1 text-xs text-gray-700 min-w-[140px] transition-colors ${filters.application_status ? 'border-blue-500 bg-blue-100 hover:bg-blue-100' : 'border-gray-300 bg-white hover:bg-gray-50'}`}>
+                            App. Status{filters.application_status ? ` (${filters.application_status.split(',').filter(Boolean).length})` : ''}
+                            <ChevronDown size={11} className="ml-auto text-gray-400" />
+                        </button>
+                        {showAppStatusDd && (
+                            <div className={ddCls}>
+                                {APP_STATUS_FILTER_OPTIONS.map(o => (
+                                    <label key={o.value} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded">
+                                        <input type="checkbox" className="w-3 h-3"
+                                            checked={filters.application_status.split(',').filter(Boolean).includes(o.value)}
+                                            onChange={() => toggleAppStatus(o.value)} />
+                                        <span className="text-xs text-gray-700">{o.label}</span>
+                                    </label>
+                                ))}
+                                <div className="border-t border-gray-100 pt-1">
+                                    <button onClick={() => { setFilters(f => ({ ...f, application_status: '' })); setShowAppStatusDd(false) }}
+                                        className="text-[10px] text-gray-400 hover:text-gray-700 w-full text-left">Clear</button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
                     <button onClick={applyFilters} className="px-3 py-1 text-xs bg-gray-800 text-white rounded hover:bg-gray-700 mt-auto">Filter</button>
                     <button onClick={clearFilters} className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-white mt-auto">Clear</button>
 
@@ -411,6 +447,7 @@ export default function ListedJobsPage() {
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Tech Skills</th>
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Closes</th>
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Submission</th>
+                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Status</th>
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 flex items-center justify-between">
                                 <span>Actions</span>
                                 <button
@@ -426,17 +463,17 @@ export default function ListedJobsPage() {
                     </thead>
                     <tbody>
                         {loading && (
-                            <tr><td colSpan={11} className="text-center py-10 text-gray-400">
+                            <tr><td colSpan={12} className="text-center py-10 text-gray-400">
                                 <div className="flex items-center justify-center gap-2"><RefreshCw size={13} className="animate-spin" /> Loading…</div>
                             </td></tr>
                         )}
                         {!loading && data.length === 0 && (
-                            <tr><td colSpan={11} className="text-center py-10 text-gray-400">No jobs found.</td></tr>
+                            <tr><td colSpan={12} className="text-center py-10 text-gray-400">No jobs found.</td></tr>
                         )}
                         {!loading && data.map((row, idx) => {
                             const rowNum = (page - 1) * limit + idx + 1
                             const techSkills: string[] = row.tech_skills ?? []
-                            const shown = techSkills.slice(0, 4)
+                            const shown = techSkills.slice(0, 2)
                             const extra = techSkills.length - shown.length
                             return (
                                 <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50">
@@ -447,9 +484,6 @@ export default function ListedJobsPage() {
                                             <span className="truncate">{row.job_title}</span>
                                             <ExternalLink size={9} className="shrink-0" />
                                         </a>
-                                        {row.experience_required && (
-                                            <div className="text-[10px] text-gray-400 mt-0.5">{row.experience_required}</div>
-                                        )}
                                     </td>
                                     <td className="px-2 py-1.5 border-r border-gray-100 max-w-[140px]">
                                         <div className="truncate text-gray-700">{row.company_name}</div>
@@ -467,11 +501,11 @@ export default function ListedJobsPage() {
                                         <SponsorBadge value={row.is_job_sponsored} />
                                     </td>
                                     <td className="px-2 py-1.5 border-r border-gray-100 max-w-[180px]">
-                                        <div className="flex flex-wrap gap-0.5">
+                                        <div className="flex flex-nowrap gap-0.5 overflow-hidden">
                                             {shown.map((s, i) => (
-                                                <span key={i} className="text-[9px] bg-gray-100 text-gray-600 px-1 py-0.5 rounded">{s}</span>
+                                                <span key={i} className="text-[9px] bg-gray-100 text-gray-600 px-1 py-0.5 rounded shrink-0 truncate max-w-[70px]">{s}</span>
                                             ))}
-                                            {extra > 0 && <span className="text-[9px] text-gray-400">+{extra}</span>}
+                                            {extra > 0 && <span className="text-[9px] text-gray-400 shrink-0">+{extra}</span>}
                                         </div>
                                     </td>
                                     <td className="px-2 py-1.5 text-gray-500 whitespace-nowrap text-[10px] border-r border-gray-100">
@@ -479,6 +513,9 @@ export default function ListedJobsPage() {
                                     </td>
                                     <td className="px-2 py-1.5 whitespace-nowrap border-r border-gray-100">
                                         <SubmissionBadge row={row} userMap={userMap} />
+                                    </td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap border-r border-gray-100 text-center">
+                                        <ApplicationStatusIcon job={row} />
                                     </td>
                                     <td className="px-2 py-1.5 whitespace-nowrap">
                                         <div className="flex items-center gap-1">

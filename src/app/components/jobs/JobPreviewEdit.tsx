@@ -1,8 +1,30 @@
 'use client'
 
 import { useState } from 'react'
-import { ExternalLink, ChevronDown, ChevronUp } from 'lucide-react'
+import { ExternalLink, ChevronDown, ChevronUp, Clock, CheckCircle2, XCircle } from 'lucide-react'
 import { timeAgo } from '@/app/utils/time'
+
+export const APPLICATION_STATUS_OPTIONS = [
+    { value: '', label: 'Not tracked' },
+    { value: 'in_progress', label: 'In Progress' },
+    { value: 'positive', label: 'Positive Response' },
+    { value: 'negative', label: 'Negative Response' },
+]
+
+export function ApplicationStatusIcon({ job }: { job: any }) {
+    const status = job.application_status
+    if (!status) return <span className="text-gray-300 text-[10px]">—</span>
+    if (status === 'in_progress') {
+        return <span title="In Progress" className="inline-flex"><Clock size={13} className="text-amber-500" /></span>
+    }
+    if (status === 'positive') {
+        return <span title={job.application_status_note ? `Next steps: ${job.application_status_note}` : 'Positive Response'} className="inline-flex"><CheckCircle2 size={13} className="text-green-600" /></span>
+    }
+    if (status === 'negative') {
+        return <span title={job.application_status_note ? `Reason: ${job.application_status_note}` : 'Negative Response'} className="inline-flex"><XCircle size={13} className="text-red-600" /></span>
+    }
+    return null
+}
 
 export function CvSubmissionBadge({ job, userMap }: { job: any; userMap?: Record<string, string> }) {
     if (!job.is_cv_submitted) {
@@ -34,8 +56,15 @@ export function JobPreview({ job, userMap }: { job: any; userMap?: Record<string
                     <div className="flex-1">
                         <h3 className="text-lg font-bold text-gray-900">{job.job_title}</h3>
                         <p className="text-sm text-gray-600 mt-1">{job.company_name} • {job.location}</p>
-                        <div className="mt-2">
+                        <div className="mt-2 flex items-center gap-2">
                             <CvSubmissionBadge job={job} userMap={userMap} />
+                            {job.application_status && (
+                                <span className="inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded font-medium bg-gray-50 border border-gray-200">
+                                    <ApplicationStatusIcon job={job} />
+                                    {APPLICATION_STATUS_OPTIONS.find(o => o.value === job.application_status)?.label}
+                                    {job.application_status_note ? ` — ${job.application_status_note}` : ''}
+                                </span>
+                            )}
                         </div>
                     </div>
                     {job.link && (
@@ -384,6 +413,45 @@ export function JobEditForm({ job, setJob, userMap }: { job: any; setJob: (job: 
                                 className={inputCls}
                             />
                         </div>
+                        <div>
+                            <label className={labelCls}>Application Status</label>
+                            <select
+                                value={job.application_status || ''}
+                                onChange={e => {
+                                    const value = e.target.value
+                                    setJob({
+                                        ...job,
+                                        application_status: value || null,
+                                        ...(value !== 'positive' && value !== 'negative' ? { application_status_note: null } : {}),
+                                    })
+                                }}
+                                className={inputCls}
+                            >
+                                {APPLICATION_STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                            </select>
+                        </div>
+                        {job.application_status === 'negative' && (
+                            <div>
+                                <label className={labelCls}>Rejection Reason</label>
+                                <textarea
+                                    value={job.application_status_note || ''}
+                                    onChange={e => handleFieldChange('application_status_note', e.target.value)}
+                                    placeholder="Why did they reject the application?"
+                                    className={`${textareaCls} h-16`}
+                                />
+                            </div>
+                        )}
+                        {job.application_status === 'positive' && (
+                            <div>
+                                <label className={labelCls}>Next Steps</label>
+                                <textarea
+                                    value={job.application_status_note || ''}
+                                    onChange={e => handleFieldChange('application_status_note', e.target.value)}
+                                    placeholder="What's next (interview, assessment, etc.)?"
+                                    className={`${textareaCls} h-16`}
+                                />
+                            </div>
+                        )}
                     </div>
                 </div>
 

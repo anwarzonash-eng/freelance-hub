@@ -71,9 +71,10 @@ export const apiClient = async <T = any, P = any>(
     const isFormData = payload instanceof FormData;
 
     const defaultHeaders: HeadersInit = isFormData
-        ? { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) } // FormData will set Content-Type automatically
+        ? { 'X-Client-App': 'upwork-tool-web', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) } // FormData will set Content-Type automatically
         : {
             'Content-Type': 'application/json',
+            'X-Client-App': 'upwork-tool-web',
             ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
             ...headers,
         };
