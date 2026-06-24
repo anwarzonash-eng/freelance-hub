@@ -13,14 +13,14 @@ function SponsorBadge({ value }: { value: string }) {
 }
 import { getAllCVs, deleteCV } from '@/app/api_handlers/api/job-cvs.api'
 import { getAllApplicants } from '@/app/api_handlers/api/job-applicants.api'
+import { getAllCompanies } from '@/app/api_handlers/api/sponsored-companies.api'
 import { listAuthUsers } from '@/app/api_handlers/api/auth.api'
 import JobCVModal from '@/app/components/jobs/JobCVModal'
 
 const EMPTY_FILTERS = {
     keyword: '',
     applicant_id: '',
-    org_id: '',
-    org_name: '',
+    company_id: '',
     email: '',
     exp_yrs: '',
     created_by: '',
@@ -47,11 +47,8 @@ function filterCvs(list: any[], f: CvFilters) {
         out = out.filter(cv => String(cv.applicant_id ?? '') === f.applicant_id)
     }
 
-    if (f.org_id) {
-        out = out.filter(cv => String(cv.company_id ?? '') === f.org_id)
-    } else if (f.org_name) {
-        const q = f.org_name.trim().toLowerCase()
-        out = out.filter(cv => cv.organization_name?.toLowerCase().includes(q))
+    if (f.company_id) {
+        out = out.filter(cv => String(cv.company_id ?? '') === f.company_id)
     }
 
     if (f.email.trim()) {
@@ -88,9 +85,10 @@ export default function CvsPage() {
     const [applicants, setApplicants] = useState<{ id: string; name: string }[]>([])
 
     const [filters, setFilters] = useState<CvFilters>({ ...EMPTY_FILTERS })
-    const [orgQuery, setOrgQuery] = useState('')
-    const [showOrgDd, setShowOrgDd] = useState(false)
-    const orgDdRef = useRef<HTMLDivElement>(null)
+    const [companyQuery, setCompanyQuery] = useState('')
+    const [companyResults, setCompanyResults] = useState<{ id: string; name: string }[]>([])
+    const [showCompanyDd, setShowCompanyDd] = useState(false)
+    const companyDdRef = useRef<HTMLDivElement>(null)
     const hydratedFromUrl = useRef(false)
 
     const load = useCallback(async () => {
@@ -110,18 +108,25 @@ export default function CvsPage() {
     useEffect(() => {
         load().then(() => {
             const searchParams = new URLSearchParams(window.location.search)
+            const hydratedCompanyId = searchParams.get('company_id') || ''
             const fromUrl: CvFilters = {
-                keyword: searchParams.get('keyword') || searchParams.get('id') || searchParams.get('company_id') || searchParams.get('job_id') || '',
+                keyword: searchParams.get('keyword') || searchParams.get('id') || searchParams.get('job_id') || '',
                 applicant_id: searchParams.get('applicant_id') || '',
-                org_id: searchParams.get('org_id') || searchParams.get('company_id') || '',
-                org_name: searchParams.get('org_name') || '',
+                company_id: hydratedCompanyId,
                 email: searchParams.get('email') || '',
                 exp_yrs: searchParams.get('exp_yrs') || '',
                 created_by: searchParams.get('created_by') || '',
             }
             hydratedFromUrl.current = true
             setFilters(fromUrl)
-            if (fromUrl.org_name) setOrgQuery(fromUrl.org_name)
+
+            if (hydratedCompanyId) {
+                getAllCompanies({ keyword: hydratedCompanyId, limit: 1 }).then((res: any) => {
+                    const payload = res?.data ?? res
+                    const found = (payload?.data ?? [])[0]
+                    setCompanyQuery(found?.organisation_name || hydratedCompanyId)
+                }).catch(() => setCompanyQuery(hydratedCompanyId))
+            }
         })
     }, [])
 
@@ -149,11 +154,25 @@ export default function CvsPage() {
 
     useEffect(() => {
         const handler = (e: MouseEvent) => {
-            if (orgDdRef.current && !orgDdRef.current.contains(e.target as Node)) setShowOrgDd(false)
+            if (companyDdRef.current && !companyDdRef.current.contains(e.target as Node)) setShowCompanyDd(false)
         }
         document.addEventListener('mousedown', handler)
         return () => document.removeEventListener('mousedown', handler)
     }, [])
+
+    // Debounced company search-as-you-type (queries the backend, same pattern as Listed Jobs).
+    useEffect(() => {
+        if (!showCompanyDd) return
+        const q = companyQuery.trim()
+        const t = setTimeout(() => {
+            getAllCompanies({ keyword: q, limit: 20 }).then((res: any) => {
+                const payload = res?.data ?? res
+                const rows = Array.isArray(payload?.data) ? payload.data : []
+                setCompanyResults(rows.map((c: any) => ({ id: c.id, name: c.organisation_name || c.id })))
+            }).catch(() => setCompanyResults([]))
+        }, 250)
+        return () => clearTimeout(t)
+    }, [companyQuery, showCompanyDd])
 
     // Recompute the visible rows + keep the URL in sync whenever a filter changes.
     useEffect(() => {
@@ -163,39 +182,20 @@ export default function CvsPage() {
         router.replace(qs ? `/jobs/cvs?${qs}` : '/jobs/cvs')
     }, [allData, filters, router])
 
-    // Organizations seen across all loaded CVs, for the search-as-you-type dropdown.
-    const orgOptions = useMemo(() => {
-        const map = new Map<string, { id: string; name: string }>()
-        allData.forEach(cv => {
-            if (!cv.company_id && !cv.organization_name) return
-            const key = cv.company_id || cv.organization_name
-            if (!map.has(key)) map.set(key, { id: cv.company_id || '', name: cv.organization_name || cv.company_id })
-        })
-        return Array.from(map.values())
-    }, [allData])
-
-    const orgMatches = useMemo(() => {
-        const q = orgQuery.trim().toLowerCase()
-        if (!q) return orgOptions.slice(0, 20)
-        return orgOptions
-            .filter(o => o.name.toLowerCase().includes(q) || o.id.toLowerCase().includes(q))
-            .slice(0, 20)
-    }, [orgOptions, orgQuery])
-
-    const selectOrg = (o: { id: string; name: string }) => {
-        setFilters(f => ({ ...f, org_id: o.id, org_name: o.id ? '' : o.name }))
-        setOrgQuery(o.name)
-        setShowOrgDd(false)
+    const selectCompany = (c: { id: string; name: string }) => {
+        setFilters(f => ({ ...f, company_id: c.id }))
+        setCompanyQuery(c.name)
+        setShowCompanyDd(false)
     }
 
-    const clearOrg = () => {
-        setFilters(f => ({ ...f, org_id: '', org_name: '' }))
-        setOrgQuery('')
+    const clearCompany = () => {
+        setFilters(f => ({ ...f, company_id: '' }))
+        setCompanyQuery('')
     }
 
     const clearAllFilters = () => {
         setFilters({ ...EMPTY_FILTERS })
-        setOrgQuery('')
+        setCompanyQuery('')
         router.replace('/jobs/cvs')
     }
 
@@ -257,36 +257,36 @@ export default function CvsPage() {
                         </select>
                     </div>
 
-                    <div className="flex flex-col gap-0.5 relative" ref={orgDdRef}>
-                        <label className="text-[10px] text-gray-400 uppercase">Organization</label>
+                    <div className="flex flex-col gap-0.5 relative" ref={companyDdRef}>
+                        <label className="text-[10px] text-gray-400 uppercase">Company</label>
                         <div className="relative">
                             <input
-                                className={`border rounded pl-2 pr-6 py-1 text-xs focus:outline-none w-44 transition-colors ${filters.org_id || filters.org_name ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}
-                                placeholder="Search org by id or name…"
-                                value={orgQuery}
-                                onFocus={() => setShowOrgDd(true)}
+                                className={`border rounded pl-2 pr-6 py-1 text-xs focus:outline-none w-44 transition-colors ${filters.company_id ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}
+                                placeholder="Search company by id or name…"
+                                value={companyQuery}
+                                onFocus={() => setShowCompanyDd(true)}
                                 onChange={e => {
-                                    setOrgQuery(e.target.value)
-                                    setShowOrgDd(true)
-                                    if (filters.org_id || filters.org_name) setFilters(f => ({ ...f, org_id: '', org_name: '' }))
+                                    setCompanyQuery(e.target.value)
+                                    setShowCompanyDd(true)
+                                    if (filters.company_id) setFilters(f => ({ ...f, company_id: '' }))
                                 }}
                             />
-                            {(orgQuery || filters.org_id || filters.org_name) && (
-                                <button onClick={clearOrg} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                            {(companyQuery || filters.company_id) && (
+                                <button onClick={clearCompany} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                                     <X size={11} />
                                 </button>
                             )}
                         </div>
-                        {showOrgDd && (
+                        {showCompanyDd && (
                             <div className="absolute z-20 top-full mt-1 left-0 bg-white border border-gray-200 rounded shadow-lg p-1 min-w-[220px] max-h-60 overflow-y-auto">
-                                {orgMatches.length === 0 && (
-                                    <p className="text-[10px] text-gray-400 px-2 py-1">No matching organizations</p>
+                                {companyResults.length === 0 && (
+                                    <p className="text-[10px] text-gray-400 px-2 py-1">No matching companies</p>
                                 )}
-                                {orgMatches.map(o => (
-                                    <button key={o.id || o.name} type="button" onClick={() => selectOrg(o)}
+                                {companyResults.map(c => (
+                                    <button key={c.id} type="button" onClick={() => selectCompany(c)}
                                         className="w-full text-left px-2 py-1 text-xs text-gray-700 hover:bg-gray-50 rounded truncate">
-                                        {o.name}
-                                        {o.id && <span className="text-[9px] text-gray-400 ml-1">({o.id})</span>}
+                                        {c.name}
+                                        <span className="text-[9px] text-gray-400 ml-1">({c.id})</span>
                                     </button>
                                 ))}
                             </div>
@@ -428,7 +428,7 @@ export default function CvsPage() {
                                             <Pencil size={12} />
                                         </button>
                                         {row.job_id && (
-                                            <a href={`/jobs/listed-jobs?id=${row.job_id}`} title="View this job"
+                                            <a href={`/jobs/listed-jobs?job_id=${row.job_id}`} title="View this job"
                                                 className="p-1 text-gray-500 hover:text-teal-700 hover:bg-teal-50 rounded">
                                                 <Briefcase size={12} />
                                             </a>

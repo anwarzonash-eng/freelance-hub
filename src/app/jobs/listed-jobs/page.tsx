@@ -13,7 +13,7 @@ import { ApplicationStatusIcon, APPLICATION_STATUS_OPTIONS } from '@/app/compone
 import { timeAgo } from '@/app/utils/time'
 
 const LIMIT_OPTIONS = [25, 50, 100, 200]
-const EMPTY_FILTERS = { keyword: '', is_job_sponsored: '', type: '', job_category: '', company_id: '', has_cv: false, cv_submitted: '', application_status: '' }
+const EMPTY_FILTERS = { keyword: '', is_job_sponsored: '', type: '', job_category: '', company_id: '', has_cv: false, cv_submitted: '', application_status: '', job_id: '' }
 const APP_STATUS_FILTER_OPTIONS = [{ value: 'none', label: 'Not tracked' }, ...APPLICATION_STATUS_OPTIONS.filter(o => o.value)]
 
 function filtersToParams(f: typeof EMPTY_FILTERS, page: number, limit: number): URLSearchParams {
@@ -26,6 +26,7 @@ function filtersToParams(f: typeof EMPTY_FILTERS, page: number, limit: number): 
     if (f.has_cv) params.set('has_cv', 'true')
     if (f.cv_submitted) params.set('cv_submitted', f.cv_submitted)
     if (f.application_status) params.set('application_status', f.application_status)
+    if (f.job_id) params.set('job_id', f.job_id)
     if (page !== 1) params.set('page', String(page))
     if (limit !== 50) params.set('limit', String(limit))
     return params
@@ -108,6 +109,7 @@ export default function ListedJobsPage() {
             if (af.company_id) q.company_id = af.company_id
             if (af.cv_submitted) q.cv_submitted = af.cv_submitted
             if (af.application_status) q.application_status = af.application_status
+            if (af.job_id) q.job_ids = af.job_id
             if (af.has_cv) {
                 const map = latestCvMap ?? cvMap
                 const ids = Object.keys(map).join(',')
@@ -138,6 +140,7 @@ export default function ListedJobsPage() {
             has_cv: searchParams.get('has_cv') === 'true',
             cv_submitted: searchParams.get('cv_submitted') || '',
             application_status: searchParams.get('application_status') || '',
+            job_id: searchParams.get('job_id') || '',
         }
         const hydratedPage = Number(searchParams.get('page')) || 1
         const hydratedLimit = Number(searchParams.get('limit')) || 50
