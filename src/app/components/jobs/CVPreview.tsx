@@ -151,6 +151,27 @@ function SkillsLine({
     )
 }
 
+// Plain comma-separated rendering (no drag-reorder) used for each Core Skills category line.
+function CategorySkillsLine({
+    skills, descriptionLower, keywords, onHover,
+}: {
+    skills: string[]
+    descriptionLower: string
+    keywords: Set<string>
+    onHover?: (word: string | null) => void
+}) {
+    return (
+        <>
+            {skills.map((skill, i) => (
+                <span key={i}>
+                    {renderSkillMatch(skill, descriptionLower, keywords, onHover)}
+                    {i < skills.length - 1 ? ', ' : ''}
+                </span>
+            ))}
+        </>
+    )
+}
+
 function fmtDate(d: string | null | undefined): string {
     if (!d) return ''
     const [y, m] = d.split('-')
@@ -192,6 +213,7 @@ export interface CVProjectItem {
 
 export interface CVData {
     applicant_name?: string
+    headline?: string
     location?: string
     selected_email?: string
     selected_phone?: string
@@ -200,6 +222,7 @@ export interface CVData {
     portfolios?: string[]
     summary?: string
     skills?: string
+    core_skills?: { category: string; skills: string[] }[]
     experience_items?: CVExpItem[]
     education?: CVEduItem[]
     projects?: CVProjectItem[]
@@ -216,28 +239,35 @@ export interface CVFontSettings {
     sectionDivider: number
     subheading: number
     applicantName: number
+    headline: number
 }
 
 export const DEFAULT_FONT_SETTINGS: CVFontSettings = {
-    body: 11,
-    secondary: 10.5,
-    sectionDivider: 13,
-    subheading: 12,
-    applicantName: 14,
+    body: 10.5,
+    secondary: 9,
+    sectionDivider: 11,
+    subheading: 10.5,
+    applicantName: 21,
+    headline: 11.25,
 }
 
 export const FONT_SETTING_FIELDS: { key: keyof CVFontSettings; label: string; hint: string }[] = [
     { key: 'applicantName', label: 'Applicant Name', hint: 'Top heading' },
-    { key: 'sectionDivider', label: 'Section Dividers', hint: 'Summary, Skills, Work Experience…' },
+    { key: 'headline', label: 'Headline', hint: 'Role/title line under the name' },
+    { key: 'sectionDivider', label: 'Section Headings', hint: 'Summary, Skills, Work Experience…' },
     { key: 'subheading', label: 'Item Subheadings', hint: 'Job title/company, degree, project title' },
     { key: 'body', label: 'Body Text', hint: 'Summary, skills, bullets, descriptions' },
-    { key: 'secondary', label: 'Secondary Metadata', hint: 'Dates, tech list' },
+    { key: 'secondary', label: 'Secondary Metadata', hint: 'Contact line, dates' },
 ]
+
+const NAVY = '#1F3864'
+const SLATE = '#44546A'
+const TEXT_COLOR = '#262626'
 
 function Divider({ title, size }: { title: string; size: number }) {
     return (
-        <div style={{ marginTop: '14px', marginBottom: '5px', borderBottom: '1.5px solid #111', paddingBottom: '2px' }}>
-            <span style={{ fontWeight: 700, fontSize: `${size}pt`, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+        <div style={{ marginTop: '16px', marginBottom: '6px', borderBottom: `1px solid ${NAVY}`, paddingBottom: '2px' }}>
+            <span style={{ fontWeight: 700, fontSize: `${size}pt`, color: NAVY, textTransform: 'uppercase', letterSpacing: '0.6px' }}>
                 {title}
             </span>
         </div>
@@ -256,14 +286,25 @@ export default function CVPreview({
 }) {
     const fs: CVFontSettings = { ...DEFAULT_FONT_SETTINGS, ...fontSettings }
     const [editingBullet, setEditingBullet] = useState<{ exp: number; bullet: number } | null>(null)
-    const contactParts = [
-        data.location,
-        data.selected_email,
-        data.selected_phone,
-        data.linkedin,
-        data.github,
-        ...(data.portfolios ?? []),
-    ].filter(Boolean) as string[]
+    // Each part is either plain text or a clickable link (email, url, linkedin, github).
+    const contactParts: { label: string; href: string | null }[] = [
+        ...[data.location, data.selected_email, data.selected_phone].filter(Boolean).map(v => ({
+            label: v as string,
+            href: (v as string).includes('@') ? `mailto:${v}` : null,
+        })),
+        ...(data.linkedin ? [{
+            label: data.linkedin.replace(/^https?:\/\/(www\.)?/, ''),
+            href: data.linkedin.startsWith('http') ? data.linkedin : `https://${data.linkedin}`,
+        }] : []),
+        ...(data.github ? [{
+            label: data.github.replace(/^https?:\/\/(www\.)?/, ''),
+            href: data.github.startsWith('http') ? data.github : `https://${data.github}`,
+        }] : []),
+        ...(data.portfolios ?? []).filter(Boolean).map(v => ({
+            label: v,
+            href: v.startsWith('http') ? v : `https://${v}`,
+        })),
+    ]
 
     const experiences = data.experience_items ?? []
     const education = data.education ?? []
@@ -276,22 +317,43 @@ export default function CVPreview({
 
     return (
         <div style={{
-            fontFamily: 'Arial, Helvetica, sans-serif',
+            fontFamily: 'Calibri, Arial, system-ui, sans-serif',
             fontSize: `${fs.body}pt`,
-            color: '#000',
+            color: TEXT_COLOR,
             backgroundColor: '#fff',
-            padding: '36px 44px',
+            padding: '48px 58px',
             boxSizing: 'border-box',
-            lineHeight: '1.45',
+            lineHeight: '1.4',
         }}>
-            {/* Name */}
-            <div style={{ textAlign: 'center', marginBottom: '6px' }}>
-                <div style={{ fontWeight: 700, fontSize: `${fs.applicantName}pt`, letterSpacing: '0.3px' }}>
+            {/* Name block */}
+            <div>
+                <div style={{ fontWeight: 700, fontSize: `${fs.applicantName}pt`, color: NAVY, letterSpacing: '0.5px' }}>
                     {data.applicant_name || 'Your Name'}
                 </div>
+                {data.headline?.trim() && (
+                    <div style={{ fontStyle: 'italic', fontSize: `${fs.headline}pt`, color: SLATE, marginTop: '2px' }}>
+                        {data.headline}
+                    </div>
+                )}
                 {contactParts.length > 0 && (
-                    <div style={{ fontSize: `${fs.secondary}pt`, color: '#333', marginTop: '4px' }}>
-                        {contactParts.join(' | ')}
+                    <div style={{ fontSize: `${fs.secondary}pt`, color: SLATE, marginTop: '4px' }}>
+                        {contactParts.map((part, i) => (
+                            <span key={i}>
+                                {i > 0 && ' | '}
+                                {part.href ? (
+                                    <a
+                                        href={part.href}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        style={{ color: NAVY, textDecoration: 'underline' }}
+                                    >
+                                        {part.label}
+                                    </a>
+                                ) : (
+                                    part.label
+                                )}
+                            </span>
+                        ))}
                     </div>
                 )}
             </div>
@@ -300,12 +362,27 @@ export default function CVPreview({
             {data.summary?.trim() && (
                 <>
                     <Divider title="Summary" size={fs.sectionDivider} />
-                    <p style={{ margin: 0, textAlign: 'justify', fontSize: `${fs.body}pt` }}>{highlightWords(data.summary, keywords, onKeywordHover)}</p>
+                    <p style={{ margin: 0, fontSize: `${fs.body}pt`, lineHeight: '1.4' }}>{highlightWords(data.summary, keywords, onKeywordHover)}</p>
                 </>
             )}
 
-            {/* Skills */}
-            {data.skills?.trim() && (
+            {/* Core Skills (categorized) — preferred; falls back to the flat skills string for older CVs */}
+            {data.core_skills && data.core_skills.length > 0 ? (
+                <>
+                    <Divider title="Core Skills" size={fs.sectionDivider} />
+                    {data.core_skills.filter(g => g.category?.trim() && g.skills?.length > 0).map((group, gi) => (
+                        <p key={gi} style={{ margin: gi === 0 ? 0 : '4px 0 0', fontSize: `${fs.body}pt` }}>
+                            <span style={{ fontWeight: 700, color: SLATE }}>{group.category}:</span>{' '}
+                            <CategorySkillsLine
+                                skills={group.skills}
+                                descriptionLower={descriptionLower}
+                                keywords={keywords}
+                                onHover={onKeywordHover}
+                            />
+                        </p>
+                    ))}
+                </>
+            ) : data.skills?.trim() && (
                 <>
                     <Divider title="Skills" size={fs.sectionDivider} />
                     <p style={{ margin: 0, fontSize: `${fs.body}pt` }}>
@@ -339,48 +416,51 @@ export default function CVPreview({
                             .filter(x => x.text.trim())
 
                         return (
-                            <div key={i} style={{ marginTop: i === 0 ? '4px' : '10px' }}>
+                            <div key={i} style={{ marginTop: i === 0 ? '6px' : '14px' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                    <span style={{ fontWeight: 700, fontSize: `${fs.subheading}pt` }}>
+                                    <span style={{ fontWeight: 700, fontSize: `${fs.subheading}pt`, color: NAVY }}>
                                         {(exp.use_ai_title && exp.ai_title) ? exp.ai_title : exp.designation}
                                         {exp.company_name ? ` | ${exp.company_name}` : ''}
                                         {meta ? ` (${meta})` : ''}
                                     </span>
-                                    <span style={{ fontSize: `${fs.secondary}pt`, whiteSpace: 'nowrap', marginLeft: '10px', color: '#222' }}>
+                                    <span style={{ fontStyle: 'italic', fontSize: `${fs.secondary}pt`, whiteSpace: 'nowrap', marginLeft: '10px', color: SLATE }}>
                                         {dateRange}
                                     </span>
                                 </div>
-                                {bullets.map(({ text, idx }) => {
-                                    const isEditing = editingBullet?.exp === i && editingBullet?.bullet === idx
-                                    return (
-                                        <div key={idx} style={{ marginLeft: '14px', marginTop: '2px', fontSize: `${fs.body}pt`, display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
-                                            <span>-</span>
-                                            {isEditing ? (
-                                                <input
-                                                    autoFocus
-                                                    value={text}
-                                                    onChange={e => onBulletEdit?.(i, idx, e.target.value)}
-                                                    onBlur={() => setEditingBullet(null)}
-                                                    onKeyDown={e => {
-                                                        if (e.key === 'Enter' || e.key === 'Escape') e.currentTarget.blur()
-                                                    }}
-                                                    style={{
-                                                        flex: 1, fontSize: `${fs.body}pt`, fontFamily: 'inherit', lineHeight: 'inherit',
-                                                        border: '1px solid #999', borderRadius: '2px', padding: '0 2px', outline: 'none',
-                                                    }}
-                                                />
-                                            ) : (
-                                                <span
-                                                    onClick={() => onBulletEdit && setEditingBullet({ exp: i, bullet: idx })}
-                                                    style={{ flex: 1, cursor: onBulletEdit ? 'text' : undefined }}
-                                                    title={onBulletEdit ? 'Click to edit' : undefined}
-                                                >
-                                                    {highlightWords(text, keywords, onKeywordHover)}
-                                                </span>
-                                            )}
-                                        </div>
-                                    )
-                                })}
+                                {bullets.length > 0 && (
+                                    <ul style={{ margin: '4px 0 0', paddingLeft: '18px', listStyleType: 'disc' }}>
+                                        {bullets.map(({ text, idx }) => {
+                                            const isEditing = editingBullet?.exp === i && editingBullet?.bullet === idx
+                                            return (
+                                                <li key={idx} style={{ fontSize: `${fs.body}pt`, marginTop: idx === 0 ? 0 : '4px' }}>
+                                                    {isEditing ? (
+                                                        <input
+                                                            autoFocus
+                                                            value={text}
+                                                            onChange={e => onBulletEdit?.(i, idx, e.target.value)}
+                                                            onBlur={() => setEditingBullet(null)}
+                                                            onKeyDown={e => {
+                                                                if (e.key === 'Enter' || e.key === 'Escape') e.currentTarget.blur()
+                                                            }}
+                                                            style={{
+                                                                width: '100%', fontSize: `${fs.body}pt`, fontFamily: 'inherit', lineHeight: 'inherit',
+                                                                border: '1px solid #999', borderRadius: '2px', padding: '0 2px', outline: 'none',
+                                                            }}
+                                                        />
+                                                    ) : (
+                                                        <span
+                                                            onClick={() => onBulletEdit && setEditingBullet({ exp: i, bullet: idx })}
+                                                            style={{ cursor: onBulletEdit ? 'text' : undefined }}
+                                                            title={onBulletEdit ? 'Click to edit' : undefined}
+                                                        >
+                                                            {highlightWords(text, keywords, onKeywordHover)}
+                                                        </span>
+                                                    )}
+                                                </li>
+                                            )
+                                        })}
+                                    </ul>
+                                )}
                             </div>
                         )
                     })}
@@ -394,12 +474,12 @@ export default function CVPreview({
                     {education.map((edu, i) => (
                         <div key={i} style={{ marginTop: i === 0 ? '4px' : '6px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                <span style={{ fontWeight: 700, fontSize: `${fs.subheading}pt` }}>
+                                <span style={{ fontWeight: 700, fontSize: `${fs.subheading}pt`, color: NAVY }}>
                                     {edu.degree_title}
                                     {edu.university_name ? ` | ${edu.university_name}` : ''}
                                 </span>
                                 {(edu.start_date || edu.end_date) && (
-                                    <span style={{ fontSize: `${fs.secondary}pt`, color: '#333', whiteSpace: 'nowrap', marginLeft: '10px' }}>
+                                    <span style={{ fontStyle: 'italic', fontSize: `${fs.secondary}pt`, color: SLATE, whiteSpace: 'nowrap', marginLeft: '10px' }}>
                                         {[fmtDate(edu.start_date), edu.end_date ? fmtDate(edu.end_date) : ''].filter(Boolean).join(' - ')}
                                     </span>
                                 )}
@@ -418,27 +498,27 @@ export default function CVPreview({
                             ? `${fmtDate(proj.start_date)} - Present`
                             : [fmtDate(proj.start_date), proj.end_date ? fmtDate(proj.end_date) : ''].filter(Boolean).join(' - ')
                         return (
-                            <div key={i} style={{ marginTop: i === 0 ? '4px' : '10px' }}>
+                            <div key={i} style={{ marginTop: i === 0 ? '6px' : '14px' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                    <span style={{ fontWeight: 700, fontSize: `${fs.subheading}pt` }}>
+                                    <span style={{ fontWeight: 700, fontSize: `${fs.subheading}pt`, color: NAVY }}>
                                         {proj.title}
-                                        {proj.link ? <span style={{ fontWeight: 400, fontSize: `${fs.secondary}pt`, color: '#444', marginLeft: '6px' }}>({proj.link})</span> : ''}
+                                        {proj.link ? <span style={{ fontWeight: 400, fontStyle: 'italic', fontSize: `${fs.secondary}pt`, color: SLATE, marginLeft: '6px' }}>({proj.link})</span> : ''}
                                     </span>
                                     {dateRange && (
-                                        <span style={{ fontSize: `${fs.secondary}pt`, color: '#222', whiteSpace: 'nowrap', marginLeft: '10px' }}>
+                                        <span style={{ fontStyle: 'italic', fontSize: `${fs.secondary}pt`, color: SLATE, whiteSpace: 'nowrap', marginLeft: '10px' }}>
                                             {dateRange}
                                         </span>
                                     )}
                                 </div>
                                 {proj.technologies?.trim() && (
-                                    <div style={{ fontSize: `${fs.secondary}pt`, color: '#333', marginTop: '1px' }}>
-                                        <span style={{ fontWeight: 600 }}>Technologies:</span> {proj.technologies}
+                                    <div style={{ fontSize: `${fs.secondary}pt`, color: SLATE, marginTop: '2px' }}>
+                                        <span style={{ fontWeight: 700 }}>Technologies:</span> {proj.technologies}
                                     </div>
                                 )}
                                 {proj.description?.trim() && (
-                                    <div style={{ fontSize: `${fs.body}pt`, marginTop: '2px', marginLeft: '14px' }}>
-                                        - {proj.description}
-                                    </div>
+                                    <ul style={{ margin: '4px 0 0', paddingLeft: '18px', listStyleType: 'disc' }}>
+                                        <li style={{ fontSize: `${fs.body}pt` }}>{proj.description}</li>
+                                    </ul>
                                 )}
                             </div>
                         )

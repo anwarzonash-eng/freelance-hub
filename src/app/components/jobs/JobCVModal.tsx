@@ -50,10 +50,7 @@ const JOB_NATURES = [
 ];
 
 function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 // Highlights ATS keyword matches inside a plain-text string by wrapping them
@@ -111,6 +108,7 @@ function buildPrompt(
   jobTitle: string,
   jobDescription: string,
   numExperiences: number,
+  linkedInTitles: string,
 ): string {
   return `You are an expert resume writer, ATS optimization specialist, and recruitment analyst.
 
@@ -140,6 +138,10 @@ Do not assume the role is technical unless the Job Description indicates it.
 INPUTS
 ======
 
+LinkedIn Titles:
+${linkedInTitles}
+
+
 Job Title:
 ${jobTitle}
 
@@ -155,127 +157,198 @@ PART 1 — ATS SKILLS EXTRACTION
 
 Analyze the Job Title and Job Description.
 
-Generate a single comma-separated string named "skills".
+Generate a structured Core Skills section organized into logical categories.
 
 OBJECTIVE
 
-Create a skills section that maximizes ATS relevance while remaining credible, concise, and recruiter-friendly.
+Create an ATS-optimized, recruiter-friendly Core Skills section that mirrors how experienced professionals present their expertise.
 
-The final skills section should look like it was written by an experienced professional, not generated to maximize keyword density.
+The AI should intelligently determine both:
 
-SKILL EXTRACTION PROCESS
+• the skill categories
+• the skills belonging to each category
 
-Step 1 — Extract Explicit Requirements
+The categories must be derived from the Job Description and profession.
 
-Identify all technologies, tools, platforms, frameworks, methodologies, regulations, certifications, domain knowledge areas, professional competencies, responsibilities, and technical capabilities explicitly mentioned in the Job Description.
+Do NOT assume the role is technical.
 
-These are mandatory and must be prioritized.
+========================================
+STEP 1 — EXTRACT ALL SKILLS
+========================================
 
-Step 2 — Add Strongly Implied Skills
+Extract all relevant:
 
-Include only skills that are directly required to perform the responsibilities described in the Job Description, even if not explicitly stated.
+• Technologies
+• Frameworks
+• Platforms
+• Programming Languages
+• Databases
+• Cloud Providers
+• Tools
+• Methodologies
+• Professional Competencies
+• Engineering Practices
+• Industry Knowledge
+• Business Domains
+• Certifications
+• Regulations
+• Processes
 
-Examples:
+Prioritize explicit Job Description requirements.
 
-* REST API Development may support API Development
-* Systems Integration may support Integration Engineering
-* Design Patterns may support Software Architecture
-* Release Management may support Software Delivery
+========================================
+STEP 2 — GROUP INTO CATEGORIES
+========================================
 
-Do not add skills with weak or indirect relevance.
+Group related skills into meaningful categories.
 
-Step 3 — Add Limited ATS Supporting Skills
+Examples only:
 
-Only where appropriate, include a small number of industry-standard skills, alternative terminology, or closely related capabilities commonly searched by recruiters for the target role.
+Software Engineering
 
-Every additional skill must have a clear connection to the Job Description.
+Front-End
 
-SKILL PRIORITIZATION
+Back-End
 
-Order skills by relevance:
+Mobile
 
-1. Explicit Job Description requirements
-2. Core technical or professional capabilities
-3. Strongly implied skills
-4. Relevant supporting skills
+Cloud
 
-Most important skills must appear first.
+Cloud & DevOps
 
-SKILLS RULES
+Infrastructure
 
-* Prioritize exact Job Description terminology whenever possible.
-* Prefer recognized professional skills over broad concepts.
-* Prefer concise skill names.
-* Avoid unnecessary fragmentation of related skills.
-* Use the most widely recognized ATS keyword when multiple variations exist.
-* Every skill must be relevant to the target role.
-* Every skill must be defensible based on the Job Description.
-* Do not include duplicate or near-duplicate skills.
-* Do not include skills solely to increase keyword count.
-* Do not include skills unrelated to the role.
-* Do not include generic personality traits.
-* Do not include vague business buzzwords.
-* Do not include filler keywords.
+Platform
 
-EXCLUDED TERMS
+Data
 
-Unless explicitly required by the Job Description, exclude:
+Databases
 
-Communication
-Collaboration
-Team Player
-Problem Solving
-Results Driven
-Hard Working
-Leadership
-Self-Motivated
-Detail Oriented
-Fast Learner
-Strategic Thinker
-Customer Focused
+AI & Automation
 
-and similar generic CV buzzwords.
+Machine Learning
 
-SKILL COUNT
+Testing
 
-Do not target a fixed number of skills.
+QA
 
-Generate only the number of skills required to accurately represent the role.
+Security
 
-Include all high-value requirements.
+Architecture
 
-Stop adding skills when no additional skill meaningfully improves ATS relevance or recruiter confidence.
+Engineering Practices
 
-QUALITY OVER QUANTITY
+Business Analysis
 
-A concise list of highly relevant skills is preferred over a larger list containing weaker or partially relevant skills.
+Accounting
 
-VALIDATION
+Finance
 
-Before generating the final skills string:
+Marketing
 
-1. Extract all unique skill phrases from the Job Description.
-2. Ensure all critical Job Description requirements are represented.
-3. Remove duplicates and near-duplicates.
-4. Remove generic recruiter buzzwords.
-5. Remove low-value ATS filler.
-6. Remove skills that a hiring manager would not reasonably expect to see in a skills section.
-7. Confirm every remaining skill is directly relevant to the target role.
+Project Management
 
+Healthcare
+
+Operations
+
+Sales
+
+Customer Success
+
+Compliance
+
+Legal
+
+Education
+
+Human Resources
+
+The categories are NOT fixed.
+
+Generate only the categories that genuinely improve readability.
+
+Do not create unnecessary categories.
+
+========================================
+STEP 3 — POPULATE EACH CATEGORY
+========================================
+
+Populate each category using:
+
+1. Explicit Job Description skills
+2. Strongly implied skills
+3. Small number of ATS-supporting skills
+
+Do not invent unrelated technologies.
+
+Do not keyword stuff.
+
+Do not duplicate skills across categories.
+
+========================================
+CATEGORY RULES
+========================================
+
+• Maximum 6 categories.
+• Minimum 3 categories when appropriate.
+• Categories should contain between 3–8 skills.
+• Order categories by importance for the target role.
+• Order skills inside each category by relevance.
+• Use concise skill names.
+• Prefer widely recognized ATS terminology.
+
+========================================
+SKILL RULES
+========================================
+
+Include:
+
+• Technologies
+• Platforms
+• Frameworks
+• Languages
+• Databases
+• Cloud
+• Engineering Practices
+• Domain Knowledge
+• Methodologies
+
+Avoid:
+
+• Leadership
+• Communication
+• Team Player
+• Hard Working
+• Results Driven
+• Self Motivated
+• Problem Solving
+• Fast Learner
+
+Avoid generic CV buzzwords.
+
+========================================
 RECRUITER REVIEW
+========================================
 
-Review the final skills list as a hiring manager.
+The generated Core Skills section should look like it was written by an experienced professional.
 
-Ask:
+Recruiters should immediately understand the candidate's expertise within 5 seconds.
 
-* Does this accurately represent the role?
-* Does this look like a genuine professional CV?
-* Would a recruiter immediately understand the candidate's expertise?
-* Does the list avoid obvious AI keyword stuffing?
+ATS should extract every important keyword naturally.
 
-If any skill weakens credibility, remove it.
+========================================
+VALIDATION
+========================================
 
-Return a single comma-separated string only.
+Before returning:
+
+• Remove duplicates.
+• Remove weak skills.
+• Remove generic buzzwords.
+• Ensure every category has a clear purpose.
+• Ensure every skill directly supports the target role.
+• Ensure categories are ordered by relevance.
 
 
 ========================================
@@ -358,57 +431,459 @@ Before generating the summary:
 PART 3 — EXPERIENCE JOB TITLES
 ==============================
 
-Generate a realistic job title for each of the ${numExperiences} experience(s).
+Generate the CV experience titles using the candidate's existing LinkedIn experience titles.
 
-Requirements:
-* Titles must be closely related to the target Job Title.
-* Use real-world job titles commonly found on CVs, LinkedIn, and job boards.
-* Show realistic career progression.
-* Most recent experience should be closest to the target role.
-* Older experiences should represent earlier stages of the career.
-* Keep titles ATS-friendly.
-* Avoid unusual or invented titles.
-* Avoid repeating the exact same title for every experience.
+The LinkedIn titles are the source of truth and MUST remain the foundation of every generated experience title.
 
-Career Progression Rules:
-* experience1 = most recent role
-* experience2 = previous role
-* experience3 = older role (and so on)
+The objective is to improve ATS relevance while preserving consistency between the CV and LinkedIn.
 
-Recent roles should demonstrate greater responsibility, specialization, ownership, or expertise.
-Older roles should demonstrate foundational experience and career development.
+========================================
+INPUT
+========================================
+
+You will receive the candidate's LinkedIn experience titles in chronological order (most recent first).
+
+Example:
+
+experience1 = Senior Software Engineer
+experience2 = Senior Software Engineer
+experience3 = Lead Software Engineer
+experience4 = Senior Software Engineer
+experience5 = Senior Software Engineer
+experience6 = Software Engineer
+experience7 = Software Engineer
+
+These titles represent the candidate's official career history.
+
+========================================
+RULES
+========================================
+
+1. NEVER replace the original LinkedIn title.
+
+Incorrect:
+
+Senior Backend Engineer
+
+Backend Engineer
+
+Product Engineer
+
+React Developer
+
+.NET Developer
+
+DevOps Engineer
+
+Correct:
+
+Senior Software Engineer
+
+Lead Software Engineer
+
+Software Engineer
+
+2. Preserve the original LinkedIn title exactly.
+
+Never change:
+
+• seniority
+• wording
+• career progression
+
+3. You MAY append a concise engineering specialization inside parentheses ONLY when it genuinely improves ATS relevance for the target role.
+
+Example:
+
+Senior Software Engineer
+↓
+
+Senior Software Engineer (Backend)
+
+4. The specialization must NEVER replace the original title.
+
+The original LinkedIn title must always remain visible.
+
+5. Apply a specialization ONLY to the most recent experience(s) that are directly relevant.
+
+Normally:
+• first experience
+• first two experiences
+
+Maximum:
+• first three experiences
+
+Older experiences should normally remain unchanged.
+
+6. Do NOT append a specialization to every experience.
+
+A CV where every experience contains a specialization appears artificial and less credible.
+
+7. Determine the specialization from BOTH the Job Description and the Job Title.
+
+Analyze:
+
+• responsibilities
+• required technologies
+• engineering domain
+• day-to-day work
+
+Do NOT rely only on the Job Title.
+
+Example:
+
+Job Title:
+Senior .NET Developer
+
+If the Job Description focuses on backend APIs:
+
+Senior Software Engineer (Backend)
+
+If the Job Description focuses on Blazor and ASP.NET:
+
+Senior Software Engineer (Full Stack)
+
+The specialization should represent the engineering domain rather than the programming language or framework.
+
+8. Keep specializations concise.
+
+Rules:
+
+• Maximum 2 words.
+• Use broad engineering domains.
+• Avoid technology names.
+• Avoid the word "Focused".
+• Avoid unnecessary qualifiers.
+
+Examples:
+
+(Backend)
+
+(Frontend)
+
+(Full Stack)
+
+(AI)
+
+(Cloud)
+
+(Cloud & DevOps)
+
+(Data)
+
+(Platform)
+
+(Systems)
+
+(Integration)
+
+(Product)
+
+(QA & Test)
+
+(Security)
+
+These are examples only.
+
+Generate the specialization that best represents the engineering domain described in the Job Description.
+
+9. Never create technology-specific specializations.
+
+Incorrect:
+
+(Node.js)
+
+(.NET)
+
+(Java)
+
+(React)
+
+(Python)
+
+(AWS)
+
+(Kubernetes)
+
+Correct:
+
+(Backend)
+
+(Frontend)
+
+(Full Stack)
+
+(Cloud)
+
+(AI)
+
+10. If no specialization meaningfully improves ATS matching, leave the title unchanged.
+========================================
+CAREER PROGRESSION
+========================================
+
+Always preserve the candidate's original career progression.
+
+Example:
+
+experience1
+Senior Software Engineer (Backend Focused)
+
+experience2
+Senior Software Engineer (Backend Focused)
+
+experience3
+Lead Software Engineer
+
+experience4
+Senior Software Engineer
+
+experience5
+Senior Software Engineer
+
+experience6
+Software Engineer
+
+experience7
+Software Engineer
+
+========================================
+OBJECTIVE
+========================================
+
+The generated titles should:
+
+• remain fully consistent with LinkedIn
+• improve ATS keyword relevance
+• look natural to recruiters
+• avoid rewriting employment history
+• avoid exaggerated or invented job titles
+• preserve credibility while tailoring the CV to the target role
 
 ========================================
 PART 4 — EXPERIENCE CONTENT
-===========================
+========================================
 
-Generate professional experience bullet points for each of the ${numExperiences} experience(s).
+Generate professional experience bullet points for each of the
+{Number Of Past Experiences} experience(s), using:
+- The Job Description
+- The Generated Skills List
+- The raw input details for that specific experience (role, company,
+  duration, any notes provided about actual work)
 
-Bullet Count Rules:
+----------------------------------------
+BULLET COUNT
+----------------------------------------
 * If Number Of Past Experiences <= 3: generate exactly 4 bullet points per experience.
 * If Number Of Past Experiences > 3: generate exactly 3 bullet points per experience.
 
-Each bullet:
-* Must be under 180 characters.
-* Must focus on outcomes and impact rather than responsibilities.
-* Must reference skills from the generated skills list naturally.
-* Must include important Job Description keywords where relevant.
-* Must sound realistic.
-* Must not contain unrealistic metrics.
-* Must not contain generic filler.
+----------------------------------------
+BULLET STRUCTURE (required for every bullet)
+----------------------------------------
+Each bullet must follow a problem/context → action → outcome shape:
+1. A situation, goal, or problem (implicit or explicit)
+2. A specific action this person took (a decision, a system built, a process changed)
+3. A result or change that followed
+
+A bullet that only states "Built/Developed/Implemented [tech] for [vague goal]"
+with no specific detail and no outcome is NOT acceptable, even if grammatically
+correct and keyword-rich.
+
+----------------------------------------
+SPECIFICITY REQUIREMENTS
+----------------------------------------
+* Each bullet must contain at least ONE concrete, specific detail: a named
+  system/feature type, a workflow, a constraint, a decision, or a scope indicator.
+  ("Redesigned the document-intake flow to cut manual review steps" is acceptable;
+  "Built document processing workflows supporting operations" is not.)
+* Each bullet must be DISTINGUISHABLE from every other bullet in this CV.
+  No two bullets — within an experience or across experiences — may share the
+  same verb-stack-noun sentence pattern.
+* No bullet within the same experience block may start with the same verb as
+  another bullet in that block. Vary sentence openings across the whole CV,
+  not just the first word.
+
+----------------------------------------
+METRICS POLICY
+----------------------------------------
+* Do NOT invent precise, unverifiable statistics (no fabricated %, $ amounts,
+  exact counts, or time savings figures).
+* You MAY use realistic qualitative or relative scale language where it fits
+  naturally: "cut manual review time," "reduced a multi-step process to one
+  step," "supported [N]-person team," "handled [type] at production scale."
+  Use such phrasing only when it's a reasonable, non-fabricated inference —
+  if there's no basis for it, omit it rather than guess.
+* Absence of a metric is preferable to a fabricated one. Do not pad a bullet
+  with vague impact language ("greatly improved," "significantly increased")
+  as a substitute for a real detail — that is filler and is not acceptable.
+
+----------------------------------------
+KEYWORD & SKILLS USAGE
+----------------------------------------
+* Each bullet should naturally reference 1–2 items from the Generated Skills
+  List where genuinely relevant to that role's actual scope.
+* Reference Job Description keywords/phrasing only where they plausibly
+  describe real work for that role — do not lift JD phrases verbatim across
+  multiple roles just to raise keyword density.
+* Keyword/skill inclusion must never come at the expense of the structure and
+  specificity requirements above. A specific, realistic bullet with fewer
+  keywords is preferred over a generic bullet stuffed with JD language.
+* Do not repeat the same JD phrase (e.g. "document processing workflows")
+  verbatim in more than one experience block.
+
+----------------------------------------
+LENGTH & FORMAT
+----------------------------------------
+* Each bullet must be under 180 characters.
+* Plain text, no markdown, no bullet symbols in the string itself.
+* Past roles use past tense; current role (if marked ongoing) uses past tense
+  for completed work, present tense only if explicitly framed as ongoing.
+
+----------------------------------------
+CAREER PROGRESSION CHECK
+----------------------------------------
+Before finalizing, compare job titles across experiences in chronological order.
+* If a later (more recent) role has a clearly lower-seniority title than an
+  earlier role (e.g. "Lead Engineer" followed later by "Software Engineer"
+  with no indication of an intentional lateral move), do NOT silently
+  generate bullets that ignore this.
+* Instead, either:
+  (a) keep the titles as provided by the user exactly as-is and add a
+      "progression_flag" field in the output noting the discrepancy, or
+  (b) if instructed to auto-correct titles, adjust only with a corresponding
+      "title_adjusted" note — never silently alter without flagging.
+* Do not fabricate a promotion narrative in the bullets to paper over a title
+  regression.
+
+----------------------------------------
+REALISM CHECK
+----------------------------------------
+Each bullet must read as something a real engineer would write about real
+work — specific enough that it couldn't be copy-pasted into an unrelated
+CV for the same job title. If a bullet could apply to literally any
+candidate applying to this job, rewrite it.
 
 ========================================
 VALIDATION REQUIREMENTS
-=======================
-
+========================================
 Before generating output, internally verify:
-* Skills accurately reflect the Job Description.
-* No duplicate skills exist.
+* Every bullet follows problem/context → action → outcome structure.
+* Every bullet contains at least one concrete, specific detail.
+* No two bullets (within or across experiences) share sentence structure or
+  opening verb.
+* No fabricated precise metrics exist anywhere.
+* No JD phrase is repeated verbatim across more than one experience.
+* Skills referenced are drawn only from the Generated Skills List, no duplicates.
 * Summary contains important Job Description keywords.
-* Experience job titles show logical career progression.
+* Job titles checked for logical career progression; discrepancies flagged
+  per the Career Progression Check, not silently passed.
 * Bullet count rules are respected.
 * Output is valid JSON.
 * No markdown, no explanations, no comments, no extra text.
+
+========================================
+PART 5 — CV HEADLINE
+====================
+
+Analyze the Job Title and Job Description.
+
+Generate a single ATS-optimized CV headline.
+
+OBJECTIVE
+
+Create a concise, recruiter-friendly headline that immediately communicates the candidate's professional identity and primary specialization.
+
+The headline should maximize ATS relevance while remaining natural, credible, and consistent with how recruiters search for candidates.
+
+The headline should represent the role the candidate is applying for rather than simply repeating the employer's Job Title.
+
+========================================
+HEADLINE RULES
+========================================
+
+1. Generate ONE professional headline only.
+
+Examples:
+
+Senior Backend Engineer
+
+Senior Software Engineer
+
+Senior Frontend Engineer
+
+Senior Full Stack Engineer
+
+Senior AI Solutions Engineer
+
+Cloud Platform Engineer
+
+Lead Software Engineer
+
+Data Engineer
+
+Software Engineer
+
+2. Determine the most appropriate headline by analyzing BOTH:
+
+• Job Title
+• Job Description
+
+3. Prefer widely recognized industry job titles.
+
+4. Do NOT invent uncommon or company-specific titles.
+
+5. Do NOT simply copy the Job Title.
+
+Example
+
+Job Title:
+Backend Product Engineer
+
+Preferred Headline:
+Backend Software Engineer
+
+6. Keep the headline concise.
+
+Maximum:
+6 words
+
+7. The headline should clearly communicate:
+
+• Professional identity
+• Primary engineering domain
+• Seniority
+
+8. Preserve realistic seniority.
+
+Do not upgrade or downgrade the candidate's apparent level.
+
+9. Use terminology recruiters commonly search for.
+
+10. Do NOT include:
+
+• technologies
+• programming languages
+• cloud providers
+• certifications
+• years of experience
+• marketing language
+• buzzwords
+
+Those belong elsewhere in the CV.
+
+11. The headline must sound natural on a professional resume.
+
+========================================
+VALIDATION
+========================================
+
+Before returning:
+
+• Confirm it is a commonly recognized job title.
+• Confirm it accurately reflects the Job Description.
+• Confirm it improves ATS relevance.
+• Confirm it is concise.
+• Confirm it is suitable as the primary headline immediately below the candidate's name.
 
 ========================================
 OUTPUT FORMAT
@@ -417,7 +892,37 @@ OUTPUT FORMAT
 Return ONLY valid JSON — no markdown code blocks, no extra text.
 
 {
-  "skills": "skill1, skill2, skill3, skill4",
+  "cv_headline": "Senior Backend Engineer",
+  "core_skills": [
+    {
+      "category": "Back-End",
+      "skills": [
+        "Node.js",
+        "TypeScript",
+        "REST API Development",
+        "System Design",
+        "Software Architecture"
+      ]
+    },
+    {
+      "category": "Cloud",
+      "skills": [
+        "Google Cloud Platform (GCP)",
+        "PostgreSQL",
+        "Terraform"
+      ]
+    },
+    {
+      "category": "Engineering Practices",
+      "skills": [
+        "Code Reviews",
+        "Automated Testing",
+        "Agile Development",
+        "Software Delivery"
+      ]
+    }
+  ]
+  ,
   "summary": "Professional summary here",
   "experience_titles": {
     "experience1": "Most Recent Job Title",
@@ -444,7 +949,10 @@ Return ONLY valid JSON — no markdown code blocks, no extra text.
 // ─── Expected JSON format (shown on error) ───────────────────────────────────
 
 const EXPECTED_FORMAT = `{
-  "skills": "skill1, skill2, skill3",
+  "core_skills": [
+    { "category": "Back-End", "skills": ["Node.js", "TypeScript"] },
+    { "category": "Cloud", "skills": ["AWS", "Terraform"] }
+  ],
   "summary": "Professional summary here",
   "experience_titles": {
     "experience1": "Most Recent Job Title",
@@ -491,6 +999,7 @@ interface Props {
 const INIT_FORM = {
   cv_title: "",
   applicant_name: "",
+  headline: "",
   target_job_title: "",
   job_description: "",
   raw_description: "",
@@ -545,6 +1054,9 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
   const [experienceItems, setExperienceItems] = useState<CVExpItem[]>([]);
   const [education, setEducation] = useState<CVEduItem[]>([]);
   const [projects, setProjects] = useState<CVProjectItem[]>([]);
+  const [coreSkills, setCoreSkills] = useState<
+    { category: string; skills: string[] }[]
+  >([]);
   const [saving, setSaving] = useState(false);
   const [savedId, setSavedId] = useState<number | null>(null);
   const [fontSettings, setFontSettings] = useState<CVFontSettings>({
@@ -568,6 +1080,7 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
   const [showJobContext, setShowJobContext] = useState(true);
   const [showContact, setShowContact] = useState(true);
   const [showCVContent, setShowCVContent] = useState(true);
+  const [showLegacySkills, setShowLegacySkills] = useState(false);
   const [showJsonPaste, setShowJsonPaste] = useState(true);
   const [showWorkExperience, setShowWorkExperience] = useState(true);
   const [showRawDescriptionView, setShowRawDescriptionView] = useState(false);
@@ -668,6 +1181,7 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
       setForm({
         cv_title: cv.cv_title ?? "",
         applicant_name: cv.applicant_name ?? "",
+        headline: cv.headline ?? "",
         target_job_title: cv.target_job_title ?? "",
         job_description: cv.job_description ?? "",
         raw_description: cv.raw_description ?? "",
@@ -687,7 +1201,11 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
       setExperienceItems(cv.experience_items ?? []);
       setEducation(cv.education ?? []);
       setProjects(cv.projects ?? []);
-      setFontSettings({ ...DEFAULT_FONT_SETTINGS, ...(cv.font_settings ?? {}) });
+      setCoreSkills(cv.core_skills ?? []);
+      setFontSettings({
+        ...DEFAULT_FONT_SETTINGS,
+        ...(cv.font_settings ?? {}),
+      });
       if (cv.applicant_id) setSelectedApplicantId(cv.applicant_id);
     } else if (job) {
       setForm((f) => ({
@@ -851,15 +1369,50 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
   const removeProject = (i: number) =>
     setProjects((p) => p.filter((_, idx) => idx !== i));
 
+  // ── Core Skills (categorized) helpers ────────────────────────────────────
+  const addSkillCategory = () =>
+    setCoreSkills((c) => [...c, { category: "", skills: [] }]);
+  const updateSkillCategory = (
+    i: number,
+    updates: Partial<{ category: string; skills: string[] }>,
+  ) =>
+    setCoreSkills((c) =>
+      c.map((g, idx) => (idx === i ? { ...g, ...updates } : g)),
+    );
+  const removeSkillCategory = (i: number) =>
+    setCoreSkills((c) => c.filter((_, idx) => idx !== i));
+
   // ── Prompt ───────────────────────────────────────────────────────────────
   const canCopyPrompt =
     form.target_job_title.trim() && experienceItems.length > 0;
+
+  // The applicant's own (non-AI) titles + date ranges for the experiences selected for this CV.
+  const linkedInTitles = (() => {
+    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+    const fmt = (d: string | null | undefined) => {
+      if (!d) return ''
+      const [y, m] = d.split('-')
+      const idx = parseInt(m) - 1
+      return `${MONTHS[idx] ?? m} ${y}`
+    }
+    const lines = experienceItems
+      .map((exp, i) => {
+        if (!exp.designation) return null
+        const start = fmt(exp.from_date)
+        const end = exp.currently_working ? 'Present' : fmt(exp.to_date)
+        const dateRange = start ? `${start} – ${end || 'Present'}` : ''
+        return `experience${i + 1} = ${exp.designation}${dateRange ? ` (${dateRange})` : ''}`
+      })
+      .filter(Boolean)
+    return lines.length ? lines.join('\n') : '(none)'
+  })()
 
   const copyPrompt = () => {
     const prompt = buildPrompt(
       form.target_job_title.trim(),
       form.raw_description.trim() || "(No job description provided)",
       experienceItems.length,
+      linkedInTitles,
     );
     navigator.clipboard.writeText(prompt).then(() => {
       setPromptCopied(true);
@@ -880,8 +1433,23 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
       return;
     }
 
-    if (typeof parsed.skills !== "string" || !parsed.skills.trim())
-      errors.push('"skills" must be a non-empty string');
+    if (!Array.isArray(parsed.core_skills) || parsed.core_skills.length === 0) {
+      errors.push(
+        '"core_skills" must be a non-empty array of { category, skills[] }',
+      );
+    } else if (
+      parsed.core_skills.some(
+        (g: any) =>
+          typeof g.category !== "string" ||
+          !g.category.trim() ||
+          !Array.isArray(g.skills) ||
+          g.skills.some((s: any) => typeof s !== "string"),
+      )
+    ) {
+      errors.push(
+        'Each "core_skills" item must have a "category" string and a "skills" array of strings',
+      );
+    }
     if (typeof parsed.summary !== "string" || !parsed.summary.trim())
       errors.push('"summary" must be a non-empty string');
     if (
@@ -917,7 +1485,8 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
       return;
     }
 
-    if (parsed.skills) set("skills", parsed.skills);
+    if (parsed.core_skills) setCoreSkills(parsed.core_skills);
+    if (parsed.cv_headline) set("headline", parsed.cv_headline);
     if (parsed.summary) set("summary", parsed.summary);
 
     setExperienceItems((items) =>
@@ -946,6 +1515,7 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
   // ── CV preview data ──────────────────────────────────────────────────────
   const cvData: CVData = {
     applicant_name: form.applicant_name,
+    headline: form.headline,
     location: form.location,
     selected_email: form.selected_email,
     selected_phone: form.selected_phone,
@@ -954,6 +1524,7 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
     portfolios,
     summary: form.summary,
     skills: form.skills,
+    core_skills: coreSkills,
     experience_items: experienceItems,
     education,
     projects,
@@ -1015,6 +1586,9 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
       education,
       projects: projects.filter((p) => p.title.trim()),
       font_settings: fontSettings,
+      core_skills: coreSkills.filter(
+        (g) => g.category.trim() && g.skills.length > 0,
+      ),
     };
   };
 
@@ -1133,7 +1707,10 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
         <div className="flex items-center gap-4 flex-wrap px-4 py-2 border-b border-gray-200 shrink-0 bg-blue-50/40">
           {FONT_SETTING_FIELDS.map((f) => (
             <div key={f.key} className="flex flex-col gap-0.5">
-              <label className="text-[10px] text-gray-500 font-medium" title={f.hint}>
+              <label
+                className="text-[10px] text-gray-500 font-medium"
+                title={f.hint}
+              >
                 {f.label}
               </label>
               <div className="flex items-center gap-1">
@@ -1146,7 +1723,8 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
                   onChange={(e) =>
                     setFontSettings((s) => ({
                       ...s,
-                      [f.key]: Number(e.target.value) || DEFAULT_FONT_SETTINGS[f.key],
+                      [f.key]:
+                        Number(e.target.value) || DEFAULT_FONT_SETTINGS[f.key],
                     }))
                   }
                   className="w-16 border border-gray-300 rounded px-1.5 py-1 text-xs focus:outline-none focus:border-gray-500 bg-white"
@@ -1205,8 +1783,8 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
           <span>
             ⚠️ Already submitted {companySubmission.count} CV
             {companySubmission.count > 1 ? "s" : ""} to{" "}
-            <strong>{form.organization_name || "this company"}</strong> —
-            most recently {timeAgo(companySubmission.latest)}
+            <strong>{form.organization_name || "this company"}</strong> — most
+            recently {timeAgo(companySubmission.latest)}
           </span>
         </div>
       )}
@@ -1219,6 +1797,39 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
           style={{ width: leftPanelWidth }}
         >
           <div className="p-4 space-y-5">
+            {/* Expand / collapse all sections */}
+            <div className="flex items-center justify-end gap-2 -mb-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowJobContext(true);
+                  setShowContact(true);
+                  setShowCVContent(true);
+                  setShowWorkExperience(true);
+                  setShowEducation(true);
+                  setShowProjects(true);
+                }}
+                className="text-[10px] text-gray-400 hover:text-gray-700 underline"
+              >
+                Expand all
+              </button>
+              <span className="text-[10px] text-gray-300">|</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowJobContext(false);
+                  setShowContact(false);
+                  setShowCVContent(false);
+                  setShowWorkExperience(false);
+                  setShowEducation(false);
+                  setShowProjects(false);
+                }}
+                className="text-[10px] text-gray-400 hover:text-gray-700 underline"
+              >
+                Collapse all
+              </button>
+            </div>
+
             {/* Applicant select */}
             <div>
               <label className={labelCls}>Select Applicant</label>
@@ -1254,200 +1865,206 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
                 onToggle={() => setShowJobContext((p) => !p)}
               />
               {showJobContext && (
-              <>
-              <div>
-                <label className={labelCls}>Target Job Title</label>
-                <input
-                  className={inputCls}
-                  placeholder="e.g. Senior React Developer"
-                  value={form.target_job_title}
-                  onChange={(e) => set("target_job_title", e.target.value)}
-                />
-              </div>
-              <div className="border border-gray-200 rounded overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setShowAdditionalJobDetails((p) => !p)}
-                  className="w-full flex items-center justify-between px-2 py-1.5 bg-gray-50 hover:bg-gray-100 text-[10px] text-gray-500 uppercase font-medium"
-                >
-                  Additional Job Details
-                  {showAdditionalJobDetails ? (
-                    <ChevronUp size={12} />
-                  ) : (
-                    <ChevronDown size={12} />
-                  )}
-                </button>
-                {showAdditionalJobDetails && (
-                  <div className="p-2 space-y-2">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className={labelCls}>Organisation</label>
-                        <input
-                          className={inputCls}
-                          placeholder="Company name"
-                          value={form.organization_name}
-                          onChange={(e) =>
-                            set("organization_name", e.target.value)
-                          }
-                        />
-                      </div>
-                      <div>
-                        <label className={labelCls}>Sponsorship</label>
-                        <select
-                          className={inputCls}
-                          value={form.sponsorship}
-                          onChange={(e) => set("sponsorship", e.target.value)}
-                        >
-                          <option value="">Unknown</option>
-                          <option value="yes">Yes</option>
-                          <option value="no">No</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div>
-                      <label className={labelCls}>Job Link (optional)</label>
-                      <input
-                        className={inputCls}
-                        placeholder="https://…"
-                        value={form.job_link}
-                        onChange={(e) => set("job_link", e.target.value)}
-                      />
-                    </div>
+                <>
+                  <div>
+                    <label className={labelCls}>Target Job Title</label>
+                    <input
+                      className={inputCls}
+                      placeholder="e.g. Senior React Developer"
+                      value={form.target_job_title}
+                      onChange={(e) => set("target_job_title", e.target.value)}
+                    />
                   </div>
-                )}
-              </div>
-              <div>
-                <label
-                  className={
-                    labelCls +
-                    " bg-blue-50 border border-blue-200 px-2 py-0.5 rounded block"
-                  }
-                >
-                  Job Description (for CV) *
-                </label>
-                <textarea
-                  rows={5}
-                  className={`${inputCls} resize-y bg-blue-50 border-blue-200`}
-                  placeholder="Raw job description text for CV generation (required)…"
-                  value={form.raw_description}
-                  onChange={(e) => set("raw_description", e.target.value)}
-                />
-              </div>
+                  <div className="border border-gray-200 rounded overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setShowAdditionalJobDetails((p) => !p)}
+                      className="w-full flex items-center justify-between px-2 py-1.5 bg-gray-50 hover:bg-gray-100 text-[10px] text-gray-500 uppercase font-medium"
+                    >
+                      Additional Job Details
+                      {showAdditionalJobDetails ? (
+                        <ChevronUp size={12} />
+                      ) : (
+                        <ChevronDown size={12} />
+                      )}
+                    </button>
+                    {showAdditionalJobDetails && (
+                      <div className="p-2 space-y-2">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className={labelCls}>Organisation</label>
+                            <input
+                              className={inputCls}
+                              placeholder="Company name"
+                              value={form.organization_name}
+                              onChange={(e) =>
+                                set("organization_name", e.target.value)
+                              }
+                            />
+                          </div>
+                          <div>
+                            <label className={labelCls}>Sponsorship</label>
+                            <select
+                              className={inputCls}
+                              value={form.sponsorship}
+                              onChange={(e) =>
+                                set("sponsorship", e.target.value)
+                              }
+                            >
+                              <option value="">Unknown</option>
+                              <option value="yes">Yes</option>
+                              <option value="no">No</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div>
+                          <label className={labelCls}>
+                            Job Link (optional)
+                          </label>
+                          <input
+                            className={inputCls}
+                            placeholder="https://…"
+                            value={form.job_link}
+                            onChange={(e) => set("job_link", e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <label
+                      className={
+                        labelCls +
+                        " bg-blue-50 border border-blue-200 px-2 py-0.5 rounded block"
+                      }
+                    >
+                      Job Description (for CV) *
+                    </label>
+                    <textarea
+                      rows={5}
+                      className={`${inputCls} resize-y bg-blue-50 border-blue-200`}
+                      placeholder="Raw job description text for CV generation (required)…"
+                      value={form.raw_description}
+                      onChange={(e) => set("raw_description", e.target.value)}
+                    />
+                  </div>
 
-              {hoverSourceInfo && (
-                <div className="text-[10px] rounded border border-amber-200 bg-amber-50 px-2 py-1 flex items-center gap-2">
-                  <span className="font-semibold text-amber-800">
-                    "{hoverSourceInfo.word}"
-                  </span>
-                  <span
-                    className={
-                      hoverSourceInfo.inRaw
-                        ? "text-green-700"
-                        : "text-gray-400"
-                    }
-                  >
-                    {hoverSourceInfo.inRaw ? "✓" : "✕"} Raw Description
-                  </span>
-                  <span
-                    className={
-                      hoverSourceInfo.inJobDesc
-                        ? "text-green-700"
-                        : "text-gray-400"
-                    }
-                  >
-                    {hoverSourceInfo.inJobDesc ? "✓" : "✕"} Job Description
-                  </span>
-                </div>
-              )}
-
-              <div className="border border-gray-200 rounded overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setShowRawDescriptionView((p) => !p)}
-                  className="w-full flex items-center justify-between px-2 py-1.5 bg-gray-50 hover:bg-gray-100 text-[10px] text-gray-500 uppercase font-medium"
-                >
-                  Raw Description (View Mode)
-                  {showRawDescriptionView ? (
-                    <ChevronUp size={12} />
-                  ) : (
-                    <ChevronDown size={12} />
+                  {hoverSourceInfo && (
+                    <div className="text-[10px] rounded border border-amber-200 bg-amber-50 px-2 py-1 flex items-center gap-2">
+                      <span className="font-semibold text-amber-800">
+                        "{hoverSourceInfo.word}"
+                      </span>
+                      <span
+                        className={
+                          hoverSourceInfo.inRaw
+                            ? "text-green-700"
+                            : "text-gray-400"
+                        }
+                      >
+                        {hoverSourceInfo.inRaw ? "✓" : "✕"} Raw Description
+                      </span>
+                      <span
+                        className={
+                          hoverSourceInfo.inJobDesc
+                            ? "text-green-700"
+                            : "text-gray-400"
+                        }
+                      >
+                        {hoverSourceInfo.inJobDesc ? "✓" : "✕"} Job Description
+                      </span>
+                    </div>
                   )}
-                </button>
-                {showRawDescriptionView && (
-                  <div
-                    ref={rawDescRef}
-                    className="p-2 text-[10.5px] leading-relaxed whitespace-pre-wrap max-h-64 overflow-y-auto"
-                    dangerouslySetInnerHTML={{
-                      __html:
-                        highlightPlainTextToHtml(
-                          form.raw_description,
-                          atsHighlightOn && hoveredKeyword
-                            ? new Set([hoveredKeyword])
-                            : new Set(),
-                        ) || '<span class="text-gray-400 italic">Empty</span>',
-                    }}
-                  />
-                )}
-              </div>
 
-              <div className="border border-gray-200 rounded overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setShowJobDescriptionView((p) => !p)}
-                  className="w-full flex items-center justify-between px-2 py-1.5 bg-gray-50 hover:bg-gray-100 text-[10px] text-gray-500 uppercase font-medium"
-                >
-                  Job Description (HTML View)
-                  {showJobDescriptionView ? (
-                    <ChevronUp size={12} />
-                  ) : (
-                    <ChevronDown size={12} />
-                  )}
-                </button>
-                {showJobDescriptionView && (
-                  <div
-                    ref={jobDescRef}
-                    className="p-2 text-[10.5px] leading-relaxed max-h-64 overflow-y-auto"
-                    dangerouslySetInnerHTML={{
-                      __html:
-                        highlightHtmlString(
-                          form.job_description,
-                          atsHighlightOn && hoveredKeyword
-                            ? new Set([hoveredKeyword])
-                            : new Set(),
-                        ) || '<span class="text-gray-400 italic">Empty</span>',
-                    }}
-                  />
-                )}
-              </div>
+                  <div className="border border-gray-200 rounded overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setShowRawDescriptionView((p) => !p)}
+                      className="w-full flex items-center justify-between px-2 py-1.5 bg-gray-50 hover:bg-gray-100 text-[10px] text-gray-500 uppercase font-medium"
+                    >
+                      Raw Description (View Mode)
+                      {showRawDescriptionView ? (
+                        <ChevronUp size={12} />
+                      ) : (
+                        <ChevronDown size={12} />
+                      )}
+                    </button>
+                    {showRawDescriptionView && (
+                      <div
+                        ref={rawDescRef}
+                        className="p-2 text-[10.5px] leading-relaxed whitespace-pre-wrap max-h-64 overflow-y-auto"
+                        dangerouslySetInnerHTML={{
+                          __html:
+                            highlightPlainTextToHtml(
+                              form.raw_description,
+                              atsHighlightOn && hoveredKeyword
+                                ? new Set([hoveredKeyword])
+                                : new Set(),
+                            ) ||
+                            '<span class="text-gray-400 italic">Empty</span>',
+                        }}
+                      />
+                    )}
+                  </div>
 
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowLLMPopup(true)}
-                  disabled={!canCopyPrompt}
-                  title={
-                    !canCopyPrompt
-                      ? "Fill Target Job Title and select an applicant first"
-                      : "Generate with AI"
-                  }
-                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded border transition-colors flex-1 justify-center
+                  <div className="border border-gray-200 rounded overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setShowJobDescriptionView((p) => !p)}
+                      className="w-full flex items-center justify-between px-2 py-1.5 bg-gray-50 hover:bg-gray-100 text-[10px] text-gray-500 uppercase font-medium"
+                    >
+                      Job Description (HTML View)
+                      {showJobDescriptionView ? (
+                        <ChevronUp size={12} />
+                      ) : (
+                        <ChevronDown size={12} />
+                      )}
+                    </button>
+                    {showJobDescriptionView && (
+                      <div
+                        ref={jobDescRef}
+                        className="p-2 text-[10.5px] leading-relaxed max-h-64 overflow-y-auto"
+                        dangerouslySetInnerHTML={{
+                          __html:
+                            highlightHtmlString(
+                              form.job_description,
+                              atsHighlightOn && hoveredKeyword
+                                ? new Set([hoveredKeyword])
+                                : new Set(),
+                            ) ||
+                            '<span class="text-gray-400 italic">Empty</span>',
+                        }}
+                      />
+                    )}
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setShowLLMPopup(true)}
+                      disabled={!canCopyPrompt}
+                      title={
+                        !canCopyPrompt
+                          ? "Fill Target Job Title and select an applicant first"
+                          : "Generate with AI"
+                      }
+                      className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded border transition-colors flex-1 justify-center
                                         ${
                                           canCopyPrompt
                                             ? "bg-purple-600 border-purple-600 text-white hover:bg-purple-700"
                                             : "border-gray-200 text-gray-300 cursor-not-allowed bg-gray-50"
                                         }`}
-                >
-                  <Sparkles size={12} />
-                  Generate with AI
-                </button>
-                <button
-                  onClick={copyPrompt}
-                  disabled={!canCopyPrompt}
-                  title={
-                    !canCopyPrompt
-                      ? "Fill Target Job Title and select an applicant first"
-                      : "Copy AI prompt to clipboard"
-                  }
-                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded border transition-colors flex-1 justify-center
+                    >
+                      <Sparkles size={12} />
+                      Generate with AI
+                    </button>
+                    <button
+                      onClick={copyPrompt}
+                      disabled={!canCopyPrompt}
+                      title={
+                        !canCopyPrompt
+                          ? "Fill Target Job Title and select an applicant first"
+                          : "Copy AI prompt to clipboard"
+                      }
+                      className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded border transition-colors flex-1 justify-center
                                         ${
                                           canCopyPrompt
                                             ? promptCopied
@@ -1455,12 +2072,12 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
                                               : "bg-gray-800 border-gray-800 text-white hover:bg-gray-700"
                                             : "border-gray-200 text-gray-300 cursor-not-allowed bg-gray-50"
                                         }`}
-                >
-                  {promptCopied ? <Check size={12} /> : <Copy size={12} />}
-                  {promptCopied ? "Copied" : "Copy Prompt"}
-                </button>
-              </div>
-              </>
+                    >
+                      {promptCopied ? <Check size={12} /> : <Copy size={12} />}
+                      {promptCopied ? "Copied" : "Copy Prompt"}
+                    </button>
+                  </div>
+                </>
               )}
             </div>
 
@@ -1472,105 +2089,118 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
                 onToggle={() => setShowContact((p) => !p)}
               />
               {showContact && (
-              <>
-              <div>
-                <label className={labelCls}>Full Name</label>
-                <input
-                  className={inputCls}
-                  value={form.applicant_name}
-                  onChange={(e) => set("applicant_name", e.target.value)}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className={labelCls}>Email</label>
-                  {applicantEmails.length > 1 && (
-                    <select
-                      className={`${inputCls} mb-1`}
-                      value={form.selected_email}
-                      onChange={(e) => set("selected_email", e.target.value)}
-                    >
-                      <option value="">— pick from applicant —</option>
-                      {applicantEmails.map((e) => (
-                        <option key={e} value={e}>
-                          {e}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                  <input
-                    className={inputCls}
-                    placeholder="email@example.com"
-                    value={form.selected_email}
-                    onChange={(e) => set("selected_email", e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className={labelCls}>Phone</label>
-                  {applicantPhones.length > 1 && (
-                    <select
-                      className={`${inputCls} mb-1`}
-                      value={form.selected_phone}
-                      onChange={(e) => set("selected_phone", e.target.value)}
-                    >
-                      <option value="">— pick from applicant —</option>
-                      {applicantPhones.map((p) => (
-                        <option key={p} value={p}>
-                          {p}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                  <input
-                    className={inputCls}
-                    placeholder="+44 7700 900000"
-                    value={form.selected_phone}
-                    onChange={(e) => set("selected_phone", e.target.value)}
-                  />
-                </div>
-              </div>
-              <div>
-                <label className={labelCls}>Location</label>
-                {applicantLocations.length > 0 && (
-                  <select
-                    className={`${inputCls} mb-1`}
-                    value={form.location}
-                    onChange={(e) => set("location", e.target.value)}
-                  >
-                    <option value="">— pick from applicant —</option>
-                    {applicantLocations.map((loc) => (
-                      <option key={loc} value={loc}>
-                        {loc}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                <input
-                  className={inputCls}
-                  placeholder="e.g. Manchester, UK (or type custom)"
-                  value={form.location}
-                  onChange={(e) => set("location", e.target.value)}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className={labelCls}>LinkedIn</label>
-                  <input
-                    className={inputCls}
-                    value={form.linkedin}
-                    onChange={(e) => set("linkedin", e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className={labelCls}>GitHub</label>
-                  <input
-                    className={inputCls}
-                    value={form.github}
-                    onChange={(e) => set("github", e.target.value)}
-                  />
-                </div>
-              </div>
-              </>
+                <>
+                  <div>
+                    <label className={labelCls}>Full Name</label>
+                    <input
+                      className={inputCls}
+                      value={form.applicant_name}
+                      onChange={(e) => set("applicant_name", e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Headline</label>
+                    <input
+                      className={inputCls}
+                      placeholder="e.g. Senior Software Engineer — Full-Stack Product Engineering"
+                      value={form.headline}
+                      onChange={(e) => set("headline", e.target.value)}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className={labelCls}>Email</label>
+                      {applicantEmails.length > 1 && (
+                        <select
+                          className={`${inputCls} mb-1`}
+                          value={form.selected_email}
+                          onChange={(e) =>
+                            set("selected_email", e.target.value)
+                          }
+                        >
+                          <option value="">— pick from applicant —</option>
+                          {applicantEmails.map((e) => (
+                            <option key={e} value={e}>
+                              {e}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      <input
+                        className={inputCls}
+                        placeholder="email@example.com"
+                        value={form.selected_email}
+                        onChange={(e) => set("selected_email", e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Phone</label>
+                      {applicantPhones.length > 1 && (
+                        <select
+                          className={`${inputCls} mb-1`}
+                          value={form.selected_phone}
+                          onChange={(e) =>
+                            set("selected_phone", e.target.value)
+                          }
+                        >
+                          <option value="">— pick from applicant —</option>
+                          {applicantPhones.map((p) => (
+                            <option key={p} value={p}>
+                              {p}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      <input
+                        className={inputCls}
+                        placeholder="+44 7700 900000"
+                        value={form.selected_phone}
+                        onChange={(e) => set("selected_phone", e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Location</label>
+                    {applicantLocations.length > 0 && (
+                      <select
+                        className={`${inputCls} mb-1`}
+                        value={form.location}
+                        onChange={(e) => set("location", e.target.value)}
+                      >
+                        <option value="">— pick from applicant —</option>
+                        {applicantLocations.map((loc) => (
+                          <option key={loc} value={loc}>
+                            {loc}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    <input
+                      className={inputCls}
+                      placeholder="e.g. Manchester, UK (or type custom)"
+                      value={form.location}
+                      onChange={(e) => set("location", e.target.value)}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className={labelCls}>LinkedIn</label>
+                      <input
+                        className={inputCls}
+                        value={form.linkedin}
+                        onChange={(e) => set("linkedin", e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelCls}>GitHub</label>
+                      <input
+                        className={inputCls}
+                        value={form.github}
+                        onChange={(e) => set("github", e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </>
               )}
             </div>
 
@@ -1582,28 +2212,103 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
                 onToggle={() => setShowCVContent((p) => !p)}
               />
               {showCVContent && (
-              <>
-              <div>
-                <label className={labelCls}>Summary</label>
-                <textarea
-                  rows={4}
-                  className={`${inputCls} resize-y`}
-                  placeholder="Brief professional summary…"
-                  value={form.summary}
-                  onChange={(e) => set("summary", e.target.value)}
-                />
-              </div>
-              <div>
-                <label className={labelCls}>Skills</label>
-                <textarea
-                  rows={3}
-                  className={`${inputCls} resize-y`}
-                  placeholder="Python, JavaScript, React, Node.js, AWS…"
-                  value={form.skills}
-                  onChange={(e) => set("skills", e.target.value)}
-                />
-              </div>
-              </>
+                <>
+                  <div>
+                    <label className={labelCls}>Summary</label>
+                    <textarea
+                      rows={4}
+                      className={`${inputCls} resize-y`}
+                      placeholder="Brief professional summary…"
+                      value={form.summary}
+                      onChange={(e) => set("summary", e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className={labelCls}>Core Skills</label>
+                      <button
+                        type="button"
+                        onClick={addSkillCategory}
+                        className="flex items-center gap-1 text-[10px] text-teal-600 hover:text-teal-800 border border-teal-200 rounded px-2 py-0.5"
+                      >
+                        <Plus size={9} /> Add Category
+                      </button>
+                    </div>
+                    {coreSkills.length === 0 && (
+                      <p className="text-[10px] text-gray-400 italic text-center py-2">
+                        No skill categories yet — e.g. "Front-End", "Back-End",
+                        "Cloud"…
+                      </p>
+                    )}
+                    <div className="space-y-2">
+                      {coreSkills.map((group, i) => (
+                        <div
+                          key={i}
+                          className="border border-gray-200 rounded p-2 space-y-1.5"
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              className={`${inputCls} font-medium`}
+                              placeholder="Category, e.g. Front-End"
+                              value={group.category}
+                              onChange={(e) =>
+                                updateSkillCategory(i, {
+                                  category: e.target.value,
+                                })
+                              }
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeSkillCategory(i)}
+                              className="text-gray-300 hover:text-red-500 shrink-0"
+                            >
+                              <Trash2 size={11} />
+                            </button>
+                          </div>
+                          <textarea
+                            rows={2}
+                            className={`${inputCls} resize-y`}
+                            placeholder="TypeScript, Next.js, React…"
+                            value={group.skills.join(", ")}
+                            onChange={(e) =>
+                              updateSkillCategory(i, {
+                                skills: e.target.value
+                                  .split(",")
+                                  .map((s) => s.trim())
+                                  .filter(Boolean),
+                              })
+                            }
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="border border-gray-200 rounded overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setShowLegacySkills((p) => !p)}
+                      className="w-full flex items-center justify-between px-2 py-1.5 bg-gray-50 hover:bg-gray-100 text-[10px] text-gray-500 uppercase font-medium"
+                    >
+                      Legacy Skills (fallback if no categories)
+                      {showLegacySkills ? (
+                        <ChevronUp size={12} />
+                      ) : (
+                        <ChevronDown size={12} />
+                      )}
+                    </button>
+                    {showLegacySkills && (
+                      <div className="p-2">
+                        <textarea
+                          rows={2}
+                          className={`${inputCls} resize-y`}
+                          placeholder="Python, JavaScript, React, Node.js, AWS…"
+                          value={form.skills}
+                          onChange={(e) => set("skills", e.target.value)}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </>
               )}
             </div>
 
@@ -1629,61 +2334,61 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
                 )}
               </div>
               {showJsonPaste && (
-              <>
-              <textarea
-                rows={6}
-                className={`${inputCls} resize-y font-mono text-[10px] ${jsonErrors.length > 0 ? "border-red-300 bg-red-50" : ""}`}
-                placeholder={
-                  "Paste JSON from ChatGPT here…\n\nExpected keys: skills, summary, experience_titles, experience_content"
-                }
-                value={jsonPaste}
-                onChange={(e) => {
-                  setJsonPaste(e.target.value);
-                  if (jsonErrors.length) setJsonErrors([]);
-                }}
-              />
-              <button
-                onClick={applyJSON}
-                disabled={!jsonPaste.trim()}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-teal-700 text-white rounded hover:bg-teal-800 disabled:opacity-40 w-full justify-center"
-              >
-                <ClipboardPaste size={12} /> Apply JSON to Fields
-              </button>
-
-              {jsonErrors.length > 0 && (
-                <div className="border border-red-200 rounded bg-red-50 p-3 space-y-2">
-                  <div className="text-[10px] font-semibold text-red-700">
-                    Validation errors:
-                  </div>
-                  <ul className="space-y-0.5">
-                    {jsonErrors.map((e, i) => (
-                      <li
-                        key={i}
-                        className="text-[10px] text-red-600 flex gap-1"
-                      >
-                        <span className="shrink-0">•</span> {e}
-                      </li>
-                    ))}
-                  </ul>
+                <>
+                  <textarea
+                    rows={6}
+                    className={`${inputCls} resize-y font-mono text-[10px] ${jsonErrors.length > 0 ? "border-red-300 bg-red-50" : ""}`}
+                    placeholder={
+                      "Paste JSON from ChatGPT here…\n\nExpected keys: skills, summary, experience_titles, experience_content"
+                    }
+                    value={jsonPaste}
+                    onChange={(e) => {
+                      setJsonPaste(e.target.value);
+                      if (jsonErrors.length) setJsonErrors([]);
+                    }}
+                  />
                   <button
-                    onClick={() => setShowExpectedFormat((p) => !p)}
-                    className="flex items-center gap-1 text-[10px] text-red-500 hover:text-red-700 mt-1"
+                    onClick={applyJSON}
+                    disabled={!jsonPaste.trim()}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-teal-700 text-white rounded hover:bg-teal-800 disabled:opacity-40 w-full justify-center"
                   >
-                    {showExpectedFormat ? (
-                      <ChevronUp size={10} />
-                    ) : (
-                      <ChevronDown size={10} />
-                    )}
-                    {showExpectedFormat ? "Hide" : "Show"} expected format
+                    <ClipboardPaste size={12} /> Apply JSON to Fields
                   </button>
-                  {showExpectedFormat && (
-                    <pre className="text-[9px] bg-white border border-red-100 rounded p-2 overflow-x-auto text-gray-700 whitespace-pre-wrap">
-                      {EXPECTED_FORMAT}
-                    </pre>
+
+                  {jsonErrors.length > 0 && (
+                    <div className="border border-red-200 rounded bg-red-50 p-3 space-y-2">
+                      <div className="text-[10px] font-semibold text-red-700">
+                        Validation errors:
+                      </div>
+                      <ul className="space-y-0.5">
+                        {jsonErrors.map((e, i) => (
+                          <li
+                            key={i}
+                            className="text-[10px] text-red-600 flex gap-1"
+                          >
+                            <span className="shrink-0">•</span> {e}
+                          </li>
+                        ))}
+                      </ul>
+                      <button
+                        onClick={() => setShowExpectedFormat((p) => !p)}
+                        className="flex items-center gap-1 text-[10px] text-red-500 hover:text-red-700 mt-1"
+                      >
+                        {showExpectedFormat ? (
+                          <ChevronUp size={10} />
+                        ) : (
+                          <ChevronDown size={10} />
+                        )}
+                        {showExpectedFormat ? "Hide" : "Show"} expected format
+                      </button>
+                      {showExpectedFormat && (
+                        <pre className="text-[9px] bg-white border border-red-100 rounded p-2 overflow-x-auto text-gray-700 whitespace-pre-wrap">
+                          {EXPECTED_FORMAT}
+                        </pre>
+                      )}
+                    </div>
                   )}
-                </div>
-              )}
-              </>
+                </>
               )}
             </div>
 
@@ -1704,51 +2409,53 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
                 </button>
               </div>
               {showWorkExperience && (
-              <>
-              <div className="flex items-center gap-3 mb-3">
-                <div>
-                  <label className={labelCls}>Years of experience</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={30}
-                    className="border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none w-20 bg-white"
-                    value={form.years_of_experience}
-                    onChange={(e) =>
-                      handleYearsChange(
-                        Math.max(1, Math.min(30, Number(e.target.value))),
-                      )
-                    }
-                  />
-                </div>
-                <div className="text-[10px] text-gray-400 mt-3">
-                  {experienceItems.length} role
-                  {experienceItems.length !== 1 ? "s" : ""} matched
-                </div>
-              </div>
+                <>
+                  <div className="flex items-center gap-3 mb-3">
+                    <div>
+                      <label className={labelCls}>Years of experience</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={30}
+                        className="border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none w-20 bg-white"
+                        value={form.years_of_experience}
+                        onChange={(e) =>
+                          handleYearsChange(
+                            Math.max(1, Math.min(30, Number(e.target.value))),
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="text-[10px] text-gray-400 mt-3">
+                      {experienceItems.length} role
+                      {experienceItems.length !== 1 ? "s" : ""} matched
+                    </div>
+                  </div>
 
-              {experienceItems.length === 0 && (
-                <p className="text-[10px] text-gray-400 italic text-center py-3">
-                  {selectedApplicant
-                    ? "No experiences match this duration."
-                    : "Select an applicant to load experiences."}
-                </p>
-              )}
+                  {experienceItems.length === 0 && (
+                    <p className="text-[10px] text-gray-400 italic text-center py-3">
+                      {selectedApplicant
+                        ? "No experiences match this duration."
+                        : "Select an applicant to load experiences."}
+                    </p>
+                  )}
 
-              <div className="space-y-3">
-                {experienceItems.map((exp, expIdx) => (
-                  <ExperienceCard
-                    key={expIdx}
-                    exp={exp}
-                    index={expIdx}
-                    onUpdateField={(updates) => updateExpField(expIdx, updates)}
-                    onSetBullet={(bi, val) => setBullet(expIdx, bi, val)}
-                    onAddBullet={() => addBullet(expIdx)}
-                    onRemoveBullet={(bi) => removeBullet(expIdx, bi)}
-                  />
-                ))}
-              </div>
-              </>
+                  <div className="space-y-3">
+                    {experienceItems.map((exp, expIdx) => (
+                      <ExperienceCard
+                        key={expIdx}
+                        exp={exp}
+                        index={expIdx}
+                        onUpdateField={(updates) =>
+                          updateExpField(expIdx, updates)
+                        }
+                        onSetBullet={(bi, val) => setBullet(expIdx, bi, val)}
+                        onAddBullet={() => addBullet(expIdx)}
+                        onRemoveBullet={(bi) => removeBullet(expIdx, bi)}
+                      />
+                    ))}
+                  </div>
+                </>
               )}
             </div>
 
@@ -2139,7 +2846,7 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
               <CVPreview
                 data={cvData}
                 highlightEnabled={atsHighlightOn}
-              fontSettings={fontSettings}
+                fontSettings={fontSettings}
                 onSkillsReorder={(newSkills) => set("skills", newSkills)}
                 onBulletEdit={(expIdx, bulletIdx, val) =>
                   setBullet(expIdx, bulletIdx, val)
@@ -2157,6 +2864,7 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
             form.target_job_title.trim(),
             form.raw_description.trim() || "(No job description provided)",
             experienceItems.length,
+            linkedInTitles,
           )}
           isOpen={showLLMPopup}
           onClose={() => setShowLLMPopup(false)}

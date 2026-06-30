@@ -43,6 +43,7 @@ export default function ViewCVPage() {
 
     const cvData: CVData = {
         applicant_name: cv.applicant_name,
+        headline: cv.headline,
         location: cv.location,
         selected_email: cv.selected_email,
         selected_phone: cv.selected_phone,
@@ -51,6 +52,7 @@ export default function ViewCVPage() {
         portfolios: cv.portfolios,
         summary: cv.summary,
         skills: cv.skills,
+        core_skills: cv.core_skills,
         experience_items: cv.experience_items,
         education: cv.education,
         projects: cv.projects,
