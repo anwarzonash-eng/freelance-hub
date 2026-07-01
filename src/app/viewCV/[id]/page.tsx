@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
-import { Printer } from 'lucide-react'
+import { Printer, RefreshCw } from 'lucide-react'
 import { getCVById } from '@/app/api_handlers/api/job-cvs.api'
 import CVPreview, { CVData } from '@/app/components/jobs/CVPreview'
 
@@ -10,10 +10,13 @@ export default function ViewCVPage() {
     const { id } = useParams()
     const [cv, setCV] = useState<any | null>(null)
     const [loading, setLoading] = useState(true)
+    const [refreshing, setRefreshing] = useState(false)
     const [error, setError] = useState(false)
 
-    useEffect(() => {
+    const loadCV = useCallback((showFullLoader = false) => {
         if (!id) return
+        if (showFullLoader) setLoading(true)
+        else setRefreshing(true)
         getCVById(Number(id))
             .then((res: any) => {
                 const data = res?.data ?? res
@@ -22,8 +25,10 @@ export default function ViewCVPage() {
                 if (data.cv_title) document.title = data.cv_title
             })
             .catch(() => setError(true))
-            .finally(() => setLoading(false))
+            .finally(() => { setLoading(false); setRefreshing(false) })
     }, [id])
+
+    useEffect(() => { loadCV(true) }, [loadCV])
 
     if (loading) {
         return (
@@ -62,6 +67,13 @@ export default function ViewCVPage() {
         <>
             <div className="no-print fixed top-4 right-4 z-10 flex items-center gap-2">
                 <span className="text-xs text-gray-500">{cv.applicant_name} — {cv.cv_title}</span>
+                <button
+                    onClick={() => loadCV()}
+                    disabled={refreshing}
+                    title="Reload latest saved version"
+                    className="flex items-center justify-center w-8 h-8 border border-gray-300 bg-white text-gray-500 rounded hover:bg-gray-50 shadow-md disabled:opacity-50">
+                    <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
+                </button>
                 <button
                     onClick={() => window.print()}
                     className="flex items-center gap-1.5 px-4 py-2 bg-gray-800 text-white text-xs rounded hover:bg-gray-700 shadow-md">

@@ -20,6 +20,11 @@ export async function updateCV(id: number, data: any) {
     return apiClient(JobCVsAPIRoutes.UPDATE.replace(':id', String(id)), ApiMethod.PUT, data, undefined, {}, true, true)
 }
 
+// Silent variant used by auto-save — no toast notifications.
+export async function updateCVSilent(id: number, data: any) {
+    return apiClient(JobCVsAPIRoutes.UPDATE.replace(':id', String(id)), ApiMethod.PUT, data, undefined, {}, false, false)
+}
+
 export async function deleteCV(id: number) {
     return apiClient(JobCVsAPIRoutes.DELETE.replace(':id', String(id)), ApiMethod.DELETE, undefined, undefined, {}, true)
 }

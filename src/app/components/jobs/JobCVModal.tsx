@@ -14,11 +14,12 @@ import {
   ChevronUp,
   Sparkles,
   Maximize2,
+  Minimize2,
   Type,
   RotateCcw,
 } from "lucide-react";
 import { getAllApplicants } from "@/app/api_handlers/api/job-applicants.api";
-import { createCV, updateCV } from "@/app/api_handlers/api/job-cvs.api";
+import { createCV, updateCV, updateCVSilent } from "@/app/api_handlers/api/job-cvs.api";
 import { getAllJobs } from "@/app/api_handlers/api/sponsored-jobs.api";
 import { timeAgo } from "@/app/utils/time";
 import CVPreview, {
@@ -39,6 +40,15 @@ import CVPreview, {
 import LLMGeneratorPopup from "../llm/LLMGeneratorPopup";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
+
+function formatLastSaved(date: Date): string {
+  const secs = Math.floor((Date.now() - date.getTime()) / 1000)
+  if (secs < 10) return 'just now'
+  if (secs < 60) return `${secs}s ago`
+  const mins = Math.floor(secs / 60)
+  if (mins < 60) return `${mins}m ago`
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
 
 const JOB_TYPES = ["Remote", "Hybrid", "Onsite"];
 const JOB_NATURES = [
@@ -886,6 +896,81 @@ Before returning:
 • Confirm it is suitable as the primary headline immediately below the candidate's name.
 
 ========================================
+ADDITIONAL RULES — TECHNOLOGY TIMELINE
+========================================
+
+Generative AI, LLMs, MCP, and similar AI-product technologies became
+commercially mainstream from approximately 2023 onward. Apply this
+constraint strictly:
+
+* Bullets referencing AI/LLM-powered features, AI-assisted automation,
+  prompt-based workflows, or MCP-style integrations may ONLY appear in
+  experience entries whose date range starts in 2023 or later.
+* Do NOT generate AI/LLM-related bullets for any experience ending before
+  2023, even if the Job Description or Skills List is AI-heavy. Older
+  roles must draw on the skills/keywords that were realistic for their
+  time period.
+* If the Job Description is AI-focused but the candidate's only AI-relevant
+  experience is the most recent role, concentrate AI-specific evidence
+  there. Do not compensate by retrofitting AI language into earlier roles.
+* "Generated Skills List" items related to AI/LLM/automation should be
+  treated as primarily applicable to the most recent 1-2 experiences only,
+  unless the user's raw input explicitly states an earlier role involved
+  AI/ML work (e.g. pre-LLM data science, classic ML, NLP).
+* For the most recent experience (if it falls in 2023+), include at least
+  ONE bullet that gives concrete evidence of AI-adjacent work if the role
+  notes or Job Description support it — a specific automation, document
+  workflow, or pipeline — not just a label like "AI-powered products."
+
+========================================
+ADDITIONAL RULES — HEADLINE / TITLE ALIGNMENT
+========================================
+
+* The CV headline (top-of-page title) must be directionally consistent
+  with the most recent experience's job title:
+  - Specialization in the headline (e.g. "Backend," "Full-Stack," "Frontend")
+    must match the specialization evident in the most recent role's bullets.
+  - Seniority implied in the headline must not exceed the seniority of the
+    most recent job title unless the user explicitly requests a target-role
+    headline that differs from current title (e.g. applying up a level).
+* If the user provides a target Job Description with a specific role
+  framing (e.g. "Full-Stack Product Engineer"), the headline may adopt
+  that framing ONLY if the candidate's actual experience (per the bullets
+  generated) substantively supports it. Do not let the headline overstate
+  beyond what the bullets demonstrate.
+* Flag (via a "headline_check" field in output) any case where the
+  headline's specialization or seniority diverges from the most recent
+  role's title, so the user can confirm intent rather than have it pass
+  silently.
+
+========================================
+ADDITIONAL RULES — OUTCOME COMPLETENESS
+========================================
+
+* A bullet that ends on the action with no resulting effect (e.g. "...to
+  support X requirements without disrupting existing users") is incomplete.
+  "Did not break something" is not an outcome.
+* Every bullet must end on either:
+  (a) a concrete result (what changed, what became possible, what was
+      reduced/enabled/unblocked), or
+  (b) if no real outcome is known from the input, a sharper description of
+      the action's scope/difficulty instead of a non-outcome filler clause.
+* Do not use negative-only outcome framing ("without breaking X," "without
+  disrupting Y," "without downtime") as the SOLE outcome of a bullet. It
+  may supplement a real outcome but cannot replace one.
+
+========================================
+UPDATED VALIDATION REQUIREMENTS
+========================================
+Before generating output, internally verify (in addition to prior checks):
+* No AI/LLM/MCP-related content appears in any experience dated before 2023.
+* Most recent experience (if 2023+) contains at least one concrete AI-adjacent
+  bullet, if supported by input/JD.
+* Headline specialization and seniority align with the most recent job title;
+  divergence is flagged via "headline_check," not silently passed.
+* No bullet ends solely on a negative/non-outcome clause.
+
+========================================
 OUTPUT FORMAT
 =============
 
@@ -1037,6 +1122,33 @@ const EMPTY_EDU: CVEduItem = {
   end_date: "",
 };
 
+function EditableTitle({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  if (editing) return (
+    <input
+      autoFocus
+      value={draft}
+      onChange={e => setDraft(e.target.value)}
+      onBlur={() => { onChange(draft); setEditing(false) }}
+      onKeyDown={e => {
+        if (e.key === 'Enter') e.currentTarget.blur()
+        if (e.key === 'Escape') { setDraft(value); setEditing(false) }
+      }}
+      className="text-xs font-semibold text-gray-800 border-none outline-none bg-transparent w-40 shrink-0 border-b border-gray-400"
+    />
+  )
+  return (
+    <span
+      onClick={() => { setDraft(value); setEditing(true) }}
+      title="Click to rename"
+      className="text-xs font-semibold text-gray-800 cursor-text rounded px-1 hover:bg-gray-100 transition-colors whitespace-nowrap"
+    >
+      {value || <span className="text-gray-400 font-normal">CV Title</span>}
+    </span>
+  )
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
@@ -1059,6 +1171,9 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
   >([]);
   const [saving, setSaving] = useState(false);
   const [savedId, setSavedId] = useState<number | null>(null);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [fontSettings, setFontSettings] = useState<CVFontSettings>({
     ...DEFAULT_FONT_SETTINGS,
   });
@@ -1080,15 +1195,29 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
   const [showJobContext, setShowJobContext] = useState(true);
   const [showContact, setShowContact] = useState(true);
   const [showCVContent, setShowCVContent] = useState(true);
+  const [showCoreSkillsEditor, setShowCoreSkillsEditor] = useState(true);
   const [showLegacySkills, setShowLegacySkills] = useState(false);
   const [showJsonPaste, setShowJsonPaste] = useState(true);
   const [showWorkExperience, setShowWorkExperience] = useState(true);
-  const [showRawDescriptionView, setShowRawDescriptionView] = useState(false);
-  const [showJobDescriptionView, setShowJobDescriptionView] = useState(false);
+  const [rawDescExpanded, setRawDescExpanded] = useState(false);
+
+  // ATS toggle on → expand the raw description overlay so user can see source + highlights together.
+  useEffect(() => {
+    setRawDescExpanded(atsHighlightOn);
+  }, [atsHighlightOn]);
   const [hoveredKeyword, setHoveredKeyword] = useState<string | null>(null);
-  const rawDescRef = useRef<HTMLDivElement>(null);
-  const jobDescRef = useRef<HTMLDivElement>(null);
+
+  // ATS mode: hover a keyword on CV → scroll to it in the raw desc overlay (no highlight on raw desc).
+  useEffect(() => {
+    if (!atsHighlightOn || !hoveredKeyword || !rawDescOverlayRef.current) return;
+    const t = setTimeout(() => {
+      const el = rawDescOverlayRef.current?.querySelector(`mark[data-word="${hoveredKeyword}"]`)
+      el?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    }, 50)
+    return () => clearTimeout(t)
+  }, [hoveredKeyword, atsHighlightOn]);
   const fullScreenRef = useRef<HTMLDivElement>(null);
+  const rawDescOverlayRef = useRef<HTMLDivElement>(null);
 
   // ── Prior CV submission history for this company ────────────────────────
   const [companySubmission, setCompanySubmission] = useState<{
@@ -1359,6 +1488,8 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
   const addEdu = () => setEducation((e) => [...e, { ...EMPTY_EDU }]);
   const updateEdu = (i: number, edu: CVEduItem) =>
     setEducation((e) => e.map((x, idx) => (idx === i ? edu : x)));
+  const updateEduField = (i: number, field: string, value: string) =>
+    setEducation((e) => e.map((x, idx) => idx === i ? { ...x, [field]: value } : x));
   const removeEdu = (i: number) =>
     setEducation((e) => e.filter((_, idx) => idx !== i));
 
@@ -1366,8 +1497,19 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
   const addProject = () => setProjects((p) => [...p, { ...EMPTY_PROJECT }]);
   const updateProject = (i: number, proj: CVProjectItem) =>
     setProjects((p) => p.map((x, idx) => (idx === i ? proj : x)));
+  const updateProjField = (i: number, field: string, value: any) =>
+    setProjects((p) => p.map((x, idx) => idx === i ? { ...x, [field]: value } : x));
   const removeProject = (i: number) =>
     setProjects((p) => p.filter((_, idx) => idx !== i));
+
+  // ── Experience add/remove (for inline CV editing) ────────────────────────
+  const addBlankExperience = () =>
+    setExperienceItems((items) => [...items, {
+      designation: '', company_name: '', from_date: '', to_date: null,
+      currently_working: false, bullets: [''],
+    }]);
+  const removeExperience = (i: number) =>
+    setExperienceItems((items) => items.filter((_, idx) => idx !== i));
 
   // ── Core Skills (categorized) helpers ────────────────────────────────────
   const addSkillCategory = () =>
@@ -1384,32 +1526,45 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
 
   // ── Prompt ───────────────────────────────────────────────────────────────
   const canCopyPrompt =
-    form.target_job_title.trim() && experienceItems.length > 0;
+    (form.cv_title.trim() || form.target_job_title.trim()) && experienceItems.length > 0;
 
   // The applicant's own (non-AI) titles + date ranges for the experiences selected for this CV.
   const linkedInTitles = (() => {
-    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+    const MONTHS = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
+    ];
     const fmt = (d: string | null | undefined) => {
-      if (!d) return ''
-      const [y, m] = d.split('-')
-      const idx = parseInt(m) - 1
-      return `${MONTHS[idx] ?? m} ${y}`
-    }
+      if (!d) return "";
+      const [y, m] = d.split("-");
+      const idx = parseInt(m) - 1;
+      return `${MONTHS[idx] ?? m} ${y}`;
+    };
     const lines = experienceItems
       .map((exp, i) => {
-        if (!exp.designation) return null
-        const start = fmt(exp.from_date)
-        const end = exp.currently_working ? 'Present' : fmt(exp.to_date)
-        const dateRange = start ? `${start} – ${end || 'Present'}` : ''
-        return `experience${i + 1} = ${exp.designation}${dateRange ? ` (${dateRange})` : ''}`
+        if (!exp.designation) return null;
+        const start = fmt(exp.from_date);
+        const end = exp.currently_working ? "Present" : fmt(exp.to_date);
+        const dateRange = start ? `${start} – ${end || "Present"}` : "";
+        return `experience${i + 1} = ${exp.designation}${dateRange ? ` (${dateRange})` : ""}`;
       })
-      .filter(Boolean)
-    return lines.length ? lines.join('\n') : '(none)'
-  })()
+      .filter(Boolean);
+    return lines.length ? lines.join("\n") : "(none)";
+  })();
 
   const copyPrompt = () => {
     const prompt = buildPrompt(
-      form.target_job_title.trim(),
+      (form.cv_title.trim() || form.target_job_title.trim()),
       form.raw_description.trim() || "(No job description provided)",
       experienceItems.length,
       linkedInTitles,
@@ -1535,44 +1690,58 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
     job_link: form.job_link,
   };
 
+  // ── Inline edit callbacks — wired to existing state setters ─────────────
+  const cvEditCallbacks: import("./CVPreview").CVEditCallbacks = {
+    name: (v) => set("applicant_name", v),
+    headline: (v) => set("headline", v),
+    summary: (v) => set("summary", v),
+    location: (v) => set("location", v),
+    email: (v) => set("selected_email", v),
+    phone: (v) => set("selected_phone", v),
+    linkedin: (v) => set("linkedin", v),
+    github: (v) => set("github", v),
+    skillsCategoryRename: (i, v) => updateSkillCategory(i, { category: v }),
+    skillsCategorySkills: (i, skills) => updateSkillCategory(i, { skills }),
+    skillsCategoryAdd: addSkillCategory,
+    skillsCategoryDelete: (i) => { if (window.confirm('Remove this skill category?')) removeSkillCategory(i) },
+    expField: (ei, field, v) => updateExpField(ei, { [field]: v }),
+    expBulletEdit: (ei, bi, v) => setBullet(ei, bi, v),
+    expBulletAdd: (ei) => addBullet(ei),
+    expBulletDelete: (ei, bi) => { if (window.confirm('Delete this bullet point?')) removeBullet(ei, bi) },
+    expAdd: addBlankExperience,
+    expDelete: (i) => { if (window.confirm('Remove this experience entry?')) removeExperience(i) },
+    eduField: (i, field, v) => updateEduField(i, field, v),
+    eduAdd: addEdu,
+    eduDelete: (i) => { if (window.confirm('Remove this education entry?')) removeEdu(i) },
+    projField: (i, field, v) => updateProjField(i, field, v),
+    projAdd: addProject,
+    projDelete: (i) => { if (window.confirm('Remove this project?')) removeProject(i) },
+  };
+
   // ── ATS keyword source tracking (raw_description vs job_description HTML) ──
   const rawDescKeywords = useMemo(
     () => extractKeywords(form.raw_description),
     [form.raw_description],
   );
-  const jobDescKeywords = useMemo(
-    () => extractKeywords(stripHtml(form.job_description)),
-    [form.job_description],
-  );
 
-  const hoverSourceInfo = useMemo(() => {
-    if (!hoveredKeyword) return null;
-    const inRaw = rawDescKeywords.has(hoveredKeyword);
-    const inJobDesc = jobDescKeywords.has(hoveredKeyword);
-    return { word: hoveredKeyword, inRaw, inJobDesc };
-  }, [hoveredKeyword, rawDescKeywords, jobDescKeywords]);
-
-  // Auto-expand whichever source panel(s) contain the hovered keyword.
-  useEffect(() => {
-    if (!hoveredKeyword) return;
-    if (rawDescKeywords.has(hoveredKeyword)) setShowRawDescriptionView(true);
-    if (jobDescKeywords.has(hoveredKeyword)) setShowJobDescriptionView(true);
-  }, [hoveredKeyword, rawDescKeywords, jobDescKeywords]);
-
-  // Auto-scroll the matching <mark> into view inside each source panel.
-  useEffect(() => {
-    if (!hoveredKeyword) return;
-    const t = setTimeout(() => {
-      const selector = `mark[data-word="${hoveredKeyword}"]`;
-      rawDescRef.current
-        ?.querySelector(selector)
-        ?.scrollIntoView({ block: "center", behavior: "smooth" });
-      jobDescRef.current
-        ?.querySelector(selector)
-        ?.scrollIntoView({ block: "center", behavior: "smooth" });
-    }, 50);
-    return () => clearTimeout(t);
-  }, [hoveredKeyword]);
+  // Keywords extracted from the actual CV content (summary, skills, bullets, experience, education, projects).
+  // Used in left-panel ATS mode to highlight which raw-description words are covered by the CV.
+  const cvContentKeywords = useMemo(() => {
+    const text = [
+      form.applicant_name,
+      form.headline,
+      form.summary,
+      form.skills,
+      ...coreSkills.flatMap(g => g.skills),
+      ...experienceItems.flatMap(exp => [
+        exp.designation, exp.company_name,
+        ...(exp.bullets ?? []),
+      ]),
+      ...education.flatMap(edu => [edu.degree_title, edu.university_name]),
+      ...projects.flatMap(p => [p.title, p.description ?? '', p.technologies ?? '']),
+    ].filter(Boolean).join(' ')
+    return extractKeywords(text)
+  }, [form.applicant_name, form.headline, form.summary, form.skills, coreSkills, experienceItems, education, projects]);
 
   const buildPayload = () => {
     const payload = { ...form };
@@ -1594,46 +1763,109 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
 
   const handleSave = async (openAfter = false) => {
     setSaving(true);
+    setSaveStatus('saving');
     try {
       if (savedId) {
         await updateCV(savedId, buildPayload());
+        setLastSavedAt(new Date());
+        setSaveStatus('saved');
         onSaved?.();
         if (openAfter) window.open(`/viewCV/${savedId}`, "_blank");
       } else {
         const res: any = await createCV(buildPayload());
         const newId = res?.data?.id ?? res?.id ?? null;
         setSavedId(newId);
+        setLastSavedAt(new Date());
+        setSaveStatus('saved');
         onSaved?.();
         if (openAfter && newId) window.open(`/viewCV/${newId}`, "_blank");
       }
+    } catch {
+      setSaveStatus('idle');
     } finally {
       setSaving(false);
     }
   };
 
+  // Auto-save 1.5 s after the last change, but only for existing CVs (savedId present).
+  // New CVs require the user to click "Save Draft" first to create the DB record.
+  const buildPayloadRef = useRef(buildPayload);
+  buildPayloadRef.current = buildPayload;
+  useEffect(() => {
+    if (!savedId) return;
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    setSaveStatus('idle');
+    autoSaveTimer.current = setTimeout(async () => {
+      setSaveStatus('saving');
+      try {
+        await updateCVSilent(savedId, buildPayloadRef.current());
+        setLastSavedAt(new Date());
+        setSaveStatus('saved');
+        onSaved?.();
+      } catch {
+        setSaveStatus('idle');
+      }
+    }, 1500);
+    return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current) }
+  }, [form, coreSkills, experienceItems, education, projects, fontSettings, savedId]);
+
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-white">
       {/* ── Header ── */}
-      <div className="flex items-center gap-3 px-4 py-2 border-b border-gray-200 shrink-0 bg-white shadow-sm">
+      <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-200 shrink-0 bg-white shadow-sm">
         <button
           onClick={onClose}
           className="text-gray-400 hover:text-gray-700 shrink-0 p-0.5"
         >
           <X size={15} />
         </button>
-        <input
-          className="flex-1 text-xs border-none outline-none font-medium text-gray-800 placeholder-gray-300 max-w-xs"
-          placeholder="CV Title (internal label)"
-          value={form.cv_title}
-          onChange={(e) => set("cv_title", e.target.value)}
-        />
-        {job && (
-          <span className="text-[10px] text-gray-400 truncate max-w-[200px] hidden sm:block">
-            For: {job.job_title} @ {job.company_name}
-          </span>
+
+        {/* CV title with org + visa appended inline */}
+        <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
+          <EditableTitle value={form.cv_title} onChange={(v) => set("cv_title", v)} />
+          {(form.organization_name || form.sponsorship === 'yes') && (
+            <span className="text-green-600 font-semibold text-[10px] uppercase shrink-0">
+              ({[form.organization_name, form.sponsorship === 'yes' ? 'VISA' : ''].filter(Boolean).join(' · ')})
+            </span>
+          )}
+        </div>
+
+        {/* Applicant selector */}
+        {loadingApplicants ? (
+          <RefreshCw size={11} className="animate-spin text-gray-400 shrink-0" />
+        ) : (
+          <select
+            value={selectedApplicantId}
+            onChange={(e) => setSelectedApplicantId(e.target.value ? Number(e.target.value) : "")}
+            className="text-xs border border-gray-200 rounded px-2 py-1 bg-white focus:outline-none shrink-0 max-w-[160px]"
+          >
+            <option value="">— Applicant —</option>
+            {applicants.map((a) => (
+              <option key={a.id} value={a.id}>{a.name}</option>
+            ))}
+          </select>
         )}
+
         <div className="flex items-center gap-2 ml-auto shrink-0">
+          {/* Auto-save status */}
+          {savedId && (
+            <span className={`text-[10px] shrink-0 transition-colors ${
+              saveStatus === 'saving' ? 'text-amber-500' :
+              saveStatus === 'saved' ? 'text-green-600' :
+              'text-gray-300'
+            }`}>
+              {saveStatus === 'saving' && '● Saving…'}
+              {saveStatus === 'saved' && lastSavedAt && `✓ Saved ${formatLastSaved(lastSavedAt)}`}
+              {saveStatus === 'idle' && lastSavedAt && `✓ Saved ${formatLastSaved(lastSavedAt)}`}
+            </span>
+          )}
+          {form.job_link && (
+            <a href={form.job_link} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-1 px-2 py-1 text-[11px] text-gray-500 hover:text-gray-800 hover:underline">
+              View Job <ExternalLink size={10} />
+            </a>
+          )}
           {savedId && (
             <a
               href={`/viewCV/${savedId}`}
@@ -1661,17 +1893,14 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
             disabled={
               saving ||
               !form.applicant_name.trim() ||
-              !form.target_job_title.trim() ||
               !form.raw_description.trim()
             }
             title={
-              !form.target_job_title.trim()
-                ? "Target Job Title is required"
-                : !form.raw_description.trim()
-                  ? "Job Description is required"
-                  : !form.applicant_name.trim()
-                    ? "Applicant name is required"
-                    : ""
+              !form.raw_description.trim()
+                ? "Job Description is required"
+                : !form.applicant_name.trim()
+                  ? "Applicant name is required"
+                  : ""
             }
             className="px-3 py-1.5 text-xs border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
           >
@@ -1682,17 +1911,14 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
             disabled={
               saving ||
               !form.applicant_name.trim() ||
-              !form.target_job_title.trim() ||
               !form.raw_description.trim()
             }
             title={
-              !form.target_job_title.trim()
-                ? "Target Job Title is required"
-                : !form.raw_description.trim()
-                  ? "Job Description is required"
-                  : !form.applicant_name.trim()
-                    ? "Applicant name is required"
-                    : ""
+              !form.raw_description.trim()
+                ? "Job Description is required"
+                : !form.applicant_name.trim()
+                  ? "Applicant name is required"
+                  : ""
             }
             className="flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-800 text-white rounded hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
           >
@@ -1743,39 +1969,6 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
         </div>
       )}
 
-      {/* ── Job Context bar ── */}
-      {(form.organization_name || form.sponsorship || form.job_link) && (
-        <div className="flex items-center justify-between gap-3 flex-wrap px-4 py-1.5 border-b border-gray-200 shrink-0 bg-gray-50 text-[11px] text-gray-600">
-          <div className="flex items-center gap-4 flex-wrap">
-            {form.organization_name && (
-              <span>
-                <strong className="text-gray-700">Organization:</strong>{" "}
-                {form.organization_name}
-              </span>
-            )}
-            {form.sponsorship && (
-              <span>
-                <strong className="text-gray-700">Sponsorship:</strong>{" "}
-                {form.sponsorship === "yes"
-                  ? "Yes"
-                  : form.sponsorship === "no"
-                    ? "No"
-                    : "Unknown"}
-              </span>
-            )}
-          </div>
-          {form.job_link && (
-            <a
-              href={form.job_link}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-600 font-medium hover:underline whitespace-nowrap"
-            >
-              View Job →
-            </a>
-          )}
-        </div>
-      )}
 
       {/* ── Prior submission warning ── */}
       {companySubmission && (
@@ -1793,9 +1986,55 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
       <div className="flex-1 flex overflow-hidden">
         {/* ── Left: Form ── */}
         <div
-          className="shrink-0 overflow-y-auto"
+          className="shrink-0 overflow-y-auto relative"
           style={{ width: leftPanelWidth }}
         >
+          {/* Full-panel expand overlay for Job Description */}
+          {rawDescExpanded && (
+            <div className="absolute inset-0 z-10 flex flex-col bg-white p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className={labelCls + " bg-blue-50 border border-blue-200 px-2 py-0.5 rounded flex-1"}>
+                  {atsHighlightOn
+                    ? 'Job Description — hover CV keyword to locate it here'
+                    : 'Job Description — hover a keyword to highlight it on CV'}
+                </span>
+                <button type="button" onClick={() => { setRawDescExpanded(false); if (atsHighlightOn) setAtsHighlightOn(false) }}
+                  className="ml-2 text-blue-500 hover:text-blue-700" title="Collapse">
+                  <Minimize2 size={13} />
+                </button>
+              </div>
+              {atsHighlightOn ? (
+                /* ATS mode: no highlights on raw desc; only scroll-to when CV keyword is hovered */
+                <div
+                  ref={rawDescOverlayRef}
+                  className="flex-1 overflow-y-auto text-[10.5px] leading-relaxed whitespace-pre-wrap bg-blue-50 border border-blue-200 rounded p-3"
+                  dangerouslySetInnerHTML={{
+                    __html: highlightPlainTextToHtml(
+                      form.raw_description,
+                      hoveredKeyword ? new Set([hoveredKeyword]) : new Set(),
+                    ) || '<span style="color:#aaa;font-style:italic">Empty</span>',
+                  }}
+                />
+              ) : (
+                /* Left ATS mode: highlight raw desc words that EXIST IN CV content.
+                   Hover a highlighted word → that word appears highlighted on CV. */
+                <div
+                  className="flex-1 overflow-y-auto text-[10.5px] leading-relaxed whitespace-pre-wrap bg-blue-50 border border-blue-200 rounded p-3"
+                  dangerouslySetInnerHTML={{
+                    __html: highlightPlainTextToHtml(
+                      form.raw_description,
+                      cvContentKeywords,
+                    ) || '<span style="color:#aaa;font-style:italic">Empty</span>',
+                  }}
+                  onMouseOver={(e) => {
+                    const word = (e.target as HTMLElement).getAttribute?.('data-word')
+                    if (word) setHoveredKeyword(word)
+                  }}
+                  onMouseLeave={() => setHoveredKeyword(null)}
+                />
+              )}
+            </div>
+          )}
           <div className="p-4 space-y-5">
             {/* Expand / collapse all sections */}
             <div className="flex items-center justify-end gap-2 -mb-2">
@@ -1830,33 +2069,6 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
               </button>
             </div>
 
-            {/* Applicant select */}
-            <div>
-              <label className={labelCls}>Select Applicant</label>
-              {loadingApplicants ? (
-                <div className="flex items-center gap-1 text-xs text-gray-400">
-                  <RefreshCw size={11} className="animate-spin" /> Loading…
-                </div>
-              ) : (
-                <select
-                  value={selectedApplicantId}
-                  onChange={(e) =>
-                    setSelectedApplicantId(
-                      e.target.value ? Number(e.target.value) : "",
-                    )
-                  }
-                  className={inputCls}
-                >
-                  <option value="">-- Select applicant --</option>
-                  {applicants.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-
             {/* Job Context */}
             <div className="space-y-2">
               <SectionHeader
@@ -1867,78 +2079,21 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
               {showJobContext && (
                 <>
                   <div>
-                    <label className={labelCls}>Target Job Title</label>
-                    <input
-                      className={inputCls}
-                      placeholder="e.g. Senior React Developer"
-                      value={form.target_job_title}
-                      onChange={(e) => set("target_job_title", e.target.value)}
-                    />
-                  </div>
-                  <div className="border border-gray-200 rounded overflow-hidden">
-                    <button
-                      type="button"
-                      onClick={() => setShowAdditionalJobDetails((p) => !p)}
-                      className="w-full flex items-center justify-between px-2 py-1.5 bg-gray-50 hover:bg-gray-100 text-[10px] text-gray-500 uppercase font-medium"
-                    >
-                      Additional Job Details
-                      {showAdditionalJobDetails ? (
-                        <ChevronUp size={12} />
-                      ) : (
-                        <ChevronDown size={12} />
-                      )}
-                    </button>
-                    {showAdditionalJobDetails && (
-                      <div className="p-2 space-y-2">
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <label className={labelCls}>Organisation</label>
-                            <input
-                              className={inputCls}
-                              placeholder="Company name"
-                              value={form.organization_name}
-                              onChange={(e) =>
-                                set("organization_name", e.target.value)
-                              }
-                            />
-                          </div>
-                          <div>
-                            <label className={labelCls}>Sponsorship</label>
-                            <select
-                              className={inputCls}
-                              value={form.sponsorship}
-                              onChange={(e) =>
-                                set("sponsorship", e.target.value)
-                              }
-                            >
-                              <option value="">Unknown</option>
-                              <option value="yes">Yes</option>
-                              <option value="no">No</option>
-                            </select>
-                          </div>
-                        </div>
-                        <div>
-                          <label className={labelCls}>
-                            Job Link (optional)
-                          </label>
-                          <input
-                            className={inputCls}
-                            placeholder="https://…"
-                            value={form.job_link}
-                            onChange={(e) => set("job_link", e.target.value)}
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  <div>
                     <label
                       className={
                         labelCls +
-                        " bg-blue-50 border border-blue-200 px-2 py-0.5 rounded block"
+                        " bg-blue-50 border border-blue-200 px-2 py-0.5 rounded flex items-center justify-between"
                       }
                     >
-                      Job Description (for CV) *
+                      <span>Job Description (for CV) *</span>
+                      <button
+                        type="button"
+                        onClick={() => { setAtsHighlightOn(false); setRawDescExpanded(true) }}
+                        className={`text-[9px] font-semibold ml-2 shrink-0 px-1.5 py-0.5 rounded border transition-colors ${rawDescExpanded && !atsHighlightOn ? 'bg-amber-100 border-amber-400 text-amber-700' : 'bg-blue-50 border-blue-300 text-blue-600 hover:bg-blue-100'}`}
+                        title="Highlight CV keywords in this description"
+                      >
+                        ATS Keywords
+                      </button>
                     </label>
                     <textarea
                       rows={5}
@@ -1947,94 +2102,6 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
                       value={form.raw_description}
                       onChange={(e) => set("raw_description", e.target.value)}
                     />
-                  </div>
-
-                  {hoverSourceInfo && (
-                    <div className="text-[10px] rounded border border-amber-200 bg-amber-50 px-2 py-1 flex items-center gap-2">
-                      <span className="font-semibold text-amber-800">
-                        "{hoverSourceInfo.word}"
-                      </span>
-                      <span
-                        className={
-                          hoverSourceInfo.inRaw
-                            ? "text-green-700"
-                            : "text-gray-400"
-                        }
-                      >
-                        {hoverSourceInfo.inRaw ? "✓" : "✕"} Raw Description
-                      </span>
-                      <span
-                        className={
-                          hoverSourceInfo.inJobDesc
-                            ? "text-green-700"
-                            : "text-gray-400"
-                        }
-                      >
-                        {hoverSourceInfo.inJobDesc ? "✓" : "✕"} Job Description
-                      </span>
-                    </div>
-                  )}
-
-                  <div className="border border-gray-200 rounded overflow-hidden">
-                    <button
-                      type="button"
-                      onClick={() => setShowRawDescriptionView((p) => !p)}
-                      className="w-full flex items-center justify-between px-2 py-1.5 bg-gray-50 hover:bg-gray-100 text-[10px] text-gray-500 uppercase font-medium"
-                    >
-                      Raw Description (View Mode)
-                      {showRawDescriptionView ? (
-                        <ChevronUp size={12} />
-                      ) : (
-                        <ChevronDown size={12} />
-                      )}
-                    </button>
-                    {showRawDescriptionView && (
-                      <div
-                        ref={rawDescRef}
-                        className="p-2 text-[10.5px] leading-relaxed whitespace-pre-wrap max-h-64 overflow-y-auto"
-                        dangerouslySetInnerHTML={{
-                          __html:
-                            highlightPlainTextToHtml(
-                              form.raw_description,
-                              atsHighlightOn && hoveredKeyword
-                                ? new Set([hoveredKeyword])
-                                : new Set(),
-                            ) ||
-                            '<span class="text-gray-400 italic">Empty</span>',
-                        }}
-                      />
-                    )}
-                  </div>
-
-                  <div className="border border-gray-200 rounded overflow-hidden">
-                    <button
-                      type="button"
-                      onClick={() => setShowJobDescriptionView((p) => !p)}
-                      className="w-full flex items-center justify-between px-2 py-1.5 bg-gray-50 hover:bg-gray-100 text-[10px] text-gray-500 uppercase font-medium"
-                    >
-                      Job Description (HTML View)
-                      {showJobDescriptionView ? (
-                        <ChevronUp size={12} />
-                      ) : (
-                        <ChevronDown size={12} />
-                      )}
-                    </button>
-                    {showJobDescriptionView && (
-                      <div
-                        ref={jobDescRef}
-                        className="p-2 text-[10.5px] leading-relaxed max-h-64 overflow-y-auto"
-                        dangerouslySetInnerHTML={{
-                          __html:
-                            highlightHtmlString(
-                              form.job_description,
-                              atsHighlightOn && hoveredKeyword
-                                ? new Set([hoveredKeyword])
-                                : new Set(),
-                            ) ||
-                            '<span class="text-gray-400 italic">Empty</span>',
-                        }}
-                      />
-                    )}
                   </div>
 
                   <div className="flex gap-2">
@@ -2225,22 +2292,31 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
                   </div>
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <label className={labelCls}>Core Skills</label>
                       <button
                         type="button"
-                        onClick={addSkillCategory}
-                        className="flex items-center gap-1 text-[10px] text-teal-600 hover:text-teal-800 border border-teal-200 rounded px-2 py-0.5"
+                        onClick={() => setShowCoreSkillsEditor((p) => !p)}
+                        className="flex items-center gap-1 text-[10px] text-gray-400 uppercase font-semibold hover:text-gray-600"
                       >
-                        <Plus size={9} /> Add Category
+                        {showCoreSkillsEditor ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                        Core Skills
                       </button>
+                      {showCoreSkillsEditor && (
+                        <button
+                          type="button"
+                          onClick={addSkillCategory}
+                          className="flex items-center gap-1 text-[10px] text-teal-600 hover:text-teal-800 border border-teal-200 rounded px-2 py-0.5"
+                        >
+                          <Plus size={9} /> Add Category
+                        </button>
+                      )}
                     </div>
-                    {coreSkills.length === 0 && (
+                    {showCoreSkillsEditor && coreSkills.length === 0 && (
                       <p className="text-[10px] text-gray-400 italic text-center py-2">
                         No skill categories yet — e.g. "Front-End", "Back-End",
                         "Cloud"…
                       </p>
                     )}
-                    <div className="space-y-2">
+                    {showCoreSkillsEditor && <div className="space-y-2">
                       {coreSkills.map((group, i) => (
                         <div
                           key={i}
@@ -2281,7 +2357,7 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
                           />
                         </div>
                       ))}
-                    </div>
+                    </div>}
                   </div>
                   <div className="border border-gray-200 rounded overflow-hidden">
                     <button
@@ -2748,7 +2824,7 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
                       : "border-gray-300 bg-white text-gray-500 hover:bg-gray-50"
                   }`}
                 >
-                  ATS Highlight {atsHighlightOn ? "On" : "Off"}
+                  ATS Keywords {atsHighlightOn ? "On" : "Off"}
                 </button>
                 <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-gray-200 rounded shadow-lg p-2 w-40 text-[10px] space-y-1.5 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity pointer-events-none">
                   <div className="flex items-center gap-1.5">
@@ -2782,13 +2858,14 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
           >
             <CVPreview
               data={cvData}
-              highlightEnabled={atsHighlightOn}
+              // ATS on → CV highlights all raw_description keywords
+              // Expand-only → CV highlights only the hovered keyword from raw desc panel
+              highlightEnabled={atsHighlightOn || (rawDescExpanded && !!hoveredKeyword)}
+              forceKeywords={!atsHighlightOn && rawDescExpanded && hoveredKeyword ? new Set([hoveredKeyword]) : undefined}
               fontSettings={fontSettings}
               onSkillsReorder={(newSkills) => set("skills", newSkills)}
-              onBulletEdit={(expIdx, bulletIdx, val) =>
-                setBullet(expIdx, bulletIdx, val)
-              }
-              onKeywordHover={setHoveredKeyword}
+              onEdit={(atsHighlightOn || !!hoveredKeyword) ? undefined : cvEditCallbacks}
+              onKeywordHover={atsHighlightOn ? setHoveredKeyword : undefined}
             />
           </div>
         </div>
@@ -2818,7 +2895,7 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
                     : "border-gray-300 bg-white text-gray-500 hover:bg-gray-50"
                 }`}
               >
-                ATS Highlight {atsHighlightOn ? "On" : "Off"}
+                ATS Keywords {atsHighlightOn ? "On" : "Off"}
               </button>
               <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-gray-200 rounded shadow-lg p-2 w-40 text-[10px] space-y-1.5 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity pointer-events-none">
                 <div className="flex items-center gap-1.5">
@@ -2848,9 +2925,7 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
                 highlightEnabled={atsHighlightOn}
                 fontSettings={fontSettings}
                 onSkillsReorder={(newSkills) => set("skills", newSkills)}
-                onBulletEdit={(expIdx, bulletIdx, val) =>
-                  setBullet(expIdx, bulletIdx, val)
-                }
+                onEdit={(atsHighlightOn || !!hoveredKeyword) ? undefined : cvEditCallbacks}
                 onKeywordHover={setHoveredKeyword}
               />
             </div>
@@ -2861,7 +2936,7 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
       {showLLMPopup && (
         <LLMGeneratorPopup
           prompt={buildPrompt(
-            form.target_job_title.trim(),
+            (form.cv_title.trim() || form.target_job_title.trim()),
             form.raw_description.trim() || "(No job description provided)",
             experienceItems.length,
             linkedInTitles,
