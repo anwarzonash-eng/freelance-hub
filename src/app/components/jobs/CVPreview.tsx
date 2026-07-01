@@ -553,7 +553,7 @@ export default function CVPreview({
             )}
 
             {/* ── Projects ── */}
-            {((data.projects ?? []).some(p => p.title?.trim()) || onEdit?.projAdd) && (
+            {(data.projects ?? []).some(p => p.title?.trim()) && (
                 <>
                     <Divider title="Projects" size={fs.sectionDivider} onAdd={onEdit?.projAdd} />
                     {(data.projects ?? []).map((proj, i) => {
