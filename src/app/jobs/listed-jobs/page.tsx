@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { RefreshCw, ExternalLink, Search, ChevronDown, Briefcase, FileText, Eye, Building2, X } from 'lucide-react'
+import { RefreshCw, ExternalLink, Search, ChevronDown, Briefcase, FileText, Eye, Building2, X, Copy, Link } from 'lucide-react'
 import { getAllJobs, getDistinctJobValues } from '@/app/api_handlers/api/sponsored-jobs.api'
 import { getAllCompanies } from '@/app/api_handlers/api/sponsored-companies.api'
 import { getAllCVs } from '@/app/api_handlers/api/job-cvs.api'
@@ -10,6 +10,7 @@ import { listAuthUsers } from '@/app/api_handlers/api/auth.api'
 import JobCVModal from '@/app/components/jobs/JobCVModal'
 import JobViewModal from '@/app/components/jobs/JobViewModal'
 import { ApplicationStatusIcon, APPLICATION_STATUS_OPTIONS } from '@/app/components/jobs/JobPreviewEdit'
+import ContextMenu, { ContextMenuItem } from '@/app/components/jobs/ContextMenu'
 import { timeAgo } from '@/app/utils/time'
 
 const LIMIT_OPTIONS = [25, 50, 100, 200]
@@ -71,6 +72,7 @@ export default function ListedJobsPage() {
 
     const [cvJob, setCvJob] = useState<any | null>(null)
     const [viewingJob, setViewingJob] = useState<any | null>(null)
+    const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; row: any } | null>(null)
     const [cvMap, setCvMap] = useState<Record<number, any>>({})
     const [userMap, setUserMap] = useState<Record<string, string>>({})
 
@@ -479,7 +481,8 @@ export default function ListedJobsPage() {
                             const shown = techSkills.slice(0, 2)
                             const extra = techSkills.length - shown.length
                             return (
-                                <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50">
+                                <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50 cursor-context-menu"
+                                    onContextMenu={e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, row }) }}>
                                     <td className="px-2 py-1.5 text-gray-400 border-r border-gray-100">{rowNum}</td>
                                     <td className="px-2 py-1.5 border-r border-gray-100 max-w-[200px]">
                                         <a href={row.link} target="_blank" rel="noopener noreferrer"
@@ -560,6 +563,19 @@ export default function ListedJobsPage() {
                     </tbody>
                 </table>
             </div>
+
+            {ctxMenu && (() => {
+                const r = ctxMenu.row
+                const cv = cvMap[r.id]
+                const items: ContextMenuItem[] = [
+                    { icon: <Eye size={13} />, label: 'View Job', onClick: () => setViewingJob(r) },
+                    { icon: <FileText size={13} />, label: 'Create CV', onClick: () => setCvJob(r) },
+                    ...(cv ? [{ icon: <ExternalLink size={13} />, label: 'View CV', onClick: () => window.open(`/viewCV/${cv.id}`, '_blank') }] : []),
+                    ...(r.company_id ? [{ icon: <Building2 size={13} />, label: 'View Company', onClick: () => window.open(`/jobs/companies?keyword=${encodeURIComponent(r.company_id)}`, '_blank') }] : []),
+                    { icon: <Link size={13} />, label: 'Copy Link', separator: true, onClick: () => navigator.clipboard.writeText(`${window.location.origin}/jobs/listed-jobs?job_id=${r.id}`) },
+                ]
+                return <ContextMenu x={ctxMenu.x} y={ctxMenu.y} items={items} onClose={() => setCtxMenu(null)} />
+            })()}
 
             {viewingJob && (
                 <JobViewModal

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, RefreshCw, Pencil, Trash2, ExternalLink, ChevronDown, ChevronUp, Search, Building2, BriefcaseBusiness, Terminal, Download, X, SlidersHorizontal, ClipboardCheck, Users, Copy, Check, FileText, ListChecks } from 'lucide-react'
+import { Plus, RefreshCw, Pencil, Trash2, ExternalLink, ChevronDown, ChevronUp, Search, Building2, BriefcaseBusiness, Terminal, Download, Upload, X, SlidersHorizontal, ClipboardCheck, Users, Copy, Check, FileText, ListChecks } from 'lucide-react'
 import { getAllCompanies, getDistinctCompanyValues, deleteCompany, rawQueryCompanies, rawQueryCompaniesOrError } from '@/app/api_handlers/api/sponsored-companies.api'
 import { timeAgo } from '@/app/utils/time'
 import { getCompanyCategories } from '@/app/api_handlers/api/company-categories.api'
@@ -12,9 +12,10 @@ import CompanyJsonPanel from './CompanyJsonPanel'
 import CompanyJobsModal from './CompanyJobsModal'
 import ManualCheckModal from './ManualCheckModal'
 import AssignModal from './AssignModal'
+import ContextMenu, { ContextMenuItem } from './ContextMenu'
 
 const LIMIT_OPTIONS = [25, 50, 100, 200, 500, 1000, 2000, 3000, 4000, 5000]
-const EMPTY_FILTERS = { sponsor_type: '', sponsor_route: '', is_deleted: 'false', visa_mentioned: '', keyword: '', has_website: '', has_career_page: '', ranked: '', rank_op: '', rank_val: '', manual_check_done: '', has_it_jobs: '', offers_freelance: '', should_apply: '', date_from: '', date_to: '', checked_by: '', category_id: '', assigned: '', assigned_to: '', cv_submitted: '' }
+const EMPTY_FILTERS = { sponsor_type: '', sponsor_route: '', is_sponsored: 'true', is_deleted: 'false', visa_mentioned: '', keyword: '', has_website: '', has_career_page: '', ranked: '', rank_op: '', rank_val: '', manual_check_done: '', has_it_jobs: '', offers_freelance: '', should_apply: '', date_from: '', date_to: '', checked_by: '', category_id: '', assigned: '', assigned_to: '', cv_submitted: '' }
 
 function companyFiltersToParams(
     f: typeof EMPTY_FILTERS, page: number, limit: number, sqlMode: boolean, sqlWhere: string,
@@ -140,11 +141,13 @@ export default function CompaniesPage() {
     // Start from the SSR-safe default on both server and first client render, then
     // load the persisted value in a post-mount effect — branching the initializer on
     // `typeof window` caused a server/client markup mismatch (hydration error).
+    // Read from localStorage only on mount (no save-on-every-render effects — those fired
+    // on the initial render with defaults and overwrote the persisted values before the
+    // load setState calls could propagate). We now write directly in the toggle callbacks.
     const [visiblePanels, setVisiblePanels] = useState<Set<string>>(() => new Set())
     const [showViewDd, setShowViewDd] = useState(false)
     const viewDdRef = useRef<HTMLDivElement>(null)
 
-    // Table column visibility (persisted to localStorage)
     const [visibleCols, setVisibleCols] = useState<Set<string>>(() => new Set(DEFAULT_TABLE_COLS))
     const [showColDd, setShowColDd] = useState(false)
     const colDdRef = useRef<HTMLDivElement>(null)
@@ -158,10 +161,13 @@ export default function CompaniesPage() {
 
     const col = (key: string) => visibleCols.has(key)
 
+    // Write to localStorage inside the updater so we save only when user changes state,
+    // never on the initial render where state is still at its default value.
     const togglePanel = (key: string) =>
         setVisiblePanels(prev => {
             const s = new Set(prev)
             if (s.has(key)) s.delete(key); else s.add(key)
+            localStorage.setItem('companies_visible_panels', JSON.stringify(Array.from(s)))
             return s
         })
 
@@ -169,20 +175,11 @@ export default function CompaniesPage() {
         setVisibleCols(prev => {
             const s = new Set(prev)
             if (s.has(key)) s.delete(key); else s.add(key)
+            localStorage.setItem('companies_visible_cols', JSON.stringify(Array.from(s)))
             return s
         })
 
     const showSqlPanel = visiblePanels.has('sql')
-
-    // Save visible columns to localStorage
-    useEffect(() => {
-        localStorage.setItem('companies_visible_cols', JSON.stringify(Array.from(visibleCols)))
-    }, [visibleCols])
-
-    // Save visible panels (Filters, SQL Query, Upload JSON, Export JSON) to localStorage
-    useEffect(() => {
-        localStorage.setItem('companies_visible_panels', JSON.stringify(Array.from(visiblePanels)))
-    }, [visiblePanels])
 
     useEffect(() => {
         const handler = (e: MouseEvent) => {
@@ -194,6 +191,8 @@ export default function CompaniesPage() {
     }, [])
 
     // Modals
+    const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; row: any } | null>(null)
+    const [pageCtxMenu, setPageCtxMenu] = useState<{ x: number; y: number } | null>(null)
     const [editing, setEditing] = useState<any | null>(null)
     const [adding, setAdding] = useState(false)
     const [deleting, setDeleting] = useState<string | null>(null)
@@ -214,6 +213,7 @@ export default function CompaniesPage() {
             const q: any = { page: pg, limit: lim }
             if (af.sponsor_type) q.sponsor_type = af.sponsor_type
             if (af.sponsor_route) q.sponsor_route = af.sponsor_route
+            if (af.is_sponsored !== '') q.is_sponsored = af.is_sponsored
             if (af.is_deleted !== '') q.is_deleted = af.is_deleted
             if (af.visa_mentioned !== '') q.visa_mentioned = af.visa_mentioned
             if (af.keyword) q.keyword = af.keyword
@@ -411,6 +411,7 @@ export default function CompaniesPage() {
                 const q: any = { export_all: true }
                 if (applied.sponsor_type) q.sponsor_type = applied.sponsor_type
                 if (applied.sponsor_route) q.sponsor_route = applied.sponsor_route
+                if (applied.is_sponsored !== '') q.is_sponsored = applied.is_sponsored
                 if (applied.is_deleted !== '') q.is_deleted = applied.is_deleted
                 if (applied.visa_mentioned !== '') q.visa_mentioned = applied.visa_mentioned
                 if (applied.keyword) q.keyword = applied.keyword
@@ -453,11 +454,12 @@ export default function CompaniesPage() {
     }
 
     return (
-        <div className="p-3 bg-white min-h-screen">
+        <div className="p-3 bg-white min-h-screen"
+            onContextMenu={e => { e.preventDefault(); setPageCtxMenu({ x: e.clientX, y: e.clientY }) }}>
             {/* Header — title only, controls live in the table's last column header */}
             <div className="flex items-center gap-2 mb-3 border-b border-gray-200 pb-2">
                 <Building2 size={14} className="text-gray-500" />
-                <h1 className="text-sm font-semibold text-gray-800">Sponsored Companies</h1>
+                <h1 className="text-sm font-semibold text-gray-800">Companies</h1>
                 <span className="text-[10px] text-gray-400">{total.toLocaleString()} total</span>
                 {sqlMode && <span className="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-medium">SQL Mode</span>}
             </div>
@@ -532,6 +534,16 @@ export default function CompaniesPage() {
                                 </div>
                             </div>
                         )}
+                    </div>
+
+                    <div className="flex flex-col gap-0.5">
+                        <label className="text-[10px] text-gray-400 uppercase">Sponsored</label>
+                        <select value={filters.is_sponsored} onChange={e => setFilters(f => ({ ...f, is_sponsored: e.target.value }))}
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.is_sponsored !== EMPTY_FILTERS.is_sponsored ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
+                            <option value="">All</option>
+                            <option value="true">Sponsored</option>
+                            <option value="false">Not Sponsored</option>
+                        </select>
                     </div>
 
                     <div className="flex flex-col gap-0.5">
@@ -930,7 +942,8 @@ export default function CompaniesPage() {
                             const rowNum = (page - 1) * limit + idx + 1
                             const catName = row.category_id ? categories.find(c => c.id === row.category_id)?.name : null
                             return (
-                                <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50">
+                                <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50 cursor-context-menu"
+                                    onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, row }) }}>
                                     {col('num') && (
                                         <td className="px-2 py-1 text-gray-400 border-r border-gray-100 whitespace-nowrap">{rowNum}</td>
                                     )}
@@ -1206,6 +1219,33 @@ export default function CompaniesPage() {
                     onDone={() => { setAssigning(false); refresh() }}
                 />
             )}
+            {ctxMenu && (() => {
+                const r = ctxMenu.row
+                const items: ContextMenuItem[] = [
+                    { icon: <BriefcaseBusiness size={13} />, label: 'View Jobs', onClick: () => window.open(`/jobs/listed-jobs?company_id=${encodeURIComponent(r.id)}`, '_blank') },
+                    { icon: <FileText size={13} />, label: 'View CVs', onClick: () => window.open(`/jobs/cvs?company_id=${encodeURIComponent(r.id)}`, '_blank') },
+                    { icon: <ListChecks size={13} />, label: 'Add / Edit Jobs', onClick: () => setAddingJobsFor(r) },
+                    { icon: <ClipboardCheck size={13} />, label: 'Manual Check', onClick: () => setManualChecking(r) },
+                    { icon: <Pencil size={13} />, label: 'Edit', onClick: () => setEditing(r) },
+                    { icon: <Copy size={13} />, label: 'Copy Link', separator: true, onClick: () => navigator.clipboard.writeText(`${window.location.origin}/jobs/companies?keyword=${encodeURIComponent(r.id)}`) },
+                    { icon: <Trash2 size={13} />, label: 'Delete', variant: 'danger' as const, onClick: () => setDeleting(r.id) },
+                ]
+                return <ContextMenu x={ctxMenu.x} y={ctxMenu.y} items={items} onClose={() => setCtxMenu(null)} />
+            })()}
+            {pageCtxMenu && (() => {
+                const panels: { key: string; icon: React.ReactNode; label: string }[] = [
+                    { key: 'filters', icon: <SlidersHorizontal size={13} />, label: `${visiblePanels.has('filters') ? 'Hide' : 'Show'} Filters` },
+                    { key: 'sql', icon: <Terminal size={13} />, label: `${visiblePanels.has('sql') ? 'Hide' : 'Show'} SQL Query` },
+                    { key: 'upload', icon: <Upload size={13} />, label: `${visiblePanels.has('upload') ? 'Hide' : 'Show'} Import JSON` },
+                    { key: 'export', icon: <Download size={13} />, label: `${visiblePanels.has('export') ? 'Hide' : 'Show'} Export JSON` },
+                ]
+                const items: ContextMenuItem[] = panels.map(p => ({
+                    icon: p.icon,
+                    label: p.label,
+                    onClick: () => togglePanel(p.key),
+                }))
+                return <ContextMenu x={pageCtxMenu.x} y={pageCtxMenu.y} items={items} onClose={() => setPageCtxMenu(null)} />
+            })()}
         </div>
     )
 }

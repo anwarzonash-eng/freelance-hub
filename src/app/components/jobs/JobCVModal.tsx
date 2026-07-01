@@ -30,6 +30,7 @@ import CVPreview, {
   CVFontSettings,
   DEFAULT_FONT_SETTINGS,
   FONT_SETTING_FIELDS,
+  FONT_SETTING_GROUPS,
   FULL_MATCH_COLOR,
   PARTIAL_MATCH_COLOR,
   extractKeywords,

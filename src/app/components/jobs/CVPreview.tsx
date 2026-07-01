@@ -288,22 +288,74 @@ export interface CVData {
 }
 
 export interface CVFontSettings {
-    body: number; secondary: number; sectionDivider: number; subheading: number
-    applicantName: number; headline: number
+    // Name block
+    applicantName: number
+    headline: number
+    contactLine: number
+    // Section headings (SUMMARY, SKILLS, WORK EXPERIENCE, EDUCATION, PROJECTS)
+    sectionHeading: number
+    // Work Experience
+    expDesignation: number
+    expCompany: number
+    expDates: number
+    expBullet: number
+    // Education
+    eduDegree: number
+    eduInstitution: number
+    eduDates: number
 }
 
 export const DEFAULT_FONT_SETTINGS: CVFontSettings = {
-    body: 10.5, secondary: 9, sectionDivider: 11, subheading: 10.5, applicantName: 21, headline: 11.25,
+    applicantName: 21,
+    headline: 11.25,
+    contactLine: 9,
+    sectionHeading: 11,
+    expDesignation: 10.5,
+    expCompany: 10.5,
+    expDates: 9,
+    expBullet: 10.5,
+    eduDegree: 10.5,
+    eduInstitution: 10.5,
+    eduDates: 9,
 }
 
-export const FONT_SETTING_FIELDS: { key: keyof CVFontSettings; label: string; hint: string }[] = [
-    { key: 'applicantName', label: 'Applicant Name', hint: 'Top heading' },
-    { key: 'headline', label: 'Headline', hint: 'Role/title line under the name' },
-    { key: 'sectionDivider', label: 'Section Headings', hint: 'Summary, Skills, Work Experience…' },
-    { key: 'subheading', label: 'Item Subheadings', hint: 'Job title/company, degree, project title' },
-    { key: 'body', label: 'Body Text', hint: 'Summary, skills, bullets, descriptions' },
-    { key: 'secondary', label: 'Secondary Metadata', hint: 'Contact line, dates' },
+export const FONT_SETTING_GROUPS: { group: string; fields: { key: keyof CVFontSettings; label: string }[] }[] = [
+    {
+        group: 'Name Block',
+        fields: [
+            { key: 'applicantName', label: 'Applicant Name' },
+            { key: 'headline', label: 'Headline' },
+            { key: 'contactLine', label: 'Contact Line' },
+        ],
+    },
+    {
+        group: 'Sections',
+        fields: [
+            { key: 'sectionHeading', label: 'Section Headings' },
+        ],
+    },
+    {
+        group: 'Work Experience',
+        fields: [
+            { key: 'expDesignation', label: 'Job Title' },
+            { key: 'expCompany', label: 'Company Name' },
+            { key: 'expDates', label: 'Dates' },
+            { key: 'expBullet', label: 'Bullet Points' },
+        ],
+    },
+    {
+        group: 'Education',
+        fields: [
+            { key: 'eduDegree', label: 'Degree' },
+            { key: 'eduInstitution', label: 'Institution' },
+            { key: 'eduDates', label: 'Dates' },
+        ],
+    },
 ]
+
+// Flat list for backward compat with any existing per-field usage
+export const FONT_SETTING_FIELDS: { key: keyof CVFontSettings; label: string; hint: string }[] =
+    FONT_SETTING_GROUPS.flatMap(g => g.fields.map(f => ({ ...f, hint: g.group })))
 
 const NAVY = '#1F3864'
 const SLATE = '#44546A'
@@ -363,13 +415,16 @@ export default function CVPreview({
         [data.raw_description, highlightEnabled]
     )
     const keywords = forceKeywords ?? computedKeywords
-    const descriptionLower = keywords.size > 0 ? (data.raw_description ?? '').toLowerCase() : ''
+    // When forceKeywords is active (hover-highlight mode), suppress descriptionLower so
+    // renderSkillMatch's phrase-inclusion check doesn't fire for every skill that happens
+    // to appear in the raw description — we only want the single hovered token highlighted.
+    const descriptionLower = !forceKeywords && keywords.size > 0 ? (data.raw_description ?? '').toLowerCase() : ''
 
     // Resolve bullet edit — onEdit.expBulletEdit takes priority, falls back to legacy onBulletEdit
     const handleBulletEdit = onEdit?.expBulletEdit ?? onBulletEdit
 
     return (
-        <div style={{ fontFamily: 'Calibri, Arial, system-ui, sans-serif', fontSize: `${fs.body}pt`, color: TEXT_COLOR, backgroundColor: '#fff', padding: '48px 58px', boxSizing: 'border-box', lineHeight: '1.4' }}>
+        <div style={{ fontFamily: 'Calibri, Arial, system-ui, sans-serif', fontSize: `${fs.expBullet}pt`, color: TEXT_COLOR, backgroundColor: '#fff', padding: '48px 58px', boxSizing: 'border-box', lineHeight: '1.4' }}>
 
             {/* ── Name block ── */}
             <div>
@@ -383,19 +438,19 @@ export default function CVPreview({
                         style={{ fontStyle: 'italic', fontSize: `${fs.headline}pt`, color: SLATE }}
                         placeholder={onEdit?.headline ? 'Add headline…' : ''} />
                 </div>
-                <div style={{ fontSize: `${fs.secondary}pt`, color: SLATE, marginTop: '4px' }}>
+                <div style={{ fontSize: `${fs.contactLine}pt`, color: SLATE, marginTop: '4px' }}>
                     {onEdit ? (
                         /* Edit mode: individual inline inputs for each contact field */
                         <span>
-                            <InlineText value={data.location || ''} onSave={onEdit.location} style={{ fontSize: `${fs.secondary}pt`, color: SLATE }} placeholder="Location" />
+                            <InlineText value={data.location || ''} onSave={onEdit.location} style={{ fontSize: `${fs.contactLine}pt`, color: SLATE }} placeholder="Location" />
                             {' | '}
-                            <InlineText value={data.selected_email || ''} onSave={onEdit.email} style={{ fontSize: `${fs.secondary}pt`, color: SLATE }} placeholder="Email" />
+                            <InlineText value={data.selected_email || ''} onSave={onEdit.email} style={{ fontSize: `${fs.contactLine}pt`, color: SLATE }} placeholder="Email" />
                             {' | '}
-                            <InlineText value={data.selected_phone || ''} onSave={onEdit.phone} style={{ fontSize: `${fs.secondary}pt`, color: SLATE }} placeholder="Phone" />
+                            <InlineText value={data.selected_phone || ''} onSave={onEdit.phone} style={{ fontSize: `${fs.contactLine}pt`, color: SLATE }} placeholder="Phone" />
                             {' | '}
-                            <InlineText value={data.linkedin || ''} onSave={onEdit.linkedin} style={{ fontSize: `${fs.secondary}pt`, color: SLATE }} placeholder="LinkedIn URL" />
+                            <InlineText value={data.linkedin || ''} onSave={onEdit.linkedin} style={{ fontSize: `${fs.contactLine}pt`, color: SLATE }} placeholder="LinkedIn URL" />
                             {' | '}
-                            <InlineText value={data.github || ''} onSave={onEdit.github} style={{ fontSize: `${fs.secondary}pt`, color: SLATE }} placeholder="GitHub URL" />
+                            <InlineText value={data.github || ''} onSave={onEdit.github} style={{ fontSize: `${fs.contactLine}pt`, color: SLATE }} placeholder="GitHub URL" />
                         </span>
                     ) : (
                         /* View mode: pipe-separated, links clickable */
@@ -414,12 +469,12 @@ export default function CVPreview({
             {/* ── Summary ── */}
             {(data.summary?.trim() || onEdit?.summary) && (
                 <>
-                    <Divider title="Summary" size={fs.sectionDivider} />
+                    <Divider title="Summary" size={fs.sectionHeading} />
                     {onEdit?.summary
                         ? <InlineArea value={data.summary || ''} onSave={onEdit.summary}
-                            style={{ fontSize: `${fs.body}pt`, lineHeight: '1.4' }}
+                            style={{ fontSize: `${fs.expBullet}pt`, lineHeight: '1.4' }}
                             placeholder="Write a professional summary…" rows={4} />
-                        : <p style={{ margin: 0, fontSize: `${fs.body}pt`, lineHeight: '1.4' }}>{highlightWords(data.summary, keywords, onKeywordHover)}</p>
+                        : <p style={{ margin: 0, fontSize: `${fs.expBullet}pt`, lineHeight: '1.4' }}>{highlightWords(data.summary, keywords, onKeywordHover)}</p>
                     }
                 </>
             )}
@@ -427,11 +482,11 @@ export default function CVPreview({
             {/* ── Core Skills (categorized) ── */}
             {(data.core_skills && data.core_skills.length > 0) || onEdit?.skillsCategoryAdd ? (
                 <>
-                    <Divider title="Core Skills" size={fs.sectionDivider} onAdd={onEdit?.skillsCategoryAdd} />
+                    <Divider title="Core Skills" size={fs.sectionHeading} onAdd={onEdit?.skillsCategoryAdd} />
                     {(data.core_skills ?? []).map((group, gi) => (
                         <HoverActions key={gi} style={{ margin: gi === 0 ? 0 : '4px 0 0' }}
                             actions={onEdit?.skillsCategoryDelete ? [{ label: '×', onClick: () => onEdit.skillsCategoryDelete!(gi), color: '#e74c3c' }] : []}>
-                            <p style={{ margin: 0, fontSize: `${fs.body}pt` }}>
+                            <p style={{ margin: 0, fontSize: `${fs.expBullet}pt` }}>
                                 <span style={{ fontWeight: 700, color: SLATE }}>
                                     <InlineText value={group.category} onSave={onEdit?.skillsCategoryRename ? v => onEdit.skillsCategoryRename!(gi, v) : undefined}
                                         style={{ fontWeight: 700, color: SLATE }} placeholder="Category" />
@@ -449,8 +504,8 @@ export default function CVPreview({
                 </>
             ) : data.skills?.trim() ? (
                 <>
-                    <Divider title="Skills" size={fs.sectionDivider} />
-                    <p style={{ margin: 0, fontSize: `${fs.body}pt` }}>
+                    <Divider title="Skills" size={fs.sectionHeading} />
+                    <p style={{ margin: 0, fontSize: `${fs.expBullet}pt` }}>
                         <SkillsLine skillsStr={data.skills ?? ''} descriptionLower={descriptionLower} keywords={keywords} onReorder={onSkillsReorder} onHover={onKeywordHover} />
                     </p>
                 </>
@@ -459,7 +514,7 @@ export default function CVPreview({
             {/* ── Work Experience ── */}
             {(experiences.length > 0 || onEdit?.expAdd) && (
                 <>
-                    <Divider title="Work Experience" size={fs.sectionDivider} onAdd={onEdit?.expAdd} />
+                    <Divider title="Work Experience" size={fs.sectionHeading} onAdd={onEdit?.expAdd} />
                     {experiences.map((exp, i) => {
                         const meta = [exp.show_job_type && exp.job_type, exp.show_job_nature && exp.job_nature].filter(Boolean).join(', ')
                         const bullets = (exp.bullets ?? []).map((b, idx) => ({ text: b, idx }))
@@ -468,25 +523,25 @@ export default function CVPreview({
                                 actions={onEdit?.expDelete ? [{ label: '×', onClick: () => onEdit.expDelete!(i), color: '#e74c3c' }] : []}>
                                 {/* Title row */}
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                    <span style={{ fontWeight: 700, fontSize: `${fs.subheading}pt`, color: NAVY, flex: 1 }}>
+                                    <span style={{ flex: 1 }}>
                                         <InlineText value={(exp.use_ai_title && exp.ai_title) ? exp.ai_title : exp.designation}
                                             onSave={onEdit?.expField ? v => onEdit.expField!(i, 'designation', v) : undefined}
-                                            style={{ fontWeight: 700, fontSize: `${fs.subheading}pt`, color: NAVY }} placeholder="Job Title" />
-                                        {' | '}
-                                        <InlineText value={exp.company_name}
+                                            style={{ fontWeight: 700, fontSize: `${fs.expDesignation}pt`, color: NAVY }} placeholder="Job Title" />
+                                        {exp.company_name ? <span style={{ fontWeight: 700, fontSize: `${fs.expCompany}pt`, color: NAVY }}> | </span> : ''}
+                                        {exp.company_name && <InlineText value={exp.company_name}
                                             onSave={onEdit?.expField ? v => onEdit.expField!(i, 'company_name', v) : undefined}
-                                            style={{ fontWeight: 700, fontSize: `${fs.subheading}pt`, color: NAVY }} placeholder="Company" />
-                                        {meta ? ` (${meta})` : ''}
+                                            style={{ fontWeight: 700, fontSize: `${fs.expCompany}pt`, color: NAVY }} placeholder="Company" />}
+                                        {meta ? <span style={{ fontWeight: 700, fontSize: `${fs.expCompany}pt`, color: NAVY }}> ({meta})</span> : ''}
                                     </span>
-                                    <span style={{ fontStyle: 'italic', fontSize: `${fs.secondary}pt`, color: SLATE, whiteSpace: 'nowrap', marginLeft: '10px' }}>
+                                    <span style={{ fontStyle: 'italic', fontSize: `${fs.expDates}pt`, color: SLATE, whiteSpace: 'nowrap', marginLeft: '10px' }}>
                                         <InlineText value={exp.from_date ?? ''}
                                             onSave={onEdit?.expField ? v => onEdit.expField!(i, 'from_date', v) : undefined}
-                                            style={{ fontStyle: 'italic', fontSize: `${fs.secondary}pt`, color: SLATE }} placeholder="YYYY-MM" />
+                                            style={{ fontStyle: 'italic', fontSize: `${fs.expDates}pt`, color: SLATE }} placeholder="YYYY-MM" />
                                         {' – '}
                                         {exp.currently_working ? 'Present' :
                                             <InlineText value={exp.to_date ?? ''}
                                                 onSave={onEdit?.expField ? v => onEdit.expField!(i, 'to_date', v) : undefined}
-                                                style={{ fontStyle: 'italic', fontSize: `${fs.secondary}pt`, color: SLATE }} placeholder="YYYY-MM" />
+                                                style={{ fontStyle: 'italic', fontSize: `${fs.expDates}pt`, color: SLATE }} placeholder="YYYY-MM" />
                                         }
                                     </span>
                                 </div>
@@ -496,10 +551,10 @@ export default function CVPreview({
                                     {bullets.map(({ text, idx }) => (
                                         <HoverActions key={idx}
                                             actions={onEdit?.expBulletDelete ? [{ label: '×', onClick: () => onEdit.expBulletDelete!(i, idx), color: '#e74c3c' }] : []}>
-                                            <li style={{ fontSize: `${fs.body}pt`, marginTop: idx === 0 ? 0 : '4px' }}>
+                                            <li style={{ fontSize: `${fs.expBullet}pt`, marginTop: idx === 0 ? 0 : '4px' }}>
                                                 {handleBulletEdit
                                                     ? <InlineArea value={text} onSave={v => handleBulletEdit(i, idx, v)}
-                                                        style={{ fontSize: `${fs.body}pt` }} placeholder="Bullet point…" rows={2} />
+                                                        style={{ fontSize: `${fs.expBullet}pt` }} placeholder="Bullet point…" rows={2} />
                                                     : highlightWords(text, keywords, onKeywordHover)
                                                 }
                                             </li>
@@ -523,28 +578,28 @@ export default function CVPreview({
             {/* ── Education ── */}
             {(education.length > 0 || onEdit?.eduAdd) && (
                 <>
-                    <Divider title="Education" size={fs.sectionDivider} onAdd={onEdit?.eduAdd} />
+                    <Divider title="Education" size={fs.sectionHeading} onAdd={onEdit?.eduAdd} />
                     {education.map((edu, i) => (
                         <HoverActions key={i} style={{ marginTop: i === 0 ? '4px' : '6px' }}
                             actions={onEdit?.eduDelete ? [{ label: '×', onClick: () => onEdit.eduDelete!(i), color: '#e74c3c' }] : []}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                <span style={{ fontWeight: 700, fontSize: `${fs.subheading}pt`, color: NAVY }}>
+                                <span>
                                     <InlineText value={edu.degree_title}
                                         onSave={onEdit?.eduField ? v => onEdit.eduField!(i, 'degree_title', v) : undefined}
-                                        style={{ fontWeight: 700, fontSize: `${fs.subheading}pt`, color: NAVY }} placeholder="Degree" />
-                                    {' | '}
-                                    <InlineText value={edu.university_name}
+                                        style={{ fontWeight: 700, fontSize: `${fs.eduDegree}pt`, color: NAVY }} placeholder="Degree" />
+                                    {edu.university_name ? <span style={{ fontWeight: 700, fontSize: `${fs.eduInstitution}pt`, color: NAVY }}> | </span> : ''}
+                                    {edu.university_name && <InlineText value={edu.university_name}
                                         onSave={onEdit?.eduField ? v => onEdit.eduField!(i, 'university_name', v) : undefined}
-                                        style={{ fontWeight: 700, fontSize: `${fs.subheading}pt`, color: NAVY }} placeholder="Institution" />
+                                        style={{ fontWeight: 700, fontSize: `${fs.eduInstitution}pt`, color: NAVY }} placeholder="Institution" />}
                                 </span>
-                                <span style={{ fontStyle: 'italic', fontSize: `${fs.secondary}pt`, color: SLATE, whiteSpace: 'nowrap', marginLeft: '10px' }}>
+                                <span style={{ fontStyle: 'italic', fontSize: `${fs.eduDates}pt`, color: SLATE, whiteSpace: 'nowrap', marginLeft: '10px' }}>
                                     <InlineText value={edu.start_date ?? ''}
                                         onSave={onEdit?.eduField ? v => onEdit.eduField!(i, 'start_date', v) : undefined}
-                                        style={{ fontStyle: 'italic', fontSize: `${fs.secondary}pt`, color: SLATE }} placeholder="YYYY-MM" />
+                                        style={{ fontStyle: 'italic', fontSize: `${fs.eduDates}pt`, color: SLATE }} placeholder="YYYY-MM" />
                                     {' – '}
                                     <InlineText value={edu.end_date ?? ''}
                                         onSave={onEdit?.eduField ? v => onEdit.eduField!(i, 'end_date', v) : undefined}
-                                        style={{ fontStyle: 'italic', fontSize: `${fs.secondary}pt`, color: SLATE }} placeholder="YYYY-MM" />
+                                        style={{ fontStyle: 'italic', fontSize: `${fs.eduDates}pt`, color: SLATE }} placeholder="YYYY-MM" />
                                 </span>
                             </div>
                         </HoverActions>
@@ -555,7 +610,7 @@ export default function CVPreview({
             {/* ── Projects ── */}
             {(data.projects ?? []).some(p => p.title?.trim()) && (
                 <>
-                    <Divider title="Projects" size={fs.sectionDivider} onAdd={onEdit?.projAdd} />
+                    <Divider title="Projects" size={fs.sectionHeading} onAdd={onEdit?.projAdd} />
                     {(data.projects ?? []).map((proj, i) => {
                         const dateRange = proj.ongoing
                             ? `${fmtDate(proj.start_date)} – Present`
@@ -564,35 +619,35 @@ export default function CVPreview({
                             <HoverActions key={i} style={{ marginTop: i === 0 ? '6px' : '14px' }}
                                 actions={onEdit?.projDelete ? [{ label: '×', onClick: () => onEdit.projDelete!(i), color: '#e74c3c' }] : []}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                    <span style={{ fontWeight: 700, fontSize: `${fs.subheading}pt`, color: NAVY }}>
+                                    <span style={{ fontWeight: 700, fontSize: `${fs.expDesignation}pt`, color: NAVY }}>
                                         <InlineText value={proj.title}
                                             onSave={onEdit?.projField ? v => onEdit.projField!(i, 'title', v) : undefined}
-                                            style={{ fontWeight: 700, fontSize: `${fs.subheading}pt`, color: NAVY }} placeholder="Project Title" />
+                                            style={{ fontWeight: 700, fontSize: `${fs.expDesignation}pt`, color: NAVY }} placeholder="Project Title" />
                                     </span>
-                                    <span style={{ fontStyle: 'italic', fontSize: `${fs.secondary}pt`, color: SLATE, whiteSpace: 'nowrap', marginLeft: '10px' }}>
+                                    <span style={{ fontStyle: 'italic', fontSize: `${fs.expDates}pt`, color: SLATE, whiteSpace: 'nowrap', marginLeft: '10px' }}>
                                         {onEdit?.projField ? <>
                                             <InlineText value={proj.start_date ?? ''} onSave={v => onEdit.projField!(i, 'start_date', v)}
-                                                style={{ fontStyle: 'italic', fontSize: `${fs.secondary}pt`, color: SLATE }} placeholder="YYYY-MM" />
+                                                style={{ fontStyle: 'italic', fontSize: `${fs.expDates}pt`, color: SLATE }} placeholder="YYYY-MM" />
                                             {' – '}
                                             <InlineText value={proj.end_date ?? ''} onSave={v => onEdit.projField!(i, 'end_date', v)}
-                                                style={{ fontStyle: 'italic', fontSize: `${fs.secondary}pt`, color: SLATE }} placeholder="YYYY-MM" />
+                                                style={{ fontStyle: 'italic', fontSize: `${fs.expDates}pt`, color: SLATE }} placeholder="YYYY-MM" />
                                         </> : dateRange}
                                     </span>
                                 </div>
                                 {(proj.technologies || onEdit?.projField) && (
-                                    <div style={{ fontSize: `${fs.secondary}pt`, color: SLATE, marginTop: '2px' }}>
+                                    <div style={{ fontSize: `${fs.expDates}pt`, color: SLATE, marginTop: '2px' }}>
                                         <span style={{ fontWeight: 700 }}>Technologies:</span>{' '}
                                         <InlineText value={proj.technologies ?? ''}
                                             onSave={onEdit?.projField ? v => onEdit.projField!(i, 'technologies', v) : undefined}
-                                            style={{ fontSize: `${fs.secondary}pt`, color: SLATE }} placeholder="React, Node.js…" />
+                                            style={{ fontSize: `${fs.expDates}pt`, color: SLATE }} placeholder="React, Node.js…" />
                                     </div>
                                 )}
                                 {(proj.description || onEdit?.projField) && (
                                     <ul style={{ margin: '4px 0 0', paddingLeft: '18px', listStyleType: 'disc' }}>
-                                        <li style={{ fontSize: `${fs.body}pt` }}>
+                                        <li style={{ fontSize: `${fs.expBullet}pt` }}>
                                             <InlineText value={proj.description ?? ''}
                                                 onSave={onEdit?.projField ? v => onEdit.projField!(i, 'description', v) : undefined}
-                                                style={{ fontSize: `${fs.body}pt` }} placeholder="Describe the project…" />
+                                                style={{ fontSize: `${fs.expBullet}pt` }} placeholder="Describe the project…" />
                                         </li>
                                     </ul>
                                 )}

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { RefreshCw, ExternalLink, Pencil, Trash2, FileText, Search, X, Plus, Link, Briefcase, Building2 } from 'lucide-react'
+import { RefreshCw, ExternalLink, Pencil, Trash2, FileText, Search, X, Plus, Link, Briefcase, Building2, Copy } from 'lucide-react'
 
 function SponsorBadge({ value }: { value: string }) {
     const v = value?.toLowerCase()
@@ -16,6 +16,7 @@ import { getAllApplicants } from '@/app/api_handlers/api/job-applicants.api'
 import { getAllCompanies } from '@/app/api_handlers/api/sponsored-companies.api'
 import { listAuthUsers } from '@/app/api_handlers/api/auth.api'
 import JobCVModal from '@/app/components/jobs/JobCVModal'
+import ContextMenu, { ContextMenuItem } from '@/app/components/jobs/ContextMenu'
 
 const EMPTY_FILTERS = {
     keyword: '',
@@ -81,6 +82,7 @@ export default function CvsPage() {
     const [loading, setLoading] = useState(false)
     const [editingCV, setEditingCV] = useState<any | null>(null)
     const [creatingNew, setCreatingNew] = useState(false)
+    const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; row: any } | null>(null)
     const [userMap, setUserMap] = useState<Record<string, string>>({})
     const [applicants, setApplicants] = useState<{ id: string; name: string }[]>([])
 
@@ -382,7 +384,8 @@ export default function CvsPage() {
                             </td></tr>
                         )}
                         {!loading && data.map((row, idx) => (
-                            <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50">
+                            <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50 cursor-context-menu"
+                                onContextMenu={e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, row }) }}>
                                 <td className="px-2 py-1.5 text-gray-400 border-r border-gray-100">{idx + 1}</td>
                                 <td className="px-2 py-1.5 border-r border-gray-100 max-w-[200px]">
                                     <div className="truncate font-medium text-gray-800">{row.cv_title || '—'}</div>
@@ -450,6 +453,19 @@ export default function CvsPage() {
                     </tbody>
                 </table>
             </div>
+
+            {ctxMenu && (() => {
+                const r = ctxMenu.row
+                const items: ContextMenuItem[] = [
+                    { icon: <ExternalLink size={13} />, label: 'View CV', onClick: () => window.open(`/viewCV/${r.id}`, '_blank') },
+                    { icon: <Pencil size={13} />, label: 'Edit CV', onClick: () => setEditingCV(r) },
+                    ...(r.job_id ? [{ icon: <Briefcase size={13} />, label: 'View Job', onClick: () => window.open(`/jobs/listed-jobs?job_id=${r.job_id}`, '_blank') }] : []),
+                    ...(r.company_id ? [{ icon: <Building2 size={13} />, label: 'View Company', onClick: () => window.open(`/jobs/companies?keyword=${encodeURIComponent(r.company_id)}`, '_blank') }] : []),
+                    { icon: <Link size={13} />, label: 'Copy Link', separator: true, onClick: () => navigator.clipboard.writeText(`${window.location.origin}/viewCV/${r.id}`) },
+                    { icon: <Trash2 size={13} />, label: 'Delete', variant: 'danger' as const, onClick: () => handleDelete(r.id) },
+                ]
+                return <ContextMenu x={ctxMenu.x} y={ctxMenu.y} items={items} onClose={() => setCtxMenu(null)} />
+            })()}
 
             {creatingNew && (
                 <JobCVModal

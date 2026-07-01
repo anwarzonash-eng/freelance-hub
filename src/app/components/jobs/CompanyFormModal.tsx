@@ -21,6 +21,7 @@ const EMPTY_FORM = {
     career_page: '',
     hr_email: '',
     visa_example_job_url: '',
+    is_sponsored: true,
     is_deleted: false,
     visa_mentioned: false,
     offers_freelance: null as boolean | null,
@@ -51,6 +52,7 @@ export default function CompanyFormModal({ company, onClose, onSaved }: Props) {
                 career_page: company.career_page ?? '',
                 hr_email: company.hr_email ?? '',
                 visa_example_job_url: company.visa_example_job_url ?? '',
+                is_sponsored: company.is_sponsored !== undefined ? Boolean(company.is_sponsored) : true,
                 is_deleted: Boolean(company.is_deleted),
                 visa_mentioned: Boolean(company.visa_mentioned),
                 offers_freelance: company.offers_freelance ?? null,
@@ -231,6 +233,10 @@ export default function CompanyFormModal({ company, onClose, onSaved }: Props) {
 
                         {/* Flags */}
                         <div className="flex items-center gap-6 flex-wrap">
+                            <label className="flex items-center gap-2 cursor-pointer text-xs text-gray-700">
+                                <input type="checkbox" checked={form.is_sponsored} onChange={e => set('is_sponsored', e.target.checked)} className="w-3.5 h-3.5 accent-blue-600" />
+                                <span className="font-medium">Is Sponsored</span>
+                            </label>
                             <label className="flex items-center gap-2 cursor-pointer text-xs text-gray-700">
                                 <input type="checkbox" checked={form.is_deleted} onChange={e => set('is_deleted', e.target.checked)} className="w-3.5 h-3.5" />
                                 Is Deleted
