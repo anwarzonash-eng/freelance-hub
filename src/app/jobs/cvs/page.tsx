@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { RefreshCw, ExternalLink, Pencil, Trash2, FileText, Search, X, Plus, Link, Briefcase, Building2, Copy } from 'lucide-react'
+import { RefreshCw, ExternalLink, Pencil, Trash2, FileText, Search, X, Link, Briefcase, Building2 } from 'lucide-react'
 
 function SponsorBadge({ value }: { value: string }) {
     const v = value?.toLowerCase()
@@ -18,6 +18,18 @@ import { listAuthUsers } from '@/app/api_handlers/api/auth.api'
 import JobCVModal from '@/app/components/jobs/JobCVModal'
 import ContextMenu, { ContextMenuItem } from '@/app/components/jobs/ContextMenu'
 
+const CV_STATUSES = [
+    { value: 'cv_created', label: 'CV Created', cls: 'bg-gray-100 text-gray-600' },
+    { value: 'cv_reviewed', label: 'CV Reviewed', cls: 'bg-yellow-100 text-yellow-700' },
+    { value: 'cv_sent', label: 'CV Sent', cls: 'bg-green-100 text-green-700' },
+]
+
+function CvStatusBadge({ value }: { value: string }) {
+    const s = CV_STATUSES.find(x => x.value === value)
+    if (!s) return <span className="text-gray-300">—</span>
+    return <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${s.cls}`}>{s.label}</span>
+}
+
 const EMPTY_FILTERS = {
     keyword: '',
     applicant_id: '',
@@ -25,6 +37,7 @@ const EMPTY_FILTERS = {
     email: '',
     exp_yrs: '',
     created_by: '',
+    status: '',
 }
 type CvFilters = typeof EMPTY_FILTERS
 
@@ -66,6 +79,10 @@ function filterCvs(list: any[], f: CvFilters) {
         out = out.filter(cv => cv.created_by === f.created_by)
     }
 
+    if (f.status) {
+        out = out.filter(cv => (cv.status ?? 'cv_created') === f.status)
+    }
+
     return out
 }
 
@@ -81,7 +98,6 @@ export default function CvsPage() {
     const [data, setData] = useState<any[]>([])
     const [loading, setLoading] = useState(false)
     const [editingCV, setEditingCV] = useState<any | null>(null)
-    const [creatingNew, setCreatingNew] = useState(false)
     const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; row: any } | null>(null)
     const [userMap, setUserMap] = useState<Record<string, string>>({})
     const [applicants, setApplicants] = useState<{ id: string; name: string }[]>([])
@@ -118,6 +134,7 @@ export default function CvsPage() {
                 email: searchParams.get('email') || '',
                 exp_yrs: searchParams.get('exp_yrs') || '',
                 created_by: searchParams.get('created_by') || '',
+                status: searchParams.get('status') || '',
             }
             hydratedFromUrl.current = true
             setFilters(fromUrl)
@@ -218,10 +235,6 @@ export default function CvsPage() {
                     <span className="text-[10px] text-gray-400">{data.length} / {allData.length} total</span>
                 </div>
                 <div className="flex items-center gap-2">
-                    <button onClick={() => setCreatingNew(true)}
-                        className="flex items-center gap-1 text-xs bg-gray-800 text-white rounded px-2 py-1 hover:bg-gray-700">
-                        <Plus size={11} /> New CV
-                    </button>
                     <button onClick={() => load()} disabled={loading}
                         className="flex items-center gap-1 text-xs border border-gray-300 rounded px-2 py-1 hover:bg-gray-50 disabled:opacity-50 text-gray-600">
                         <RefreshCw size={11} className={loading ? 'animate-spin' : ''} /> Refresh
@@ -331,6 +344,20 @@ export default function CvsPage() {
                         </select>
                     </div>
 
+                    <div className="flex flex-col gap-0.5">
+                        <label className="text-[10px] text-gray-400 uppercase">Status</label>
+                        <select
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none min-w-[110px] transition-colors ${filters.status ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}
+                            value={filters.status}
+                            onChange={e => setFilters(f => ({ ...f, status: e.target.value }))}
+                        >
+                            <option value="">All</option>
+                            {CV_STATUSES.map(s => (
+                                <option key={s.value} value={s.value}>{s.label}</option>
+                            ))}
+                        </select>
+                    </div>
+
                     {activeFilterCount > 0 && (
                         <button onClick={clearAllFilters} className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-white mt-auto">
                             Clear ({activeFilterCount})
@@ -357,6 +384,7 @@ export default function CvsPage() {
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Job Link</th>
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Email</th>
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Exp (yrs)</th>
+                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Status</th>
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Created</th>
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Created By</th>
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 flex items-center justify-between">
@@ -374,19 +402,23 @@ export default function CvsPage() {
                     </thead>
                     <tbody>
                         {loading && (
-                            <tr><td colSpan={11} className="text-center py-10 text-gray-400">
+                            <tr><td colSpan={12} className="text-center py-10 text-gray-400">
                                 <div className="flex items-center justify-center gap-2"><RefreshCw size={13} className="animate-spin" /> Loading…</div>
                             </td></tr>
                         )}
                         {!loading && data.length === 0 && (
-                            <tr><td colSpan={11} className="text-center py-10 text-gray-400">
-                                {activeFilterCount > 0 ? 'No CVs match your filters.' : 'No CVs yet. Click "New CV" to create one.'}
+                            <tr><td colSpan={12} className="text-center py-10 text-gray-400">
+                                {activeFilterCount > 0 ? 'No CVs match your filters.' : 'No CVs yet. Create one from the Listed Jobs page.'}
                             </td></tr>
                         )}
                         {!loading && data.map((row, idx) => (
                             <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50 cursor-context-menu"
                                 onContextMenu={e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, row }) }}>
-                                <td className="px-2 py-1.5 text-gray-400 border-r border-gray-100">{idx + 1}</td>
+                                <td className="px-2 py-1.5 text-gray-400 border-r border-gray-100 cursor-pointer select-none"
+                                    title={`Click to copy ID: ${row.id}`}
+                                    onClick={() => navigator.clipboard.writeText(String(row.id))}>
+                                    {idx + 1}
+                                </td>
                                 <td className="px-2 py-1.5 border-r border-gray-100 max-w-[200px]">
                                     <div className="truncate font-medium text-gray-800">{row.cv_title || '—'}</div>
                                 </td>
@@ -412,6 +444,9 @@ export default function CvsPage() {
                                 </td>
                                 <td className="px-2 py-1.5 border-r border-gray-100 text-center text-gray-600">
                                     {row.years_of_experience ?? '—'}
+                                </td>
+                                <td className="px-2 py-1.5 border-r border-gray-100 whitespace-nowrap">
+                                    <CvStatusBadge value={row.status ?? 'cv_created'} />
                                 </td>
                                 <td className="px-2 py-1.5 border-r border-gray-100 text-gray-400 text-[10px] whitespace-nowrap">
                                     {row.createdAt ? new Date(row.createdAt).toLocaleDateString() : '—'}
@@ -466,13 +501,6 @@ export default function CvsPage() {
                 ]
                 return <ContextMenu x={ctxMenu.x} y={ctxMenu.y} items={items} onClose={() => setCtxMenu(null)} />
             })()}
-
-            {creatingNew && (
-                <JobCVModal
-                    onClose={() => setCreatingNew(false)}
-                    onSaved={() => { setCreatingNew(false); load() }}
-                />
-            )}
 
             {editingCV && (
                 <JobCVModal

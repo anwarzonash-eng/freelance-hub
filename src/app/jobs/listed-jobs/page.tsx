@@ -14,8 +14,13 @@ import ContextMenu, { ContextMenuItem } from '@/app/components/jobs/ContextMenu'
 import { timeAgo } from '@/app/utils/time'
 
 const LIMIT_OPTIONS = [25, 50, 100, 200]
-const EMPTY_FILTERS = { keyword: '', is_job_sponsored: '', type: '', job_category: '', company_id: '', has_cv: false, cv_submitted: '', application_status: '', job_id: '' }
+const EMPTY_FILTERS = { keyword: '', is_job_sponsored: '', type: '', job_category: '', company_id: '', has_cv: false, cv_submitted: '', application_status: '', job_id: '', cv_status: '' }
 const APP_STATUS_FILTER_OPTIONS = [{ value: 'none', label: 'Not tracked' }, ...APPLICATION_STATUS_OPTIONS.filter(o => o.value)]
+const CV_STATUS_OPTIONS = [
+    { value: 'cv_created', label: 'CV Created' },
+    { value: 'cv_reviewed', label: 'CV Reviewed' },
+    { value: 'cv_sent', label: 'CV Sent' },
+]
 
 function filtersToParams(f: typeof EMPTY_FILTERS, page: number, limit: number): URLSearchParams {
     const params = new URLSearchParams()
@@ -28,6 +33,7 @@ function filtersToParams(f: typeof EMPTY_FILTERS, page: number, limit: number): 
     if (f.cv_submitted) params.set('cv_submitted', f.cv_submitted)
     if (f.application_status) params.set('application_status', f.application_status)
     if (f.job_id) params.set('job_id', f.job_id)
+    if (f.cv_status) params.set('cv_status', f.cv_status)
     if (page !== 1) params.set('page', String(page))
     if (limit !== 50) params.set('limit', String(limit))
     return params
@@ -71,6 +77,8 @@ export default function ListedJobsPage() {
     const [loading, setLoading] = useState(false)
 
     const [cvJob, setCvJob] = useState<any | null>(null)
+    const [editingCVFromJob, setEditingCVFromJob] = useState<any | null>(null)
+    const cvListRef = useRef<any[]>([])
     const [viewingJob, setViewingJob] = useState<any | null>(null)
     const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; row: any } | null>(null)
     const [cvMap, setCvMap] = useState<Record<number, any>>({})
@@ -94,6 +102,7 @@ export default function ListedJobsPage() {
     const loadCVs = useCallback(async () => {
         const res: any = await getAllCVs()
         const list: any[] = Array.isArray(res?.data ?? res) ? (res?.data ?? res) : []
+        cvListRef.current = list
         const map: Record<number, any> = {}
         list.forEach(cv => { if (cv.job_id) map[cv.job_id] = cv })
         setCvMap(map)
@@ -117,6 +126,22 @@ export default function ListedJobsPage() {
                 const ids = Object.keys(map).join(',')
                 if (!ids) { setData([]); setTotal(0); setTotalPages(1); return }
                 q.job_ids = ids
+            }
+            if (af.cv_status) {
+                const matchingIds = [...new Set(
+                    cvListRef.current
+                        .filter(cv => (cv.status ?? 'cv_created') === af.cv_status && cv.job_id)
+                        .map(cv => Number(cv.job_id))
+                )]
+                if (matchingIds.length === 0) { setData([]); setTotal(0); setTotalPages(1); return }
+                if (q.job_ids) {
+                    const existing = String(q.job_ids).split(',').map(Number)
+                    const intersection = existing.filter(id => matchingIds.includes(id))
+                    if (intersection.length === 0) { setData([]); setTotal(0); setTotalPages(1); return }
+                    q.job_ids = intersection.join(',')
+                } else {
+                    q.job_ids = matchingIds.join(',')
+                }
             }
             const res: any = await getAllJobs(q)
             const payload = res?.data ?? res
@@ -143,6 +168,7 @@ export default function ListedJobsPage() {
             cv_submitted: searchParams.get('cv_submitted') || '',
             application_status: searchParams.get('application_status') || '',
             job_id: searchParams.get('job_id') || '',
+            cv_status: searchParams.get('cv_status') || '',
         }
         const hydratedPage = Number(searchParams.get('page')) || 1
         const hydratedLimit = Number(searchParams.get('limit')) || 50
@@ -220,6 +246,12 @@ export default function ListedJobsPage() {
     const clearCompany = () => {
         setFilters(f => ({ ...f, company_id: '' }))
         setCompanyQuery('')
+    }
+
+    const openCvForJob = (row: any) => {
+        const existing = cvMap[row.id]
+        if (existing) setEditingCVFromJob(existing)
+        else setCvJob(row)
     }
 
     const applyFilters = () => { setPage(1); setApplied({ ...filters }) }
@@ -424,6 +456,16 @@ export default function ListedJobsPage() {
                         )}
                     </div>
 
+                    <div className="flex flex-col gap-0.5">
+                        <label className="text-[10px] text-gray-400 uppercase">CV Status</label>
+                        <select value={filters.cv_status}
+                            onChange={e => setFilters(f => ({ ...f, cv_status: e.target.value }))}
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.cv_status ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
+                            <option value="">All</option>
+                            {CV_STATUS_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                        </select>
+                    </div>
+
                     <button onClick={applyFilters} className="px-3 py-1 text-xs bg-gray-800 text-white rounded hover:bg-gray-700 mt-auto">Filter</button>
                     <button onClick={clearFilters} className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-white mt-auto">Clear</button>
 
@@ -483,7 +525,11 @@ export default function ListedJobsPage() {
                             return (
                                 <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50 cursor-context-menu"
                                     onContextMenu={e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, row }) }}>
-                                    <td className="px-2 py-1.5 text-gray-400 border-r border-gray-100">{rowNum}</td>
+                                    <td className="px-2 py-1.5 text-gray-400 border-r border-gray-100 cursor-pointer select-none"
+                                        title={`Click to copy ID: ${row.id}`}
+                                        onClick={() => navigator.clipboard.writeText(String(row.id))}>
+                                        {rowNum}
+                                    </td>
                                     <td className="px-2 py-1.5 border-r border-gray-100 max-w-[200px]">
                                         <a href={row.link} target="_blank" rel="noopener noreferrer"
                                             className="font-medium text-blue-600 hover:underline flex items-center gap-0.5">
@@ -532,8 +578,8 @@ export default function ListedJobsPage() {
                                                 <Eye size={12} />
                                             </button>
                                             <button
-                                                onClick={() => setCvJob(row)}
-                                                title="Create CV for this job"
+                                                onClick={() => openCvForJob(row)}
+                                                title={cvMap[row.id] ? 'Edit CV for this job' : 'Create CV for this job'}
                                                 className="flex items-center p-1.5 border border-gray-300 rounded hover:bg-gray-50 text-gray-600">
                                                 <FileText size={12} />
                                             </button>
@@ -569,7 +615,7 @@ export default function ListedJobsPage() {
                 const cv = cvMap[r.id]
                 const items: ContextMenuItem[] = [
                     { icon: <Eye size={13} />, label: 'View Job', onClick: () => setViewingJob(r) },
-                    { icon: <FileText size={13} />, label: 'Create CV', onClick: () => setCvJob(r) },
+                    { icon: <FileText size={13} />, label: cv ? 'Edit CV' : 'Create CV', onClick: () => openCvForJob(r) },
                     ...(cv ? [{ icon: <ExternalLink size={13} />, label: 'View CV', onClick: () => window.open(`/viewCV/${cv.id}`, '_blank') }] : []),
                     ...(r.company_id ? [{ icon: <Building2 size={13} />, label: 'View Company', onClick: () => window.open(`/jobs/companies?keyword=${encodeURIComponent(r.company_id)}`, '_blank') }] : []),
                     { icon: <Link size={13} />, label: 'Copy Link', separator: true, onClick: () => navigator.clipboard.writeText(`${window.location.origin}/jobs/listed-jobs?job_id=${r.id}`) },
@@ -591,6 +637,14 @@ export default function ListedJobsPage() {
                     job={cvJob}
                     onClose={() => setCvJob(null)}
                     onSaved={loadCVs}
+                />
+            )}
+
+            {editingCVFromJob && (
+                <JobCVModal
+                    cv={editingCVFromJob}
+                    onClose={() => setEditingCVFromJob(null)}
+                    onSaved={() => { setEditingCVFromJob(null); loadCVs() }}
                 />
             )}
 

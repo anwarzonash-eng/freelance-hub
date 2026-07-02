@@ -1082,6 +1082,18 @@ interface Props {
   onSaved?: () => void;
 }
 
+const CV_STATUSES = [
+  { value: 'cv_created', label: 'CV Created' },
+  { value: 'cv_reviewed', label: 'CV Reviewed' },
+  { value: 'cv_sent', label: 'CV Sent' },
+] as const
+
+const CV_STATUS_COLORS: Record<string, string> = {
+  cv_created: 'bg-gray-100 text-gray-600',
+  cv_reviewed: 'bg-yellow-100 text-yellow-700',
+  cv_sent: 'bg-green-100 text-green-700',
+}
+
 const INIT_FORM = {
   cv_title: "",
   applicant_name: "",
@@ -1100,6 +1112,7 @@ const INIT_FORM = {
   summary: "",
   skills: "",
   years_of_experience: 5,
+  status: "cv_created",
 };
 
 const inputCls =
@@ -1326,6 +1339,7 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
         summary: cv.summary ?? "",
         skills: cv.skills ?? "",
         years_of_experience: cv.years_of_experience ?? 5,
+        status: cv.status ?? "cv_created",
       });
       setPortfolios(cv.portfolios ?? []);
       setExperienceItems(cv.experience_items ?? []);
@@ -1802,7 +1816,6 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
         await updateCVSilent(savedId, buildPayloadRef.current());
         setLastSavedAt(new Date());
         setSaveStatus('saved');
-        onSaved?.();
       } catch {
         setSaveStatus('idle');
       }
@@ -1847,6 +1860,17 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
             ))}
           </select>
         )}
+
+        {/* CV Status */}
+        <select
+          value={form.status}
+          onChange={e => set('status', e.target.value)}
+          className={`text-xs border rounded px-2 py-1 focus:outline-none shrink-0 font-medium ${CV_STATUS_COLORS[form.status] ?? 'bg-gray-100 text-gray-600'}`}
+        >
+          {CV_STATUSES.map(s => (
+            <option key={s.value} value={s.value}>{s.label}</option>
+          ))}
+        </select>
 
         <div className="flex items-center gap-2 ml-auto shrink-0">
           {/* Auto-save status */}

@@ -945,7 +945,11 @@ export default function CompaniesPage() {
                                 <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50 cursor-context-menu"
                                     onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, row }) }}>
                                     {col('num') && (
-                                        <td className="px-2 py-1 text-gray-400 border-r border-gray-100 whitespace-nowrap">{rowNum}</td>
+                                        <td className="px-2 py-1 text-gray-400 border-r border-gray-100 whitespace-nowrap cursor-pointer select-none"
+                                            title={`Click to copy ID: ${row.id}`}
+                                            onClick={() => navigator.clipboard.writeText(String(row.id))}>
+                                            {rowNum}
+                                        </td>
                                     )}
                                     {col('id') && (
                                         <td className="px-2 py-1 border-r border-gray-100">
