@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, RefreshCw, Pencil, Trash2, ExternalLink, ChevronDown, ChevronUp, Search, Building2, BriefcaseBusiness, Terminal, Download, Upload, X, SlidersHorizontal, ClipboardCheck, Users, Copy, Check, FileText, ListChecks } from 'lucide-react'
 import { getAllCompanies, getDistinctCompanyValues, deleteCompany, rawQueryCompanies, rawQueryCompaniesOrError } from '@/app/api_handlers/api/sponsored-companies.api'
+import { useColResize } from '@/app/hooks/useColResize'
 import { timeAgo } from '@/app/utils/time'
 import { getCompanyCategories } from '@/app/api_handlers/api/company-categories.api'
 import { listAuthUsers } from '@/app/api_handlers/api/auth.api'
@@ -79,6 +80,15 @@ const TABLE_COLS = [
 ]
 const DEFAULT_TABLE_COLS = new Set(TABLE_COLS.filter(c => c.default).map(c => c.key))
 
+const COMPANIES_COL_WIDTHS: Record<string, number> = {
+    num: 36, id: 120, rank: 50, organisation: 220, city: 110,
+    sponsor_type: 110, sponsor_route: 90, links: 80, category: 110,
+    is_deleted: 50, visa: 50, checked: 90, has_it_jobs: 80,
+    estimated_it_jobs: 80, checked_by_col: 100, overall_jobs: 80,
+    it_jobs_count: 70, assigned_to_col: 100, offers_freelance: 80,
+    should_apply: 90, cv_submitted: 100,
+}
+
 function Badge({ value, on, off }: { value: boolean; on: string; off: string }) {
     return (
         <span className={`inline-block text-[9px] px-1.5 py-0.5 rounded font-medium ${value ? on : off}`}>
@@ -151,6 +161,7 @@ export default function CompaniesPage() {
     const [visibleCols, setVisibleCols] = useState<Set<string>>(() => new Set(DEFAULT_TABLE_COLS))
     const [showColDd, setShowColDd] = useState(false)
     const colDdRef = useRef<HTMLDivElement>(null)
+    const { widths: colW, startResize } = useColResize(COMPANIES_COL_WIDTHS, 'companies_col_widths')
 
     useEffect(() => {
         const savedPanels = localStorage.getItem('companies_visible_panels')
@@ -160,6 +171,14 @@ export default function CompaniesPage() {
     }, [])
 
     const col = (key: string) => visibleCols.has(key)
+
+    // 80 = actions column (fixed, not resizable)
+    const tableWidth = 80 + TABLE_COLS.filter(c => col(c.key)).reduce((s, c) => s + (colW[c.key] ?? COMPANIES_COL_WIDTHS[c.key] ?? 100), 0)
+
+    const rh = (key: string) => (
+        <div className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-blue-400/40 active:bg-blue-500/60 select-none"
+            onMouseDown={e => startResize(key, e)} />
+    )
 
     // Write to localStorage inside the updater so we save only when user changes state,
     // never on the initial render where state is still at its default value.
@@ -829,31 +848,10 @@ export default function CompaniesPage() {
 
             {/* Table */}
             <div className="border border-gray-200 rounded overflow-x-auto min-h-[60vh]">
-                <table className="w-full text-xs border-collapse">
+                <table className="text-xs border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
                     <thead>
                         <tr className="bg-gray-100 border-b border-gray-300">
-                            {col('num')          && <th className="px-2 py-1 text-left font-medium text-gray-500 border-r border-gray-200 w-6">#</th>}
-                            {col('id')           && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 max-w-[80px]">ID</th>}
-                            {col('rank')         && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 w-10">Rank</th>}
-                            {col('organisation') && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200">Organisation</th>}
-                            {col('city')         && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200">City</th>}
-                            {col('sponsor_type') && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Sponsor Type</th>}
-                            {col('sponsor_route')&& <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200">Route</th>}
-                            {col('links')        && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200">Links</th>}
-                            {col('category')     && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200">Category</th>}
-                            {col('is_deleted')   && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200">Del</th>}
-                            {col('visa')         && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200">Visa</th>}
-                            {col('checked')           && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Checked</th>}
-                            {col('has_it_jobs')       && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Has IT Jobs</th>}
-                            {col('estimated_it_jobs') && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Est. IT Jobs</th>}
-                            {col('checked_by_col')    && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Checked By</th>}
-                            {col('overall_jobs')      && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Total Jobs</th>}
-                            {col('it_jobs_count')     && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">IT Jobs</th>}
-                            {col('assigned_to_col')   && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Assigned To</th>}
-                            {col('offers_freelance')  && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Freelance</th>}
-                            {col('should_apply')      && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">Should Apply</th>}
-                            {col('cv_submitted')      && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 whitespace-nowrap">CV Submitted</th>}
-                            <th className="px-1 py-1 font-medium text-gray-600">
+                            <th className="px-1 py-1 font-medium text-gray-600 border-r border-gray-200" style={{ width: 80 }}>
                                 <div className="flex items-center justify-end gap-1.5 pr-1">
                                     {/* Refresh */}
                                     <button onClick={refresh} disabled={loading} title="Refresh"
@@ -872,7 +870,7 @@ export default function CompaniesPage() {
                                             )}
                                         </button>
                                         {showColDd && (
-                                            <div className="absolute right-0 top-full mt-1 z-40 bg-white border border-gray-200 rounded shadow-lg p-2 min-w-[170px]">
+                                            <div className="absolute left-0 top-full mt-1 z-40 bg-white border border-gray-200 rounded shadow-lg p-2 min-w-[170px]">
                                                 <p className="text-[9px] text-gray-400 uppercase font-semibold px-1 mb-1">Columns</p>
                                                 {TABLE_COLS.map(({ key, label }) => (
                                                     <label key={key} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded">
@@ -897,7 +895,7 @@ export default function CompaniesPage() {
                                             )}
                                         </button>
                                         {showViewDd && (
-                                            <div className="absolute right-0 top-full mt-1 z-40 bg-white border border-gray-200 rounded shadow-lg p-2 min-w-[160px]">
+                                            <div className="absolute left-0 top-full mt-1 z-40 bg-white border border-gray-200 rounded shadow-lg p-2 min-w-[160px]">
                                                 <p className="text-[9px] text-gray-400 uppercase font-semibold px-1 mb-1">Panels</p>
                                                 {[
                                                     { key: 'upload', label: 'Upload JSON' },
@@ -916,17 +914,35 @@ export default function CompaniesPage() {
                                         )}
                                     </div>
 
-                                    {/* Assign (admin only) */}
                                     {isAdmin && !sqlMode && (
                                         <button onClick={() => setAssigning(true)} title="Assign companies"
                                             className="text-gray-400 hover:text-indigo-600"><Users size={12} /></button>
                                     )}
-
-                                    {/* Add company */}
                                     <button onClick={() => setAdding(true)} title="Add company"
                                         className="text-gray-400 hover:text-gray-800"><Plus size={12} /></button>
                                 </div>
                             </th>
+                            {col('num')          && <th className="px-2 py-1 text-left font-medium text-gray-500 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.num }}>#&nbsp;{rh('num')}</th>}
+                            {col('id')           && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.id }}>ID{rh('id')}</th>}
+                            {col('rank')         && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.rank }}>Rank{rh('rank')}</th>}
+                            {col('organisation') && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.organisation }}>Organisation{rh('organisation')}</th>}
+                            {col('city')         && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.city }}>City{rh('city')}</th>}
+                            {col('sponsor_type') && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.sponsor_type }}>Sponsor Type{rh('sponsor_type')}</th>}
+                            {col('sponsor_route')&& <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.sponsor_route }}>Route{rh('sponsor_route')}</th>}
+                            {col('links')        && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.links }}>Links{rh('links')}</th>}
+                            {col('category')     && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.category }}>Category{rh('category')}</th>}
+                            {col('is_deleted')   && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.is_deleted }}>Del{rh('is_deleted')}</th>}
+                            {col('visa')         && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.visa }}>Visa{rh('visa')}</th>}
+                            {col('checked')           && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.checked }}>Checked{rh('checked')}</th>}
+                            {col('has_it_jobs')       && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.has_it_jobs }}>Has IT Jobs{rh('has_it_jobs')}</th>}
+                            {col('estimated_it_jobs') && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.estimated_it_jobs }}>Est. IT Jobs{rh('estimated_it_jobs')}</th>}
+                            {col('checked_by_col')    && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.checked_by_col }}>Checked By{rh('checked_by_col')}</th>}
+                            {col('overall_jobs')      && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.overall_jobs }}>Total Jobs{rh('overall_jobs')}</th>}
+                            {col('it_jobs_count')     && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.it_jobs_count }}>IT Jobs{rh('it_jobs_count')}</th>}
+                            {col('assigned_to_col')   && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.assigned_to_col }}>Assigned To{rh('assigned_to_col')}</th>}
+                            {col('offers_freelance')  && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.offers_freelance }}>Freelance{rh('offers_freelance')}</th>}
+                            {col('should_apply')      && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.should_apply }}>Should Apply{rh('should_apply')}</th>}
+                            {col('cv_submitted')      && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.cv_submitted }}>CV Submitted{rh('cv_submitted')}</th>}
                         </tr>
                     </thead>
                     <tbody>
@@ -944,6 +960,22 @@ export default function CompaniesPage() {
                             return (
                                 <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50 cursor-context-menu"
                                     onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, row }) }}>
+                                    <td className="px-2 py-1">
+                                        <div className="flex items-center gap-1.5">
+                                            <button onClick={() => setManualChecking(row)} title="Apply Manual Check"
+                                                className="text-gray-400 hover:text-teal-600"><ClipboardCheck size={12} /></button>
+                                            <button onClick={() => setAddingJobsFor(row)} title="Add Jobs"
+                                                className="text-gray-400 hover:text-teal-600"><BriefcaseBusiness size={12} /></button>
+                                            <a href={`/jobs/listed-jobs?company_id=${encodeURIComponent(row.id)}`} target="_blank" rel="noopener noreferrer" title="View all jobs for this company"
+                                                className="text-gray-400 hover:text-indigo-600"><ListChecks size={12} /></a>
+                                            <a href={`/jobs/cvs?company_id=${encodeURIComponent(row.id)}`} target="_blank" rel="noopener noreferrer" title="View all CVs for this company"
+                                                className="text-gray-400 hover:text-purple-600"><FileText size={12} /></a>
+                                            <button onClick={() => setEditing(row)} title="Edit"
+                                                className="text-gray-400 hover:text-blue-600"><Pencil size={12} /></button>
+                                            <button onClick={() => handleDelete(row.id)} disabled={deleting === row.id} title="Delete"
+                                                className="text-gray-400 hover:text-red-600 disabled:opacity-40"><Trash2 size={12} /></button>
+                                        </div>
+                                    </td>
                                     {col('num') && (
                                         <td className="px-2 py-1 text-gray-400 border-r border-gray-100 whitespace-nowrap cursor-pointer select-none"
                                             title={`Click to copy ID: ${row.id}`}
@@ -1137,22 +1169,6 @@ export default function CompaniesPage() {
                                                 : <span className="text-[9px] text-gray-300">—</span>}
                                         </td>
                                     )}
-                                    <td className="px-2 py-1">
-                                        <div className="flex items-center gap-1.5">
-                                            <button onClick={() => setManualChecking(row)} title="Apply Manual Check"
-                                                className="text-gray-400 hover:text-teal-600"><ClipboardCheck size={12} /></button>
-                                            <button onClick={() => setAddingJobsFor(row)} title="Add Jobs"
-                                                className="text-gray-400 hover:text-teal-600"><BriefcaseBusiness size={12} /></button>
-                                            <a href={`/jobs/listed-jobs?company_id=${encodeURIComponent(row.id)}`} target="_blank" rel="noopener noreferrer" title="View all jobs for this company"
-                                                className="text-gray-400 hover:text-indigo-600"><ListChecks size={12} /></a>
-                                            <a href={`/jobs/cvs?company_id=${encodeURIComponent(row.id)}`} target="_blank" rel="noopener noreferrer" title="View all CVs for this company"
-                                                className="text-gray-400 hover:text-purple-600"><FileText size={12} /></a>
-                                            <button onClick={() => setEditing(row)} title="Edit"
-                                                className="text-gray-400 hover:text-blue-600"><Pencil size={12} /></button>
-                                            <button onClick={() => handleDelete(row.id)} disabled={deleting === row.id} title="Delete"
-                                                className="text-gray-400 hover:text-red-600 disabled:opacity-40"><Trash2 size={12} /></button>
-                                        </div>
-                                    </td>
                                 </tr>
                             )
                         })}

@@ -51,6 +51,76 @@ function formatLastSaved(date: Date): string {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
+function CopyPromptBtn({ rawDesc, jobTitle, savedId }: { rawDesc: string; jobTitle: string; savedId: number | null }) {
+  const [copied, setCopied] = useState(false)
+
+  const copy = () => {
+    const cvUrl = savedId ? `${window.location.origin}/viewCV/${savedId}` : ''
+    const prompt = `You are an expert CV reviewer, ATS specialist, and senior recruiter. Please review the CV${cvUrl ? ` at ${cvUrl}` : ''} and provide a detailed analysis covering all of the following:
+
+## 1. ATS Scan
+- Score how well this CV would pass ATS filters for the target role
+- List keywords and phrases present that match the job
+- List important missing keywords that should be added
+- Flag any formatting issues that could cause ATS parsing failures
+
+## 2. Recruiter Analysis
+Analyse the CV as a senior recruiter would:
+- First impressions and overall presentation
+- Strongest selling points
+- Red flags, gaps, or weaknesses
+- How competitive this candidate appears vs typical applicants for this role
+
+## 3. Missing Points
+List any critical information, achievements, metrics, or sections that are absent or underdeveloped.
+
+## 4. Skills Review
+- **Add**: List supporting or complementary skills that should be added (and explain why)
+- **Remove**: List skills that are irrelevant, outdated, or hurt the candidate's positioning
+- **Reframe**: Any skills that need better context or stronger phrasing
+
+## 5. Natural Language Check
+If any section reads as AI-generated, overly formal, or generic:
+- Quote the original text
+- Explain what makes it sound unnatural
+- Write an alternate version that sounds authentic and human while still being professional
+
+## 6. Experience Bullets
+For each role in the experience section:
+- Critique existing bullets (vague language, missing metrics, weak verbs)
+- Rewrite weak bullets with stronger, quantified, action-oriented alternatives
+- Suggest additional bullets that would strengthen that role's impact
+
+## 7. Summary & Headline
+- Review the current CV headline and summary
+- Identify what's weak or generic
+- Write 2–3 alternate headline options
+- Write 2–3 alternate summary paragraphs (varying tone: confident, results-focused, narrative)
+
+---
+**Target Job Title:** ${jobTitle || '(not specified)'}
+
+**Job Description:**
+${rawDesc || '(not provided)'}`
+    navigator.clipboard.writeText(prompt).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      title="Copy Claude review prompt"
+      className={`p-0.5 rounded transition-colors ${copied ? 'text-teal-600' : 'text-blue-400 hover:text-blue-700'}`}
+    >
+      {copied ? <Check size={11} /> : <Copy size={11} />}
+    </button>
+  )
+}
+
+
 const JOB_TYPES = ["Remote", "Hybrid", "Onsite"];
 const JOB_NATURES = [
   "Full Time",
@@ -2125,14 +2195,17 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
                       }
                     >
                       <span>Job Description (for CV) *</span>
-                      <button
-                        type="button"
-                        onClick={() => { setAtsHighlightOn(false); setRawDescExpanded(true) }}
-                        className={`text-[9px] font-semibold ml-2 shrink-0 px-1.5 py-0.5 rounded border transition-colors ${rawDescExpanded && !atsHighlightOn ? 'bg-amber-100 border-amber-400 text-amber-700' : 'bg-blue-50 border-blue-300 text-blue-600 hover:bg-blue-100'}`}
-                        title="Highlight CV keywords in this description"
-                      >
-                        ATS Keywords
-                      </button>
+                      <div className="flex items-center gap-1 ml-2 shrink-0">
+                        <CopyPromptBtn rawDesc={form.raw_description} jobTitle={form.target_job_title} savedId={savedId} />
+                        <button
+                          type="button"
+                          onClick={() => { setAtsHighlightOn(false); setRawDescExpanded(true) }}
+                          className={`text-[9px] font-semibold px-1.5 py-0.5 rounded border transition-colors ${rawDescExpanded && !atsHighlightOn ? 'bg-amber-100 border-amber-400 text-amber-700' : 'bg-blue-50 border-blue-300 text-blue-600 hover:bg-blue-100'}`}
+                          title="Highlight CV keywords in this description"
+                        >
+                          ATS Keywords
+                        </button>
+                      </div>
                     </label>
                     <textarea
                       rows={5}

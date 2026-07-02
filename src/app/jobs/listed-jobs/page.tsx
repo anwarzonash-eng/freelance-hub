@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { RefreshCw, ExternalLink, Search, ChevronDown, Briefcase, FileText, Eye, Building2, X, Link, Users } from 'lucide-react'
+import { RefreshCw, ExternalLink, Search, ChevronDown, Briefcase, FileText, Eye, Building2, X, Link, Users, SlidersHorizontal } from 'lucide-react'
 import { getAllJobs, getDistinctJobValues, assignJobs } from '@/app/api_handlers/api/sponsored-jobs.api'
+import { useColResize } from '@/app/hooks/useColResize'
 import { getAllCompanies } from '@/app/api_handlers/api/sponsored-companies.api'
 import { getAllCVs } from '@/app/api_handlers/api/job-cvs.api'
 import { listAuthUsers } from '@/app/api_handlers/api/auth.api'
@@ -15,6 +16,27 @@ import AssignModal from '@/app/components/jobs/AssignModal'
 import { timeAgo } from '@/app/utils/time'
 
 const LIMIT_OPTIONS = [25, 50, 100, 200]
+const TABLE_COLS = [
+    { key: 'num',         label: '#',           default: true  },
+    { key: 'job_title',   label: 'Job Title',   default: true  },
+    { key: 'company',     label: 'Company',     default: true  },
+    { key: 'location',    label: 'Location',    default: true  },
+    { key: 'type',        label: 'Type',        default: false },
+    { key: 'category',    label: 'Category',    default: false },
+    { key: 'sponsored',   label: 'Sponsored',   default: true  },
+    { key: 'tech_skills', label: 'Tech Skills', default: false },
+    { key: 'closes',      label: 'Closes',      default: false },
+    { key: 'submission',  label: 'Submission',  default: true  },
+    { key: 'assigned_to', label: 'Assigned To', default: true  },
+    { key: 'status',      label: 'Status',      default: true  },
+]
+const DEFAULT_TABLE_COLS = new Set(TABLE_COLS.filter(c => c.default).map(c => c.key))
+
+const JOBS_COL_WIDTHS: Record<string, number> = {
+    num: 36, job_title: 200, company: 140, location: 130,
+    type: 80, category: 130, sponsored: 84, tech_skills: 180,
+    closes: 100, submission: 160, assigned_to: 110, status: 60,
+}
 const EMPTY_FILTERS = { keyword: '', is_job_sponsored: '', type: '', job_category: '', company_id: '', has_cv: false, cv_submitted: '', application_status: '', job_id: '', cv_status: '', assigned: '', assigned_to: '' }
 const APP_STATUS_FILTER_OPTIONS = [{ value: 'none', label: 'Not tracked' }, ...APPLICATION_STATUS_OPTIONS.filter(o => o.value)]
 const CV_STATUS_OPTIONS = [
@@ -63,6 +85,45 @@ function SponsorBadge({ value }: { value: string }) {
     return <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${cls}`}>{value || 'unknown'}</span>
 }
 
+function TechSkillsCell({ skills }: { skills: string[] }) {
+    const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
+    const ref = useRef<HTMLDivElement>(null)
+    const shown = skills.slice(0, 2)
+    const extra = skills.length - shown.length
+
+    const showPopup = () => {
+        if (!ref.current) return
+        const r = ref.current.getBoundingClientRect()
+        setPos({ top: r.bottom + window.scrollY + 4, left: r.left + window.scrollX })
+    }
+
+    if (skills.length === 0) return <span className="text-[9px] text-gray-300">—</span>
+
+    return (
+        <div ref={ref} className="relative flex flex-nowrap gap-0.5 overflow-hidden items-center"
+            onMouseEnter={showPopup} onMouseLeave={() => setPos(null)}>
+            {shown.map((s, i) => (
+                <span key={i} className="text-[9px] bg-gray-100 text-gray-600 px-1 py-0.5 rounded shrink-0 truncate max-w-[70px]">{s}</span>
+            ))}
+            {extra > 0 && <span className="text-[9px] text-gray-400 shrink-0 font-medium">+{extra}</span>}
+
+            {pos && typeof window !== 'undefined' && (
+                <div
+                    style={{ position: 'fixed', top: pos.top - window.scrollY, left: pos.left, zIndex: 9999 }}
+                    className="bg-white border border-gray-200 rounded-lg shadow-xl p-2.5 w-72 max-h-60 overflow-y-auto"
+                    onMouseEnter={() => setPos(pos)} onMouseLeave={() => setPos(null)}>
+                    <p className="text-[9px] text-gray-400 uppercase font-semibold mb-2 px-0.5">Tech Skills ({skills.length})</p>
+                    <div className="flex flex-wrap gap-1">
+                        {skills.map((s, i) => (
+                            <span key={i} className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-0.5 rounded-full font-medium">{s}</span>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    )
+}
+
 function TypeBadge({ value }: { value: string }) {
     const cls = value === 'remote' ? 'bg-teal-100 text-teal-700'
         : value === 'hybrid' ? 'bg-blue-100 text-blue-700'
@@ -100,6 +161,11 @@ export default function ListedJobsPage() {
     const [showCatDd, setShowCatDd] = useState(false)
     const [showTypeDd, setShowTypeDd] = useState(false)
     const [showAppStatusDd, setShowAppStatusDd] = useState(false)
+
+    const [visibleCols, setVisibleCols] = useState<Set<string>>(() => new Set(DEFAULT_TABLE_COLS))
+    const [showColDd, setShowColDd] = useState(false)
+    const colDdRef = useRef<HTMLDivElement>(null)
+    const { widths: colW, startResize } = useColResize(JOBS_COL_WIDTHS, 'jobs_col_widths')
 
     const [companyQuery, setCompanyQuery] = useState('')
     const [companyResults, setCompanyResults] = useState<{ id: string; name: string }[]>([])
@@ -211,6 +277,11 @@ export default function ListedJobsPage() {
     }, [page, limit, applied, load, router])
 
     useEffect(() => {
+        const savedCols = localStorage.getItem('jobs_visible_cols')
+        if (savedCols) setVisibleCols(new Set(JSON.parse(savedCols)))
+    }, [])
+
+    useEffect(() => {
         getDistinctJobValues().then((res: any) => {
             const p = res?.data ?? res
             setCategories(p?.job_categories ?? [])
@@ -240,6 +311,7 @@ export default function ListedJobsPage() {
     useEffect(() => {
         const handler = (e: MouseEvent) => {
             if (companyDdRef.current && !companyDdRef.current.contains(e.target as Node)) setShowCompanyDd(false)
+            if (colDdRef.current && !colDdRef.current.contains(e.target as Node)) setShowColDd(false)
         }
         document.addEventListener('mousedown', handler)
         return () => document.removeEventListener('mousedown', handler)
@@ -275,6 +347,24 @@ export default function ListedJobsPage() {
         if (existing) setEditingCVFromJob(existing)
         else setCvJob(row)
     }
+
+    const col = (key: string) => visibleCols.has(key)
+
+    // 32 = checkbox, 120 = actions (both fixed, not resizable)
+    const tableWidth = 32 + 120 + TABLE_COLS.filter(c => col(c.key)).reduce((s, c) => s + (colW[c.key] ?? JOBS_COL_WIDTHS[c.key] ?? 100), 0)
+
+    const rh = (key: string) => (
+        <div className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-blue-400/40 active:bg-blue-500/60 select-none"
+            onMouseDown={e => startResize(key, e)} />
+    )
+
+    const toggleCol = (key: string) =>
+        setVisibleCols(prev => {
+            const s = new Set(prev)
+            if (s.has(key)) s.delete(key); else s.add(key)
+            localStorage.setItem('jobs_visible_cols', JSON.stringify(Array.from(s)))
+            return s
+        })
 
     const applyFilters = () => { setPage(1); setApplied({ ...filters }) }
     const clearFilters = () => {
@@ -534,10 +624,10 @@ export default function ListedJobsPage() {
 
             {/* Table */}
             <div className="border border-gray-200 rounded overflow-x-auto min-h-[60vh]">
-                <table className="w-full text-xs border-collapse">
+                <table className="text-xs border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
                     <thead>
                         <tr className="bg-gray-100 border-b border-gray-300">
-                            <th className="px-2 py-1.5 border-r border-gray-200 w-7 text-center">
+                            <th className="px-2 py-1.5 border-r border-gray-200 text-center" style={{ width: 32 }}>
                                 <input type="checkbox"
                                     className="w-3 h-3 accent-indigo-600"
                                     title="Select all on this page"
@@ -548,45 +638,70 @@ export default function ListedJobsPage() {
                                     }}
                                 />
                             </th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-500 border-r border-gray-200 w-6">#</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Job Title</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Company</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Location</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Type</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Category</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Sponsored</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Tech Skills</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Closes</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Submission</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Assigned To</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Status</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 flex items-center justify-between">
-                                <span>Actions</span>
-                                <button
-                                    onClick={() => load(page, limit, applied)}
-                                    disabled={loading}
-                                    title="Refresh results with current filter"
-                                    className="p-0.5 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded transition-colors disabled:opacity-50"
-                                >
-                                    <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
-                                </button>
+                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200" style={{ width: 120 }}>
+                                <div className="flex items-center justify-between gap-1">
+                                    <span>Actions</span>
+                                    <div className="flex items-center gap-1">
+                                        <button
+                                            onClick={() => load(page, limit, applied)}
+                                            disabled={loading}
+                                            title="Refresh results with current filter"
+                                            className="p-0.5 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded transition-colors disabled:opacity-50"
+                                        >
+                                            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+                                        </button>
+                                        <div className="relative" ref={colDdRef}>
+                                            <button onClick={() => setShowColDd(p => !p)}
+                                                title="Show/hide columns"
+                                                className={`p-0.5 hover:bg-gray-200 rounded transition-colors relative ${showColDd ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}>
+                                                <SlidersHorizontal size={12} />
+                                                {visibleCols.size !== DEFAULT_TABLE_COLS.size && (
+                                                    <span className="absolute -top-1 -right-1 bg-indigo-500 text-white text-[7px] rounded-full w-2.5 h-2.5 flex items-center justify-center font-bold leading-none">·</span>
+                                                )}
+                                            </button>
+                                            {showColDd && (
+                                                <div className="absolute left-0 top-full mt-1 z-40 bg-white border border-gray-200 rounded shadow-lg p-2 min-w-40">
+                                                    <p className="text-[9px] text-gray-400 uppercase font-semibold px-1 mb-1">Columns</p>
+                                                    {TABLE_COLS.map(({ key, label }) => (
+                                                        <label key={key} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded">
+                                                            <input type="checkbox" className="w-3 h-3"
+                                                                checked={visibleCols.has(key)}
+                                                                onChange={() => toggleCol(key)} />
+                                                            <span className="text-xs text-gray-700">{label}</span>
+                                                        </label>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
                             </th>
+                            {col('num') && <th className="px-2 py-1.5 text-left font-medium text-gray-500 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.num }}>#&nbsp;{rh('num')}</th>}
+                            {col('job_title') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.job_title }}>Job Title{rh('job_title')}</th>}
+                            {col('company') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.company }}>Company{rh('company')}</th>}
+                            {col('location') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.location }}>Location{rh('location')}</th>}
+                            {col('type') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.type }}>Type{rh('type')}</th>}
+                            {col('category') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.category }}>Category{rh('category')}</th>}
+                            {col('sponsored') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.sponsored }}>Sponsored{rh('sponsored')}</th>}
+                            {col('tech_skills') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.tech_skills }}>Tech Skills{rh('tech_skills')}</th>}
+                            {col('closes') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.closes }}>Closes{rh('closes')}</th>}
+                            {col('submission') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.submission }}>Submission{rh('submission')}</th>}
+                            {col('assigned_to') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.assigned_to }}>Assigned To{rh('assigned_to')}</th>}
+                            {col('status') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.status }}>Status{rh('status')}</th>}
                         </tr>
                     </thead>
                     <tbody>
                         {loading && (
-                            <tr><td colSpan={14} className="text-center py-10 text-gray-400">
+                            <tr><td colSpan={2 + visibleCols.size} className="text-center py-10 text-gray-400">
                                 <div className="flex items-center justify-center gap-2"><RefreshCw size={13} className="animate-spin" /> Loading…</div>
                             </td></tr>
                         )}
                         {!loading && data.length === 0 && (
-                            <tr><td colSpan={14} className="text-center py-10 text-gray-400">No jobs found.</td></tr>
+                            <tr><td colSpan={2 + visibleCols.size} className="text-center py-10 text-gray-400">No jobs found.</td></tr>
                         )}
                         {!loading && data.map((row, idx) => {
                             const rowNum = (page - 1) * limit + idx + 1
                             const techSkills: string[] = row.tech_skills ?? []
-                            const shown = techSkills.slice(0, 2)
-                            const extra = techSkills.length - shown.length
                             return (
                                 <tr key={row.id}
                                     className={`border-b border-gray-100 hover:bg-gray-50 cursor-context-menu ${selectedJobIds.has(row.id) ? 'bg-indigo-50' : ''}`}
@@ -603,56 +718,7 @@ export default function ListedJobsPage() {
                                             })}
                                         />
                                     </td>
-                                    <td className="px-2 py-1.5 text-gray-400 border-r border-gray-100 cursor-pointer select-none"
-                                        title={`Click to copy ID: ${row.id}`}
-                                        onClick={() => navigator.clipboard.writeText(String(row.id))}>
-                                        {rowNum}
-                                    </td>
-                                    <td className="px-2 py-1.5 border-r border-gray-100 max-w-[200px]">
-                                        <a href={row.link} target="_blank" rel="noopener noreferrer"
-                                            className="font-medium text-blue-600 hover:underline flex items-center gap-0.5">
-                                            <span className="truncate">{row.job_title}</span>
-                                            <ExternalLink size={9} className="shrink-0" />
-                                        </a>
-                                    </td>
-                                    <td className="px-2 py-1.5 border-r border-gray-100 max-w-[140px]">
-                                        <div className="truncate text-gray-700">{row.company_name}</div>
-                                    </td>
-                                    <td className="px-2 py-1.5 border-r border-gray-100 max-w-[130px]">
-                                        <div className="truncate text-gray-600">{row.location}</div>
-                                    </td>
                                     <td className="px-2 py-1.5 border-r border-gray-100 whitespace-nowrap">
-                                        <TypeBadge value={row.type} />
-                                    </td>
-                                    <td className="px-2 py-1.5 border-r border-gray-100 max-w-[130px]">
-                                        <div className="truncate text-gray-600">{row.job_category}</div>
-                                    </td>
-                                    <td className="px-2 py-1.5 border-r border-gray-100 whitespace-nowrap">
-                                        <SponsorBadge value={row.is_job_sponsored} />
-                                    </td>
-                                    <td className="px-2 py-1.5 border-r border-gray-100 max-w-[180px]">
-                                        <div className="flex flex-nowrap gap-0.5 overflow-hidden">
-                                            {shown.map((s, i) => (
-                                                <span key={i} className="text-[9px] bg-gray-100 text-gray-600 px-1 py-0.5 rounded shrink-0 truncate max-w-[70px]">{s}</span>
-                                            ))}
-                                            {extra > 0 && <span className="text-[9px] text-gray-400 shrink-0">+{extra}</span>}
-                                        </div>
-                                    </td>
-                                    <td className="px-2 py-1.5 text-gray-500 whitespace-nowrap text-[10px] border-r border-gray-100">
-                                        {row.application_closing_date || '—'}
-                                    </td>
-                                    <td className="px-2 py-1.5 whitespace-nowrap border-r border-gray-100">
-                                        <SubmissionBadge row={row} userMap={userMap} />
-                                    </td>
-                                    <td className="px-2 py-1.5 border-r border-gray-100">
-                                        {row.assigned_to && userMap[row.assigned_to]
-                                            ? <span className="text-[10px] text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded font-medium">{userMap[row.assigned_to]}</span>
-                                            : <span className="text-[9px] text-gray-300">—</span>}
-                                    </td>
-                                    <td className="px-2 py-1.5 whitespace-nowrap border-r border-gray-100 text-center">
-                                        <ApplicationStatusIcon job={row} />
-                                    </td>
-                                    <td className="px-2 py-1.5 whitespace-nowrap">
                                         <div className="flex items-center gap-0.5">
                                             <button
                                                 onClick={() => setViewingJob(row)}
@@ -686,6 +752,74 @@ export default function ListedJobsPage() {
                                             )}
                                         </div>
                                     </td>
+                                    {col('num') && (
+                                        <td className="px-2 py-1.5 text-gray-400 border-r border-gray-100 cursor-pointer select-none"
+                                            title={`Click to copy ID: ${row.id}`}
+                                            onClick={() => navigator.clipboard.writeText(String(row.id))}>
+                                            {rowNum}
+                                        </td>
+                                    )}
+                                    {col('job_title') && (
+                                        <td className="px-2 py-1.5 border-r border-gray-100 max-w-[200px]">
+                                            <a href={row.link} target="_blank" rel="noopener noreferrer"
+                                                className="font-medium text-blue-600 hover:underline flex items-center gap-0.5">
+                                                <span className="truncate">{row.job_title}</span>
+                                                <ExternalLink size={9} className="shrink-0" />
+                                            </a>
+                                        </td>
+                                    )}
+                                    {col('company') && (
+                                        <td className="px-2 py-1.5 border-r border-gray-100 max-w-[140px]">
+                                            <div className="truncate text-gray-700">{row.company_name}</div>
+                                        </td>
+                                    )}
+                                    {col('location') && (
+                                        <td className="px-2 py-1.5 border-r border-gray-100 max-w-[130px]">
+                                            <div className="truncate text-gray-600">{row.location}</div>
+                                        </td>
+                                    )}
+                                    {col('type') && (
+                                        <td className="px-2 py-1.5 border-r border-gray-100 whitespace-nowrap">
+                                            <TypeBadge value={row.type} />
+                                        </td>
+                                    )}
+                                    {col('category') && (
+                                        <td className="px-2 py-1.5 border-r border-gray-100 max-w-[130px]">
+                                            <div className="truncate text-gray-600">{row.job_category}</div>
+                                        </td>
+                                    )}
+                                    {col('sponsored') && (
+                                        <td className="px-2 py-1.5 border-r border-gray-100 whitespace-nowrap">
+                                            <SponsorBadge value={row.is_job_sponsored} />
+                                        </td>
+                                    )}
+                                    {col('tech_skills') && (
+                                        <td className="px-2 py-1.5 border-r border-gray-100 max-w-[180px]">
+                                            <TechSkillsCell skills={techSkills} />
+                                        </td>
+                                    )}
+                                    {col('closes') && (
+                                        <td className="px-2 py-1.5 text-gray-500 whitespace-nowrap text-[10px] border-r border-gray-100">
+                                            {row.application_closing_date || '—'}
+                                        </td>
+                                    )}
+                                    {col('submission') && (
+                                        <td className="px-2 py-1.5 whitespace-nowrap border-r border-gray-100">
+                                            <SubmissionBadge row={row} userMap={userMap} />
+                                        </td>
+                                    )}
+                                    {col('assigned_to') && (
+                                        <td className="px-2 py-1.5 border-r border-gray-100">
+                                            {row.assigned_to && userMap[row.assigned_to]
+                                                ? <span className="text-[10px] text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded font-medium">{userMap[row.assigned_to]}</span>
+                                                : <span className="text-[9px] text-gray-300">—</span>}
+                                        </td>
+                                    )}
+                                    {col('status') && (
+                                        <td className="px-2 py-1.5 whitespace-nowrap border-r border-gray-100 text-center">
+                                            <ApplicationStatusIcon job={row} />
+                                        </td>
+                                    )}
                                 </tr>
                             )
                         })}

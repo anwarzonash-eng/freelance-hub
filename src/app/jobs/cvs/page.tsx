@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { RefreshCw, ExternalLink, Pencil, Trash2, FileText, Search, X, Link, Briefcase, Building2 } from 'lucide-react'
+import { useColResize } from '@/app/hooks/useColResize'
 
 function SponsorBadge({ value }: { value: string }) {
     const v = value?.toLowerCase()
@@ -28,6 +29,12 @@ function CvStatusBadge({ value }: { value: string }) {
     const s = CV_STATUSES.find(x => x.value === value)
     if (!s) return <span className="text-gray-300">—</span>
     return <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${s.cls}`}>{s.label}</span>
+}
+
+const CVS_COL_WIDTHS: Record<string, number> = {
+    num: 36, cv_title: 200, applicant: 120, organisation: 140,
+    sponsorship: 90, job_link: 70, email: 180, exp_yrs: 70,
+    status: 100, created: 90, created_by: 90,
 }
 
 const EMPTY_FILTERS = {
@@ -108,6 +115,14 @@ export default function CvsPage() {
     const [showCompanyDd, setShowCompanyDd] = useState(false)
     const companyDdRef = useRef<HTMLDivElement>(null)
     const hydratedFromUrl = useRef(false)
+    const { widths: colW, startResize } = useColResize(CVS_COL_WIDTHS, 'cvs_col_widths')
+
+    const tableWidth = 120 + Object.keys(CVS_COL_WIDTHS).reduce((s, k) => s + (colW[k] ?? CVS_COL_WIDTHS[k] ?? 100), 0)
+
+    const rh = (key: string) => (
+        <div className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-blue-400/40 active:bg-blue-500/60 select-none"
+            onMouseDown={e => startResize(key, e)} />
+    )
 
     const load = useCallback(async () => {
         setLoading(true)
@@ -373,21 +388,10 @@ export default function CvsPage() {
             </div>
 
             <div className="border border-gray-200 rounded overflow-x-auto min-h-[60vh]">
-                <table className="w-full text-xs border-collapse">
+                <table className="text-xs border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
                     <thead>
                         <tr className="bg-gray-100 border-b border-gray-300">
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-500 border-r border-gray-200 w-6">#</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">CV Title</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Applicant</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Organisation</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Sponsorship</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Job Link</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Email</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Exp (yrs)</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Status</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Created</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Created By</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 flex items-center justify-between">
+                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 flex items-center justify-between" style={{ width: 120 }}>
                                 <span>Actions</span>
                                 <button
                                     onClick={() => setData(filterCvs(allData, filters))}
@@ -398,11 +402,22 @@ export default function CvsPage() {
                                     <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
                                 </button>
                             </th>
+                            <th className="px-2 py-1.5 text-left font-medium text-gray-500 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.num }}>#&nbsp;{rh('num')}</th>
+                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.cv_title }}>CV Title{rh('cv_title')}</th>
+                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.applicant }}>Applicant{rh('applicant')}</th>
+                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.organisation }}>Organisation{rh('organisation')}</th>
+                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.sponsorship }}>Sponsorship{rh('sponsorship')}</th>
+                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.job_link }}>Job Link{rh('job_link')}</th>
+                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.email }}>Email{rh('email')}</th>
+                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.exp_yrs }}>Exp (yrs){rh('exp_yrs')}</th>
+                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.status }}>Status{rh('status')}</th>
+                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.created }}>Created{rh('created')}</th>
+                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.created_by }}>Created By{rh('created_by')}</th>
                         </tr>
                     </thead>
                     <tbody>
                         {loading && (
-                            <tr><td colSpan={12} className="text-center py-10 text-gray-400">
+                            <tr><td colSpan={12} className="text-center py-10 text-gray-400" style={{ minWidth: tableWidth }}>
                                 <div className="flex items-center justify-center gap-2"><RefreshCw size={13} className="animate-spin" /> Loading…</div>
                             </td></tr>
                         )}
@@ -414,6 +429,35 @@ export default function CvsPage() {
                         {!loading && data.map((row, idx) => (
                             <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50 cursor-context-menu"
                                 onContextMenu={e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, row }) }}>
+                                <td className="px-2 py-1.5 border-r border-gray-100">
+                                    <div className="flex items-center gap-1">
+                                        <a href={`/viewCV/${row.id}`} target="_blank" rel="noopener noreferrer"
+                                            title="View CV"
+                                            className="p-1 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded">
+                                            <ExternalLink size={12} />
+                                        </a>
+                                        <button onClick={() => setEditingCV(row)} title="Edit CV"
+                                            className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded">
+                                            <Pencil size={12} />
+                                        </button>
+                                        {row.job_id && (
+                                            <a href={`/jobs/listed-jobs?job_id=${row.job_id}`} title="View this job"
+                                                className="p-1 text-gray-500 hover:text-teal-700 hover:bg-teal-50 rounded">
+                                                <Briefcase size={12} />
+                                            </a>
+                                        )}
+                                        {row.company_id && (
+                                            <a href={`/jobs/companies?id=${encodeURIComponent(row.company_id)}`} title="View this company"
+                                                className="p-1 text-gray-500 hover:text-indigo-700 hover:bg-indigo-50 rounded">
+                                                <Building2 size={12} />
+                                            </a>
+                                        )}
+                                        <button onClick={() => handleDelete(row.id)} title="Delete CV"
+                                            className="p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded">
+                                            <Trash2 size={12} />
+                                        </button>
+                                    </div>
+                                </td>
                                 <td className="px-2 py-1.5 text-gray-400 border-r border-gray-100 cursor-pointer select-none"
                                     title={`Click to copy ID: ${row.id}`}
                                     onClick={() => navigator.clipboard.writeText(String(row.id))}>
@@ -453,35 +497,6 @@ export default function CvsPage() {
                                 </td>
                                 <td className="px-2 py-1.5 border-r border-gray-100 text-gray-600 text-[10px] whitespace-nowrap">
                                     {row.created_by ? (userMap[row.created_by] || row.created_by) : '—'}
-                                </td>
-                                <td className="px-2 py-1.5">
-                                    <div className="flex items-center gap-1">
-                                        <a href={`/viewCV/${row.id}`} target="_blank" rel="noopener noreferrer"
-                                            title="View CV"
-                                            className="p-1 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded">
-                                            <ExternalLink size={12} />
-                                        </a>
-                                        <button onClick={() => setEditingCV(row)} title="Edit CV"
-                                            className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded">
-                                            <Pencil size={12} />
-                                        </button>
-                                        {row.job_id && (
-                                            <a href={`/jobs/listed-jobs?job_id=${row.job_id}`} title="View this job"
-                                                className="p-1 text-gray-500 hover:text-teal-700 hover:bg-teal-50 rounded">
-                                                <Briefcase size={12} />
-                                            </a>
-                                        )}
-                                        {row.company_id && (
-                                            <a href={`/jobs/companies?id=${encodeURIComponent(row.company_id)}`} title="View this company"
-                                                className="p-1 text-gray-500 hover:text-indigo-700 hover:bg-indigo-50 rounded">
-                                                <Building2 size={12} />
-                                            </a>
-                                        )}
-                                        <button onClick={() => handleDelete(row.id)} title="Delete CV"
-                                            className="p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded">
-                                            <Trash2 size={12} />
-                                        </button>
-                                    </div>
                                 </td>
                             </tr>
                         ))}
