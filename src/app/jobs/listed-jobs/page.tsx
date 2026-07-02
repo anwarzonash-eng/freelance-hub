@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { RefreshCw, ExternalLink, Search, ChevronDown, Briefcase, FileText, Eye, Building2, X, Copy, Link } from 'lucide-react'
-import { getAllJobs, getDistinctJobValues } from '@/app/api_handlers/api/sponsored-jobs.api'
+import { RefreshCw, ExternalLink, Search, ChevronDown, Briefcase, FileText, Eye, Building2, X, Link, Users } from 'lucide-react'
+import { getAllJobs, getDistinctJobValues, assignJobs } from '@/app/api_handlers/api/sponsored-jobs.api'
 import { getAllCompanies } from '@/app/api_handlers/api/sponsored-companies.api'
 import { getAllCVs } from '@/app/api_handlers/api/job-cvs.api'
 import { listAuthUsers } from '@/app/api_handlers/api/auth.api'
@@ -11,10 +11,11 @@ import JobCVModal from '@/app/components/jobs/JobCVModal'
 import JobViewModal from '@/app/components/jobs/JobViewModal'
 import { ApplicationStatusIcon, APPLICATION_STATUS_OPTIONS } from '@/app/components/jobs/JobPreviewEdit'
 import ContextMenu, { ContextMenuItem } from '@/app/components/jobs/ContextMenu'
+import AssignModal from '@/app/components/jobs/AssignModal'
 import { timeAgo } from '@/app/utils/time'
 
 const LIMIT_OPTIONS = [25, 50, 100, 200]
-const EMPTY_FILTERS = { keyword: '', is_job_sponsored: '', type: '', job_category: '', company_id: '', has_cv: false, cv_submitted: '', application_status: '', job_id: '', cv_status: '' }
+const EMPTY_FILTERS = { keyword: '', is_job_sponsored: '', type: '', job_category: '', company_id: '', has_cv: false, cv_submitted: '', application_status: '', job_id: '', cv_status: '', assigned: '', assigned_to: '' }
 const APP_STATUS_FILTER_OPTIONS = [{ value: 'none', label: 'Not tracked' }, ...APPLICATION_STATUS_OPTIONS.filter(o => o.value)]
 const CV_STATUS_OPTIONS = [
     { value: 'cv_created', label: 'CV Created' },
@@ -34,6 +35,8 @@ function filtersToParams(f: typeof EMPTY_FILTERS, page: number, limit: number): 
     if (f.application_status) params.set('application_status', f.application_status)
     if (f.job_id) params.set('job_id', f.job_id)
     if (f.cv_status) params.set('cv_status', f.cv_status)
+    if (f.assigned) params.set('assigned', f.assigned)
+    if (f.assigned_to) params.set('assigned_to', f.assigned_to)
     if (page !== 1) params.set('page', String(page))
     if (limit !== 50) params.set('limit', String(limit))
     return params
@@ -79,6 +82,10 @@ export default function ListedJobsPage() {
     const [cvJob, setCvJob] = useState<any | null>(null)
     const [editingCVFromJob, setEditingCVFromJob] = useState<any | null>(null)
     const cvListRef = useRef<any[]>([])
+    const [userList, setUserList] = useState<{ id: string; userid: string }[]>([])
+    const [isAdmin, setIsAdmin] = useState(false)
+    const [assigning, setAssigning] = useState(false)
+    const [selectedJobIds, setSelectedJobIds] = useState<Set<number>>(new Set())
     const [viewingJob, setViewingJob] = useState<any | null>(null)
     const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; row: any } | null>(null)
     const [cvMap, setCvMap] = useState<Record<number, any>>({})
@@ -121,6 +128,8 @@ export default function ListedJobsPage() {
             if (af.cv_submitted) q.cv_submitted = af.cv_submitted
             if (af.application_status) q.application_status = af.application_status
             if (af.job_id) q.job_ids = af.job_id
+            if (af.assigned) q.assigned = af.assigned
+            if (af.assigned_to) q.assigned_to = af.assigned_to
             if (af.has_cv) {
                 const map = latestCvMap ?? cvMap
                 const ids = Object.keys(map).join(',')
@@ -148,6 +157,7 @@ export default function ListedJobsPage() {
             setData(Array.isArray(payload?.data) ? payload.data : [])
             setTotal(payload?.total ?? 0)
             setTotalPages(payload?.totalPages ?? 1)
+            setSelectedJobIds(new Set())
         } finally {
             setLoading(false)
         }
@@ -169,6 +179,8 @@ export default function ListedJobsPage() {
             application_status: searchParams.get('application_status') || '',
             job_id: searchParams.get('job_id') || '',
             cv_status: searchParams.get('cv_status') || '',
+            assigned: searchParams.get('assigned') || '',
+            assigned_to: searchParams.get('assigned_to') || '',
         }
         const hydratedPage = Number(searchParams.get('page')) || 1
         const hydratedLimit = Number(searchParams.get('limit')) || 50
@@ -208,11 +220,21 @@ export default function ListedJobsPage() {
         listAuthUsers().then((res: any) => {
             const list = res?.data ?? res
             if (Array.isArray(list)) {
+                const eligible = list.filter((u: any) => u.id !== '00000000-0000-0000-0000-000000000001')
                 const map: Record<string, string> = {}
-                list.forEach((u: any) => { if (u.id) map[u.id] = u.userid || u.id })
+                eligible.forEach((u: any) => { if (u.id) map[u.id] = u.userid || u.id })
                 setUserMap(map)
+                setUserList(eligible.map((u: any) => ({ id: u.id, userid: u.userid || u.id })))
             }
         }).catch(() => { })
+
+        try {
+            const token = localStorage.getItem('authToken')
+            if (token) {
+                const payload = JSON.parse(atob(token.split('.')[1]))
+                setIsAdmin(payload.role === 'admin')
+            }
+        } catch { }
     }, [])
 
     useEffect(() => {
@@ -289,10 +311,18 @@ export default function ListedJobsPage() {
                     <h1 className="text-sm font-semibold text-gray-800">Listed Jobs</h1>
                     <span className="text-[10px] text-gray-400">{total} total</span>
                 </div>
-                <button onClick={() => load(page, limit, applied)} disabled={loading}
-                    className="flex items-center gap-1 text-xs border border-gray-300 rounded px-2 py-1 hover:bg-gray-50 disabled:opacity-50 text-gray-600">
-                    <RefreshCw size={11} className={loading ? 'animate-spin' : ''} /> Refresh
-                </button>
+                <div className="flex items-center gap-1.5">
+                    {isAdmin && (
+                        <button onClick={() => setAssigning(true)} title={selectedJobIds.size > 0 ? `Assign ${selectedJobIds.size} selected jobs` : 'Assign filtered jobs to users'}
+                            className={`flex items-center gap-1 text-xs border rounded px-2 py-1 transition-colors ${selectedJobIds.size > 0 ? 'border-indigo-400 bg-indigo-50 text-indigo-700 hover:bg-indigo-100' : 'border-gray-300 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 text-gray-600'}`}>
+                            <Users size={11} /> Assign{selectedJobIds.size > 0 ? ` (${selectedJobIds.size})` : ''}
+                        </button>
+                    )}
+                    <button onClick={() => load(page, limit, applied)} disabled={loading}
+                        className="flex items-center gap-1 text-xs border border-gray-300 rounded px-2 py-1 hover:bg-gray-50 disabled:opacity-50 text-gray-600">
+                        <RefreshCw size={11} className={loading ? 'animate-spin' : ''} /> Refresh
+                    </button>
+                </div>
             </div>
 
             {/* Filter bar */}
@@ -457,6 +487,29 @@ export default function ListedJobsPage() {
                     </div>
 
                     <div className="flex flex-col gap-0.5">
+                        <label className="text-[10px] text-gray-400 uppercase">Assigned</label>
+                        <select value={filters.assigned}
+                            onChange={e => setFilters(f => ({ ...f, assigned: e.target.value }))}
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.assigned ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
+                            <option value="">All</option>
+                            <option value="true">Assigned</option>
+                            <option value="false">Unassigned</option>
+                        </select>
+                    </div>
+
+                    <div className="flex flex-col gap-0.5">
+                        <label className="text-[10px] text-gray-400 uppercase">Assigned To</label>
+                        <select value={filters.assigned_to}
+                            onChange={e => setFilters(f => ({ ...f, assigned_to: e.target.value }))}
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none min-w-[110px] transition-colors ${filters.assigned_to ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
+                            <option value="">All</option>
+                            {userList.map(u => (
+                                <option key={u.id} value={u.id}>{u.userid}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="flex flex-col gap-0.5">
                         <label className="text-[10px] text-gray-400 uppercase">CV Status</label>
                         <select value={filters.cv_status}
                             onChange={e => setFilters(f => ({ ...f, cv_status: e.target.value }))}
@@ -484,6 +537,17 @@ export default function ListedJobsPage() {
                 <table className="w-full text-xs border-collapse">
                     <thead>
                         <tr className="bg-gray-100 border-b border-gray-300">
+                            <th className="px-2 py-1.5 border-r border-gray-200 w-7 text-center">
+                                <input type="checkbox"
+                                    className="w-3 h-3 accent-indigo-600"
+                                    title="Select all on this page"
+                                    checked={data.length > 0 && data.every(r => selectedJobIds.has(r.id))}
+                                    onChange={e => {
+                                        if (e.target.checked) setSelectedJobIds(prev => new Set([...prev, ...data.map(r => r.id)]))
+                                        else setSelectedJobIds(prev => { const n = new Set(prev); data.forEach(r => n.delete(r.id)); return n })
+                                    }}
+                                />
+                            </th>
                             <th className="px-2 py-1.5 text-left font-medium text-gray-500 border-r border-gray-200 w-6">#</th>
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Job Title</th>
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Company</th>
@@ -494,6 +558,7 @@ export default function ListedJobsPage() {
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Tech Skills</th>
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Closes</th>
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Submission</th>
+                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Assigned To</th>
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200">Status</th>
                             <th className="px-2 py-1.5 text-left font-medium text-gray-600 flex items-center justify-between">
                                 <span>Actions</span>
@@ -510,12 +575,12 @@ export default function ListedJobsPage() {
                     </thead>
                     <tbody>
                         {loading && (
-                            <tr><td colSpan={12} className="text-center py-10 text-gray-400">
+                            <tr><td colSpan={14} className="text-center py-10 text-gray-400">
                                 <div className="flex items-center justify-center gap-2"><RefreshCw size={13} className="animate-spin" /> Loading…</div>
                             </td></tr>
                         )}
                         {!loading && data.length === 0 && (
-                            <tr><td colSpan={12} className="text-center py-10 text-gray-400">No jobs found.</td></tr>
+                            <tr><td colSpan={14} className="text-center py-10 text-gray-400">No jobs found.</td></tr>
                         )}
                         {!loading && data.map((row, idx) => {
                             const rowNum = (page - 1) * limit + idx + 1
@@ -523,8 +588,21 @@ export default function ListedJobsPage() {
                             const shown = techSkills.slice(0, 2)
                             const extra = techSkills.length - shown.length
                             return (
-                                <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50 cursor-context-menu"
+                                <tr key={row.id}
+                                    className={`border-b border-gray-100 hover:bg-gray-50 cursor-context-menu ${selectedJobIds.has(row.id) ? 'bg-indigo-50' : ''}`}
                                     onContextMenu={e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, row }) }}>
+                                    <td className="px-2 py-1.5 border-r border-gray-100 text-center"
+                                        onClick={e => e.stopPropagation()}>
+                                        <input type="checkbox"
+                                            className="w-3 h-3 accent-indigo-600"
+                                            checked={selectedJobIds.has(row.id)}
+                                            onChange={e => setSelectedJobIds(prev => {
+                                                const n = new Set(prev)
+                                                if (e.target.checked) n.add(row.id); else n.delete(row.id)
+                                                return n
+                                            })}
+                                        />
+                                    </td>
                                     <td className="px-2 py-1.5 text-gray-400 border-r border-gray-100 cursor-pointer select-none"
                                         title={`Click to copy ID: ${row.id}`}
                                         onClick={() => navigator.clipboard.writeText(String(row.id))}>
@@ -565,6 +643,11 @@ export default function ListedJobsPage() {
                                     </td>
                                     <td className="px-2 py-1.5 whitespace-nowrap border-r border-gray-100">
                                         <SubmissionBadge row={row} userMap={userMap} />
+                                    </td>
+                                    <td className="px-2 py-1.5 border-r border-gray-100">
+                                        {row.assigned_to && userMap[row.assigned_to]
+                                            ? <span className="text-[10px] text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded font-medium">{userMap[row.assigned_to]}</span>
+                                            : <span className="text-[9px] text-gray-300">—</span>}
                                     </td>
                                     <td className="px-2 py-1.5 whitespace-nowrap border-r border-gray-100 text-center">
                                         <ApplicationStatusIcon job={row} />
@@ -647,6 +730,21 @@ export default function ListedJobsPage() {
                     onSaved={() => { setEditingCVFromJob(null); loadCVs() }}
                 />
             )}
+
+            {assigning && (() => {
+                const hasSelection = selectedJobIds.size > 0
+                return (
+                    <AssignModal
+                        filters={hasSelection ? { job_ids: Array.from(selectedJobIds).join(',') } : applied}
+                        totalFiltered={hasSelection ? selectedJobIds.size : total}
+                        users={userList}
+                        entityLabel="jobs"
+                        assignFn={assignJobs}
+                        onClose={() => setAssigning(false)}
+                        onDone={() => { setAssigning(false); setSelectedJobIds(new Set()); load(page, limit, applied) }}
+                    />
+                )
+            })()}
 
             {/* Pagination */}
             {totalPages > 1 && (

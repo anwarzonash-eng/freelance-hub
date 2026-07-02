@@ -1777,6 +1777,7 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
   };
 
   const handleSave = async (openAfter = false) => {
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     setSaving(true);
     setSaveStatus('saving');
     try {
@@ -1802,18 +1803,27 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
     }
   };
 
-  // Auto-save 1.5 s after the last change, but only for existing CVs (savedId present).
-  // New CVs require the user to click "Save Draft" first to create the DB record.
+  // Auto-save 1.5 s after the last change. Works for both new and existing CVs.
+  // New CVs auto-create once applicant_name is filled; existing CVs update silently.
   const buildPayloadRef = useRef(buildPayload);
   buildPayloadRef.current = buildPayload;
+  const savedIdRef = useRef<number | null>(null);
+  savedIdRef.current = savedId;
   useEffect(() => {
-    if (!savedId) return;
+    if (!form.applicant_name.trim()) return;
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     setSaveStatus('idle');
     autoSaveTimer.current = setTimeout(async () => {
       setSaveStatus('saving');
       try {
-        await updateCVSilent(savedId, buildPayloadRef.current());
+        const currentSavedId = savedIdRef.current;
+        if (currentSavedId) {
+          await updateCVSilent(currentSavedId, buildPayloadRef.current());
+        } else {
+          const res: any = await createCV(buildPayloadRef.current());
+          const newId = res?.data?.id ?? res?.id ?? null;
+          if (newId) setSavedId(newId);
+        }
         setLastSavedAt(new Date());
         setSaveStatus('saved');
       } catch {
@@ -1861,10 +1871,16 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
           </select>
         )}
 
-        {/* CV Status */}
+        {/* CV Status — saves immediately on change, no debounce */}
         <select
           value={form.status}
-          onChange={e => set('status', e.target.value)}
+          onChange={e => {
+            const newStatus = e.target.value
+            set('status', newStatus)
+            if (savedId) {
+              updateCVSilent(savedId, { ...buildPayloadRef.current(), status: newStatus }).catch(() => {})
+            }
+          }}
           className={`text-xs border rounded px-2 py-1 focus:outline-none shrink-0 font-medium ${CV_STATUS_COLORS[form.status] ?? 'bg-gray-100 text-gray-600'}`}
         >
           {CV_STATUSES.map(s => (
@@ -1874,17 +1890,15 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
 
         <div className="flex items-center gap-2 ml-auto shrink-0">
           {/* Auto-save status */}
-          {savedId && (
-            <span className={`text-[10px] shrink-0 transition-colors ${
-              saveStatus === 'saving' ? 'text-amber-500' :
-              saveStatus === 'saved' ? 'text-green-600' :
-              'text-gray-300'
-            }`}>
-              {saveStatus === 'saving' && '● Saving…'}
-              {saveStatus === 'saved' && lastSavedAt && `✓ Saved ${formatLastSaved(lastSavedAt)}`}
-              {saveStatus === 'idle' && lastSavedAt && `✓ Saved ${formatLastSaved(lastSavedAt)}`}
-            </span>
-          )}
+          <span className={`text-[10px] shrink-0 transition-colors ${
+            saveStatus === 'saving' ? 'text-amber-500' :
+            saveStatus === 'saved' ? 'text-green-600' :
+            'text-gray-300'
+          }`}>
+            {saveStatus === 'saving' && '● Saving…'}
+            {saveStatus === 'saved' && lastSavedAt && `✓ Saved ${formatLastSaved(lastSavedAt)}`}
+            {saveStatus === 'idle' && lastSavedAt && `✓ Saved ${formatLastSaved(lastSavedAt)}`}
+          </span>
           {form.job_link && (
             <a href={form.job_link} target="_blank" rel="noopener noreferrer"
               className="flex items-center gap-1 px-2 py-1 text-[11px] text-gray-500 hover:text-gray-800 hover:underline">
@@ -1929,7 +1943,7 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
             }
             className="px-3 py-1.5 text-xs border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {saving ? "Saving…" : "Save Draft"}
+            {saving ? "Saving…" : "Save"}
           </button>
           <button
             onClick={() => handleSave(true)}
@@ -1948,7 +1962,7 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
             className="flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-800 text-white rounded hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <ExternalLink size={11} />
-            {saving ? "Saving…" : "Save & View"}
+            {saving ? "Saving…" : "Save & Open CV"}
           </button>
         </div>
       </div>

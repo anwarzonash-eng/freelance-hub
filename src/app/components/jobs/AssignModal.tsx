@@ -22,9 +22,11 @@ interface Props {
     users: User[]
     onClose: () => void
     onDone: () => void
+    entityLabel?: string
+    assignFn?: (body: { filters: any; assignments: Assignment[] }) => Promise<any>
 }
 
-export default function AssignModal({ filters, totalFiltered, users, onClose, onDone }: Props) {
+export default function AssignModal({ filters, totalFiltered, users, onClose, onDone, entityLabel = 'companies', assignFn = assignCompanies }: Props) {
     const eligible = users.filter(u => u.id !== SYSTEM_USER)
 
     const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -68,7 +70,7 @@ export default function AssignModal({ filters, totalFiltered, users, onClose, on
                 userId: id,
                 count: counts[id] ?? 0,
             }))
-            await assignCompanies({ filters, assignments })
+            await assignFn({ filters, assignments })
             onDone()
         } finally {
             setSaving(false)
@@ -83,14 +85,14 @@ export default function AssignModal({ filters, totalFiltered, users, onClose, on
                 <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 shrink-0">
                     <div className="flex items-center gap-2">
                         <Users size={15} className="text-indigo-500" />
-                        <span className="text-sm font-semibold text-gray-800">Assign Companies</span>
+                        <span className="text-sm font-semibold text-gray-800">Assign {entityLabel.charAt(0).toUpperCase() + entityLabel.slice(1)}</span>
                     </div>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={16} /></button>
                 </div>
 
                 <div className="px-4 py-3 border-b border-gray-100 shrink-0">
                     <p className="text-xs text-gray-500">
-                        Distributing <span className="font-semibold text-gray-800">{totalFiltered.toLocaleString()}</span> filtered companies to selected users.
+                        Distributing <span className="font-semibold text-gray-800">{totalFiltered.toLocaleString()}</span> filtered {entityLabel} to selected users.
                         First <span className="font-semibold text-gray-800">{totalAssigned.toLocaleString()}</span> companies will be assigned.
                         {totalAssigned < totalFiltered && (
                             <span className="text-amber-600 ml-1">({(totalFiltered - totalAssigned).toLocaleString()} will remain unassigned)</span>

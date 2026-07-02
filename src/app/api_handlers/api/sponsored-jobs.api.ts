@@ -33,3 +33,7 @@ export async function updateJob(jobId: number, payload: any) {
         true,
     )
 }
+
+export async function assignJobs(body: { filters: any; assignments: { userId: string; count: number }[] }) {
+    return apiClient(SponsoredJobsAPIRoutes.ASSIGN, ApiMethod.POST, body, undefined, {}, true)
+}
