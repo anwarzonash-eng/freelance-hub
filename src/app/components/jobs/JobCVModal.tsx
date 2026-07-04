@@ -19,7 +19,11 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { getAllApplicants } from "@/app/api_handlers/api/job-applicants.api";
-import { createCV, updateCV, updateCVSilent } from "@/app/api_handlers/api/job-cvs.api";
+import {
+  createCV,
+  updateCV,
+  updateCVSilent,
+} from "@/app/api_handlers/api/job-cvs.api";
 import { getAllJobs } from "@/app/api_handlers/api/sponsored-jobs.api";
 import { timeAgo } from "@/app/utils/time";
 import CVPreview, {
@@ -43,20 +47,28 @@ import LLMGeneratorPopup from "../llm/LLMGeneratorPopup";
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 function formatLastSaved(date: Date): string {
-  const secs = Math.floor((Date.now() - date.getTime()) / 1000)
-  if (secs < 10) return 'just now'
-  if (secs < 60) return `${secs}s ago`
-  const mins = Math.floor(secs / 60)
-  if (mins < 60) return `${mins}m ago`
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const secs = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (secs < 10) return "just now";
+  if (secs < 60) return `${secs}s ago`;
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-function CopyPromptBtn({ rawDesc, jobTitle, savedId }: { rawDesc: string; jobTitle: string; savedId: number | null }) {
-  const [copied, setCopied] = useState(false)
+function CopyPromptBtn({
+  rawDesc,
+  jobTitle,
+  savedId,
+}: {
+  rawDesc: string;
+  jobTitle: string;
+  savedId: number | null;
+}) {
+  const [copied, setCopied] = useState(false);
 
   const copy = () => {
-    const cvUrl = savedId ? `${window.location.origin}/viewCV/${savedId}` : ''
-    const prompt = `You are an expert CV reviewer, ATS specialist, and senior recruiter. Please review the CV${cvUrl ? ` at ${cvUrl}` : ''} and provide a detailed analysis covering all of the following:
+    const cvUrl = savedId ? `${window.location.origin}/viewCV/${savedId}` : "";
+    const prompt = `You are an expert CV reviewer, ATS specialist, and senior recruiter. Please review the CV${cvUrl ? ` at ${cvUrl}` : ""} and provide a detailed analysis covering all of the following:
 
 ## 1. ATS Scan
 - Score how well this CV would pass ATS filters for the target role
@@ -98,30 +110,47 @@ For each role in the experience section:
 - Write 2–3 alternate summary paragraphs (varying tone: confident, results-focused, narrative)
 
 ---
-**Target Job Title:** ${jobTitle || '(not specified)'}
+**Target Job Title:** ${jobTitle || "(not specified)"}
 
 **Job Description:**
-${rawDesc || '(not provided)'}`
+${rawDesc || "(not provided)"}`;
     navigator.clipboard.writeText(prompt).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    })
-  }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
 
   return (
     <button
       type="button"
       onClick={copy}
       title="Copy Claude review prompt"
-      className={`p-0.5 rounded transition-colors ${copied ? 'text-teal-600' : 'text-blue-400 hover:text-blue-700'}`}
+      className={`p-0.5 rounded transition-colors ${copied ? "text-teal-600" : "text-blue-400 hover:text-blue-700"}`}
     >
       {copied ? <Check size={11} /> : <Copy size={11} />}
     </button>
-  )
+  );
 }
 
-
 const JOB_TYPES = ["Remote", "Hybrid", "Onsite"];
+const EXP_MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+const EXP_CUR_YEAR = new Date().getFullYear();
+const EXP_YEARS = Array.from({ length: EXP_CUR_YEAR - 1984 }, (_, i) =>
+  String(EXP_CUR_YEAR - i),
+);
 const JOB_NATURES = [
   "Full Time",
   "Freelance",
@@ -153,6 +182,21 @@ function highlightPlainTextToHtml(
       return escapeHtml(part);
     })
     .join("");
+}
+
+// Adds a second pass of manual-search highlights (green) on top of already-highlighted HTML.
+// Avoids touching content inside existing <mark> or <...> tags.
+function applyManualHighlight(html: string, term: string): string {
+  if (!term.trim()) return html;
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`(${escaped})`, "gi");
+  return html.replace(/(<[^>]+>)|([^<]+)/g, (_, tag, text) => {
+    if (tag) return tag;
+    return text.replace(
+      re,
+      '<mark class="manual-hl" style="background:#bbf7d0;color:#14532d;border-radius:3px;padding:1px 3px;font-weight:700;font-size:1.08em;box-shadow:0 0 0 1px #86efac;">$1</mark>',
+    );
+  });
 }
 
 // Highlights ATS keyword matches inside an HTML string without breaking existing
@@ -753,112 +797,243 @@ Generate professional experience bullet points for each of the
   duration, any notes provided about actual work)
 
 ----------------------------------------
-BULLET COUNT
+BULLET COUNT (recency-weighted)
 ----------------------------------------
-* If Number Of Past Experiences <= 3: generate exactly 4 bullet points per experience.
-* If Number Of Past Experiences > 3: generate exactly 3 bullet points per experience.
+
+Order experiences chronologically by end date, most recent (or "Present")
+first. Assign bullet counts by recency tier — do NOT apply a single flat
+count to all experiences:
+
+* Tier 1 — Most recent / current role:
+  - 5 bullets if Number Of Past Experiences <= 3
+  - 4 bullets if Number Of Past Experiences >= 4
+
+* Tier 2 — Second most recent role: 4 bullets
+
+* Tier 3 — Third most recent role and all older roles: 3 bullets each
+
+* Never generate fewer than 2 bullets for a single role, even for short
+  stints (<6 months).
+
+Examples:
+  - 2 total experiences  → 5, 4
+  - 3 total experiences  → 5, 4, 3
+  - 4 total experiences  → 5, 4, 3, 3
+  - 5+ total experiences → 5, 4, 3, 3, 3, ...
+
+Rationale: recruiters weight the most recent/current role most heavily, so
+it should carry the most supporting detail and the most quantified proof
+points. Older roles should stay lean regardless of total job count.
 
 ----------------------------------------
 BULLET STRUCTURE (required for every bullet)
 ----------------------------------------
+
 Each bullet must follow a problem/context → action → outcome shape:
 1. A situation, goal, or problem (implicit or explicit)
-2. A specific action this person took (a decision, a system built, a process changed)
-3. A result or change that followed
+2. A specific action this person took (a decision, a system built, a
+   process changed)
+3. A result or change that followed, expressed with quantification or
+   scale (see METRICS POLICY below — this is a separate, additive
+   requirement from Specificity, not the same thing)
 
-A bullet that only states "Built/Developed/Implemented [tech] for [vague goal]"
-with no specific detail and no outcome is NOT acceptable, even if grammatically
-correct and keyword-rich.
+A bullet that only states "Built/Developed/Implemented [tech] for [vague
+goal]" with no specific detail and no outcome is NOT acceptable, even if
+grammatically correct and keyword-rich.
 
 ----------------------------------------
-SPECIFICITY REQUIREMENTS
+SPECIFICITY REQUIREMENTS (about the ACTION, not the outcome)
 ----------------------------------------
-* Each bullet must contain at least ONE concrete, specific detail: a named
-  system/feature type, a workflow, a constraint, a decision, or a scope indicator.
-  ("Redesigned the document-intake flow to cut manual review steps" is acceptable;
-  "Built document processing workflows supporting operations" is not.)
+
+* Each bullet must contain at least ONE concrete, specific detail about
+  WHAT WAS DONE: a named system/feature type, a workflow, a constraint, a
+  decision, or a technical scope indicator (e.g. "across development,
+  test, and production environments," "using Azure DevOps and GitHub").
+* IMPORTANT: satisfying this requirement (naming a system, tool, or
+  environment) does NOT automatically satisfy the METRICS POLICY below.
+  These are two separate, additive requirements. A bullet can correctly
+  name three environments and still have zero quantification of outcome —
+  that bullet is still incomplete.
 * Each bullet must be DISTINGUISHABLE from every other bullet in this CV.
-  No two bullets — within an experience or across experiences — may share the
-  same verb-stack-noun sentence pattern.
-* No bullet within the same experience block may start with the same verb as
-  another bullet in that block. Vary sentence openings across the whole CV,
-  not just the first word.
+  No two bullets — within an experience or across experiences — may share
+  the same verb-stack-noun sentence pattern.
+* No bullet within the same experience block may start with the same verb
+  as another bullet in that block. Vary sentence openings across the whole
+  CV, not just the first word.
 
 ----------------------------------------
-METRICS POLICY
+METRICS POLICY (about the OUTCOME, not the action)
 ----------------------------------------
-* Do NOT invent precise, unverifiable statistics (no fabricated %, $ amounts,
-  exact counts, or time savings figures).
-* You MAY use realistic qualitative or relative scale language where it fits
-  naturally: "cut manual review time," "reduced a multi-step process to one
-  step," "supported [N]-person team," "handled [type] at production scale."
-  Use such phrasing only when it's a reasonable, non-fabricated inference —
-  if there's no basis for it, omit it rather than guess.
-* Absence of a metric is preferable to a fabricated one. Do not pad a bullet
-  with vague impact language ("greatly improved," "significantly increased")
-  as a substitute for a real detail — that is filler and is not acceptable.
+
+PRIMARY RULE — read this first:
+Every bullet MUST end with a quantified or scale-framed outcome that is
+distinct from the technical scope named in the action part of the bullet.
+This is not optional filler — a bullet without it is incomplete and must
+be revised before output. Acceptable forms of quantification/scale
+framing, in order of preference:
+  (a) A real number, percentage, or time figure, ONLY if directly
+      supported by the raw input notes.
+  (b) A relative/comparative change: "reduced from a multi-step approval
+      process to a single automated step," "cut a two-day manual task
+      down to under an hour."
+  (c) A scope-of-impact indicator that describes WHO or HOW MUCH was
+      affected by the result (not the tool used to do the work): "for a
+      12-person delivery team," "across 4 concurrent client programmes,"
+      "for all new starters onboarded that quarter."
+  (d) A before/after contrast in process or reliability: "eliminating a
+      recurring manual handoff step," "removing the need for manual
+      reconciliation between two systems."
+
+WORKED EXAMPLES:
+  BAD (specificity without quantification — do NOT do this):
+    "Configured environment management frameworks for Microsoft 365 and
+    Power Platform assets to strengthen release governance."
+    → Why it fails: names real systems (specific), but "strengthen release
+      governance" has no scale, comparison, or scope of effect. This is
+      the exact failure pattern to avoid.
+  GOOD (same underlying work, properly quantified):
+    "Configured environment management frameworks for Microsoft 365 and
+    Power Platform assets, replacing three separate manual sign-off steps
+    with a single governed release gate."
+    → Why it works: same technical specificity, PLUS a concrete
+      before/after scope of impact.
+
+  BAD:
+    "Streamlined platform health monitoring by introducing advanced
+    logging and alerting controls, which reduced response times for
+    production incidents."
+    → Why it fails: "reduced response times" has no comparison point or
+      scope — reduced from what, for whom, how often.
+  GOOD:
+    "Introduced logging and alerting for platform health monitoring,
+    cutting incident triage from a manual multi-team investigation down to
+    a single automated alert path."
+    → Why it works: specific mechanism (logging/alerting) plus a concrete
+      before/after process contrast.
+
+* Do NOT invent precise, unverifiable statistics (no fabricated %, $
+  amounts, or exact counts that aren't supported by the raw input notes).
+  When a hard number isn't available, use form (b), (c), or (d) above
+  instead — these do not require fabrication, only reasonable inference
+  from the described work.
+* The "no plausible basis" exception is NARROW, not a default. It applies
+  ONLY when the raw input notes describe a bullet with no team, process,
+  frequency, or scope context whatsoever (e.g. a single vague phrase with
+  no detail at all). If the raw notes mention any team, tool, process
+  step, environment, or user group, a scope-of-impact or before/after
+  frame (forms c or d) is always constructible — use one. Do not claim
+  this exception simply because no hard number was given.
+* BANNED FILLER PHRASES — do not use these or close variants as a
+  substitute for real quantification: "strengthen," "elevate," "enhance,"
+  "accelerate operational efficiency," "preserve system reliability,"
+  "improve overall performance," "greatly improved," "significantly
+  increased." If a draft bullet contains one of these phrases with nothing
+  else after it, that bullet must be rewritten using forms (a)-(d) above.
+* Tier 1 (most recent/current role) bullets get priority when allocating
+  any available quantifiable detail from the raw input notes, since this
+  role carries the most weight with recruiters. Do not let the strongest
+  outcome framing land on an older, lower-priority role by default while
+  the current role stays generic.
 
 ----------------------------------------
 KEYWORD & SKILLS USAGE
 ----------------------------------------
-* Each bullet should naturally reference 1–2 items from the Generated Skills
-  List where genuinely relevant to that role's actual scope.
+
+* Each bullet should naturally reference 1–2 items from the Generated
+  Skills List where genuinely relevant to that role's actual scope.
 * Reference Job Description keywords/phrasing only where they plausibly
-  describe real work for that role — do not lift JD phrases verbatim across
-  multiple roles just to raise keyword density.
-* Keyword/skill inclusion must never come at the expense of the structure and
-  specificity requirements above. A specific, realistic bullet with fewer
-  keywords is preferred over a generic bullet stuffed with JD language.
-* Do not repeat the same JD phrase (e.g. "document processing workflows")
-  verbatim in more than one experience block.
+  describe real work for that role — do not lift JD phrases verbatim
+  across multiple roles just to raise keyword density, and avoid copying
+  a distinctive JD phrase (e.g. "technical escalation point") word-for-
+  word — paraphrase it into the candidate's own voice.
+* Keyword/skill inclusion must never come at the expense of the
+  Specificity or Metrics requirements above. A specific, quantified bullet
+  with fewer keywords is preferred over a generic bullet stuffed with JD
+  language.
+* Do not repeat the same JD phrase verbatim in more than one experience
+  block.
 
 ----------------------------------------
 LENGTH & FORMAT
 ----------------------------------------
+
 * Each bullet must be under 180 characters.
 * Plain text, no markdown, no bullet symbols in the string itself.
-* Past roles use past tense; current role (if marked ongoing) uses past tense
-  for completed work, present tense only if explicitly framed as ongoing.
+* Past roles use past tense; current role (if marked ongoing) uses past
+  tense for completed work, present tense only if explicitly framed as
+  ongoing.
 
 ----------------------------------------
 CAREER PROGRESSION CHECK
 ----------------------------------------
-Before finalizing, compare job titles across experiences in chronological order.
-* If a later (more recent) role has a clearly lower-seniority title than an
-  earlier role (e.g. "Lead Engineer" followed later by "Software Engineer"
-  with no indication of an intentional lateral move), do NOT silently
-  generate bullets that ignore this.
+
+Before finalizing, compare job titles across experiences in chronological
+order.
+* If a later (more recent) role has a clearly lower-seniority title than
+  an earlier role (e.g. "Lead Engineer" followed later by "Software
+  Engineer" with no indication of an intentional lateral move), do NOT
+  silently generate bullets that ignore this.
 * Instead, either:
   (a) keep the titles as provided by the user exactly as-is and add a
       "progression_flag" field in the output noting the discrepancy, or
-  (b) if instructed to auto-correct titles, adjust only with a corresponding
-      "title_adjusted" note — never silently alter without flagging.
-* Do not fabricate a promotion narrative in the bullets to paper over a title
-  regression.
+  (b) if instructed to auto-correct titles, adjust only with a
+      corresponding "title_adjusted" note — never silently alter without
+      flagging.
+* Do not fabricate a promotion narrative in the bullets to paper over a
+  title regression.
 
 ----------------------------------------
 REALISM CHECK
 ----------------------------------------
+
 Each bullet must read as something a real engineer would write about real
 work — specific enough that it couldn't be copy-pasted into an unrelated
 CV for the same job title. If a bullet could apply to literally any
 candidate applying to this job, rewrite it.
 
 ========================================
+SELF-AUDIT PASS (mandatory second pass before output)
+========================================
+
+After drafting all bullets, re-read each one individually and check it
+against this per-bullet test — do not skip this step:
+
+  1. Does this bullet name a specific action/system/tool? (Specificity)
+  2. Does this bullet ALSO contain a distinct outcome using forms
+     (a)/(b)/(c)/(d) from the Metrics Policy — separate from the
+     system named in step 1?
+  3. Does this bullet contain any banned filler phrase with nothing
+     concrete after it?
+
+If any bullet fails check 2 or triggers check 3, REWRITE that bullet
+before producing final output. Do not proceed to output with a bullet
+that only passes check 1.
+
+========================================
 VALIDATION REQUIREMENTS
 ========================================
+
 Before generating output, internally verify:
 * Every bullet follows problem/context → action → outcome structure.
-* Every bullet contains at least one concrete, specific detail.
-* No two bullets (within or across experiences) share sentence structure or
-  opening verb.
+* Every bullet contains at least one concrete, specific detail (action).
+* Every bullet contains a DISTINCT quantification/scale element (outcome),
+  per the Self-Audit Pass — naming a system alone does not count.
+* No bullet relies on a banned filler phrase without concrete backing.
+* No two bullets (within or across experiences) share sentence structure
+  or opening verb.
 * No fabricated precise metrics exist anywhere.
-* No JD phrase is repeated verbatim across more than one experience.
-* Skills referenced are drawn only from the Generated Skills List, no duplicates.
+* No distinctive JD phrase is copied verbatim in more than one experience,
+  or copied word-for-word from the JD at all where a paraphrase is
+  reasonable.
+* Skills referenced are drawn only from the Generated Skills List, no
+  duplicates.
 * Summary contains important Job Description keywords.
 * Job titles checked for logical career progression; discrepancies flagged
   per the Career Progression Check, not silently passed.
-* Bullet count rules are respected.
+* Bullet counts match the recency-weighted tiering rules above, not a flat
+  count applied uniformly.
+* Tier 1 role received priority allocation of any usable quantifiable
+  detail from the raw input notes.
 * Output is valid JSON.
 * No markdown, no explanations, no comments, no extra text.
 
@@ -1153,16 +1328,16 @@ interface Props {
 }
 
 const CV_STATUSES = [
-  { value: 'cv_created', label: 'CV Created' },
-  { value: 'cv_reviewed', label: 'CV Reviewed' },
-  { value: 'cv_sent', label: 'CV Sent' },
-] as const
+  { value: "cv_created", label: "CV Created" },
+  { value: "cv_reviewed", label: "CV Reviewed" },
+  { value: "cv_sent", label: "CV Sent" },
+] as const;
 
 const CV_STATUS_COLORS: Record<string, string> = {
-  cv_created: 'bg-gray-100 text-gray-600',
-  cv_reviewed: 'bg-yellow-100 text-yellow-700',
-  cv_sent: 'bg-green-100 text-green-700',
-}
+  cv_created: "bg-gray-100 text-gray-600",
+  cv_reviewed: "bg-yellow-100 text-yellow-700",
+  cv_sent: "bg-green-100 text-green-700",
+};
 
 const INIT_FORM = {
   cv_title: "",
@@ -1206,31 +1381,47 @@ const EMPTY_EDU: CVEduItem = {
   end_date: "",
 };
 
-function EditableTitle({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState('')
-  if (editing) return (
-    <input
-      autoFocus
-      value={draft}
-      onChange={e => setDraft(e.target.value)}
-      onBlur={() => { onChange(draft); setEditing(false) }}
-      onKeyDown={e => {
-        if (e.key === 'Enter') e.currentTarget.blur()
-        if (e.key === 'Escape') { setDraft(value); setEditing(false) }
-      }}
-      className="text-xs font-semibold text-gray-800 border-none outline-none bg-transparent w-40 shrink-0 border-b border-gray-400"
-    />
-  )
+function EditableTitle({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  if (editing)
+    return (
+      <input
+        autoFocus
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => {
+          onChange(draft);
+          setEditing(false);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+          if (e.key === "Escape") {
+            setDraft(value);
+            setEditing(false);
+          }
+        }}
+        className="text-xs font-semibold text-gray-800 border-none outline-none bg-transparent w-40 shrink-0 border-b border-gray-400"
+      />
+    );
   return (
     <span
-      onClick={() => { setDraft(value); setEditing(true) }}
+      onClick={() => {
+        setDraft(value);
+        setEditing(true);
+      }}
       title="Click to rename"
       className="text-xs font-semibold text-gray-800 cursor-text rounded px-1 hover:bg-gray-100 transition-colors whitespace-nowrap"
     >
       {value || <span className="text-gray-400 font-normal">CV Title</span>}
     </span>
-  )
+  );
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -1255,7 +1446,12 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
   >([]);
   const [saving, setSaving] = useState(false);
   const [savedId, setSavedId] = useState<number | null>(null);
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">(
+    "idle",
+  );
+  const isAdmin =
+    typeof window !== "undefined" &&
+    localStorage.getItem("userRole") === "admin";
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [fontSettings, setFontSettings] = useState<CVFontSettings>({
@@ -1284,6 +1480,7 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
   const [showJsonPaste, setShowJsonPaste] = useState(true);
   const [showWorkExperience, setShowWorkExperience] = useState(true);
   const [rawDescExpanded, setRawDescExpanded] = useState(false);
+  const [atsManualSearch, setAtsManualSearch] = useState("");
 
   // ATS toggle on → expand the raw description overlay so user can see source + highlights together.
   useEffect(() => {
@@ -1293,15 +1490,37 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
 
   // ATS mode: hover a keyword on CV → scroll to it in the raw desc overlay (no highlight on raw desc).
   useEffect(() => {
-    if (!atsHighlightOn || !hoveredKeyword || !rawDescOverlayRef.current) return;
+    if (!atsHighlightOn || !hoveredKeyword || !rawDescOverlayRef.current)
+      return;
     const t = setTimeout(() => {
-      const el = rawDescOverlayRef.current?.querySelector(`mark[data-word="${hoveredKeyword}"]`)
-      el?.scrollIntoView({ block: 'center', behavior: 'smooth' })
-    }, 50)
-    return () => clearTimeout(t)
+      const el = rawDescOverlayRef.current?.querySelector(
+        `mark[data-word="${hoveredKeyword}"]`,
+      );
+      el?.scrollIntoView({ block: "center", behavior: "smooth" });
+    }, 50);
+    return () => clearTimeout(t);
   }, [hoveredKeyword, atsHighlightOn]);
   const fullScreenRef = useRef<HTMLDivElement>(null);
   const rawDescOverlayRef = useRef<HTMLDivElement>(null);
+
+  // Manual search: auto-scroll to first green match whenever search term changes.
+  useEffect(() => {
+    if (!atsManualSearch.trim() || !rawDescOverlayRef.current) return;
+    const t = setTimeout(() => {
+      const el = rawDescOverlayRef.current?.querySelector(".manual-hl");
+      el?.scrollIntoView({ block: "center", behavior: "smooth" });
+    }, 80);
+    return () => clearTimeout(t);
+  }, [atsManualSearch]);
+
+  const atsManualMatchCount = useMemo(() => {
+    if (!atsManualSearch.trim()) return 0;
+    const re = new RegExp(
+      atsManualSearch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+      "gi",
+    );
+    return (form.raw_description.match(re) ?? []).length;
+  }, [atsManualSearch, form.raw_description]);
 
   // ── Prior CV submission history for this company ────────────────────────
   const [companySubmission, setCompanySubmission] = useState<{
@@ -1574,7 +1793,9 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
   const updateEdu = (i: number, edu: CVEduItem) =>
     setEducation((e) => e.map((x, idx) => (idx === i ? edu : x)));
   const updateEduField = (i: number, field: string, value: string) =>
-    setEducation((e) => e.map((x, idx) => idx === i ? { ...x, [field]: value } : x));
+    setEducation((e) =>
+      e.map((x, idx) => (idx === i ? { ...x, [field]: value } : x)),
+    );
   const removeEdu = (i: number) =>
     setEducation((e) => e.filter((_, idx) => idx !== i));
 
@@ -1583,16 +1804,25 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
   const updateProject = (i: number, proj: CVProjectItem) =>
     setProjects((p) => p.map((x, idx) => (idx === i ? proj : x)));
   const updateProjField = (i: number, field: string, value: any) =>
-    setProjects((p) => p.map((x, idx) => idx === i ? { ...x, [field]: value } : x));
+    setProjects((p) =>
+      p.map((x, idx) => (idx === i ? { ...x, [field]: value } : x)),
+    );
   const removeProject = (i: number) =>
     setProjects((p) => p.filter((_, idx) => idx !== i));
 
   // ── Experience add/remove (for inline CV editing) ────────────────────────
   const addBlankExperience = () =>
-    setExperienceItems((items) => [...items, {
-      designation: '', company_name: '', from_date: '', to_date: null,
-      currently_working: false, bullets: [''],
-    }]);
+    setExperienceItems((items) => [
+      ...items,
+      {
+        designation: "",
+        company_name: "",
+        from_date: "",
+        to_date: null,
+        currently_working: false,
+        bullets: [""],
+      },
+    ]);
   const removeExperience = (i: number) =>
     setExperienceItems((items) => items.filter((_, idx) => idx !== i));
 
@@ -1611,7 +1841,8 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
 
   // ── Prompt ───────────────────────────────────────────────────────────────
   const canCopyPrompt =
-    (form.cv_title.trim() || form.target_job_title.trim()) && experienceItems.length > 0;
+    (form.cv_title.trim() || form.target_job_title.trim()) &&
+    experienceItems.length > 0;
 
   // The applicant's own (non-AI) titles + date ranges for the experiences selected for this CV.
   const linkedInTitles = (() => {
@@ -1649,7 +1880,7 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
 
   const copyPrompt = () => {
     const prompt = buildPrompt(
-      (form.cv_title.trim() || form.target_job_title.trim()),
+      form.cv_title.trim() || form.target_job_title.trim(),
       form.raw_description.trim() || "(No job description provided)",
       experienceItems.length,
       linkedInTitles,
@@ -1788,19 +2019,38 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
     skillsCategoryRename: (i, v) => updateSkillCategory(i, { category: v }),
     skillsCategorySkills: (i, skills) => updateSkillCategory(i, { skills }),
     skillsCategoryAdd: addSkillCategory,
-    skillsCategoryDelete: (i) => { if (window.confirm('Remove this skill category?')) removeSkillCategory(i) },
-    expField: (ei, field, v) => updateExpField(ei, { [field]: v }),
+    skillsCategoryDelete: (i) => {
+      if (window.confirm("Remove this skill category?")) removeSkillCategory(i);
+    },
+    expField: (ei, field, v) => {
+      if (field === "currently_working") {
+        updateExpField(ei, {
+          currently_working: Boolean(v),
+          ...(v ? { to_date: null } : {}),
+        });
+      } else {
+        updateExpField(ei, { [field]: v });
+      }
+    },
     expBulletEdit: (ei, bi, v) => setBullet(ei, bi, v),
     expBulletAdd: (ei) => addBullet(ei),
-    expBulletDelete: (ei, bi) => { if (window.confirm('Delete this bullet point?')) removeBullet(ei, bi) },
+    expBulletDelete: (ei, bi) => {
+      if (window.confirm("Delete this bullet point?")) removeBullet(ei, bi);
+    },
     expAdd: addBlankExperience,
-    expDelete: (i) => { if (window.confirm('Remove this experience entry?')) removeExperience(i) },
+    expDelete: (i) => {
+      if (window.confirm("Remove this experience entry?")) removeExperience(i);
+    },
     eduField: (i, field, v) => updateEduField(i, field, v),
     eduAdd: addEdu,
-    eduDelete: (i) => { if (window.confirm('Remove this education entry?')) removeEdu(i) },
+    eduDelete: (i) => {
+      if (window.confirm("Remove this education entry?")) removeEdu(i);
+    },
     projField: (i, field, v) => updateProjField(i, field, v),
     projAdd: addProject,
-    projDelete: (i) => { if (window.confirm('Remove this project?')) removeProject(i) },
+    projDelete: (i) => {
+      if (window.confirm("Remove this project?")) removeProject(i);
+    },
   };
 
   // ── ATS keyword source tracking (raw_description vs job_description HTML) ──
@@ -1817,16 +2067,32 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
       form.headline,
       form.summary,
       form.skills,
-      ...coreSkills.flatMap(g => g.skills),
-      ...experienceItems.flatMap(exp => [
-        exp.designation, exp.company_name,
+      ...coreSkills.flatMap((g) => g.skills),
+      ...experienceItems.flatMap((exp) => [
+        exp.designation,
+        exp.company_name,
         ...(exp.bullets ?? []),
       ]),
-      ...education.flatMap(edu => [edu.degree_title, edu.university_name]),
-      ...projects.flatMap(p => [p.title, p.description ?? '', p.technologies ?? '']),
-    ].filter(Boolean).join(' ')
-    return extractKeywords(text)
-  }, [form.applicant_name, form.headline, form.summary, form.skills, coreSkills, experienceItems, education, projects]);
+      ...education.flatMap((edu) => [edu.degree_title, edu.university_name]),
+      ...projects.flatMap((p) => [
+        p.title,
+        p.description ?? "",
+        p.technologies ?? "",
+      ]),
+    ]
+      .filter(Boolean)
+      .join(" ");
+    return extractKeywords(text);
+  }, [
+    form.applicant_name,
+    form.headline,
+    form.summary,
+    form.skills,
+    coreSkills,
+    experienceItems,
+    education,
+    projects,
+  ]);
 
   const buildPayload = () => {
     const payload = { ...form };
@@ -1849,12 +2115,12 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
   const handleSave = async (openAfter = false) => {
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     setSaving(true);
-    setSaveStatus('saving');
+    setSaveStatus("saving");
     try {
       if (savedId) {
         await updateCV(savedId, buildPayload());
         setLastSavedAt(new Date());
-        setSaveStatus('saved');
+        setSaveStatus("saved");
         onSaved?.();
         if (openAfter) window.open(`/viewCV/${savedId}`, "_blank");
       } else {
@@ -1862,12 +2128,12 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
         const newId = res?.data?.id ?? res?.id ?? null;
         setSavedId(newId);
         setLastSavedAt(new Date());
-        setSaveStatus('saved');
+        setSaveStatus("saved");
         onSaved?.();
         if (openAfter && newId) window.open(`/viewCV/${newId}`, "_blank");
       }
     } catch {
-      setSaveStatus('idle');
+      setSaveStatus("idle");
     } finally {
       setSaving(false);
     }
@@ -1882,9 +2148,9 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
   useEffect(() => {
     if (!form.applicant_name.trim()) return;
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
-    setSaveStatus('idle');
+    setSaveStatus("idle");
     autoSaveTimer.current = setTimeout(async () => {
-      setSaveStatus('saving');
+      setSaveStatus("saving");
       try {
         const currentSavedId = savedIdRef.current;
         if (currentSavedId) {
@@ -1895,13 +2161,23 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
           if (newId) setSavedId(newId);
         }
         setLastSavedAt(new Date());
-        setSaveStatus('saved');
+        setSaveStatus("saved");
       } catch {
-        setSaveStatus('idle');
+        setSaveStatus("idle");
       }
     }, 1500);
-    return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current) }
-  }, [form, coreSkills, experienceItems, education, projects, fontSettings, savedId]);
+    return () => {
+      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    };
+  }, [
+    form,
+    coreSkills,
+    experienceItems,
+    education,
+    projects,
+    fontSettings,
+    savedId,
+  ]);
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
@@ -1917,61 +2193,106 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
 
         {/* CV title with org + visa appended inline */}
         <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
-          <EditableTitle value={form.cv_title} onChange={(v) => set("cv_title", v)} />
-          {(form.organization_name || form.sponsorship === 'yes') && (
+          <EditableTitle
+            value={form.cv_title}
+            onChange={(v) => set("cv_title", v)}
+          />
+          {(form.organization_name || form.sponsorship === "yes") && (
             <span className="text-green-600 font-semibold text-[10px] uppercase shrink-0">
-              ({[form.organization_name, form.sponsorship === 'yes' ? 'VISA' : ''].filter(Boolean).join(' · ')})
+              (
+              {[
+                form.organization_name,
+                form.sponsorship === "yes" ? "VISA" : "",
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+              )
             </span>
           )}
         </div>
 
         {/* Applicant selector */}
         {loadingApplicants ? (
-          <RefreshCw size={11} className="animate-spin text-gray-400 shrink-0" />
+          <RefreshCw
+            size={11}
+            className="animate-spin text-gray-400 shrink-0"
+          />
         ) : (
           <select
             value={selectedApplicantId}
-            onChange={(e) => setSelectedApplicantId(e.target.value ? Number(e.target.value) : "")}
+            onChange={(e) =>
+              setSelectedApplicantId(
+                e.target.value ? Number(e.target.value) : "",
+              )
+            }
             className="text-xs border border-gray-200 rounded px-2 py-1 bg-white focus:outline-none shrink-0 max-w-[160px]"
           >
             <option value="">— Applicant —</option>
             {applicants.map((a) => (
-              <option key={a.id} value={a.id}>{a.name}</option>
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
             ))}
           </select>
         )}
 
-        {/* CV Status — saves immediately on change, no debounce */}
-        <select
-          value={form.status}
-          onChange={e => {
-            const newStatus = e.target.value
-            set('status', newStatus)
-            if (savedId) {
-              updateCVSilent(savedId, { ...buildPayloadRef.current(), status: newStatus }).catch(() => {})
-            }
-          }}
-          className={`text-xs border rounded px-2 py-1 focus:outline-none shrink-0 font-medium ${CV_STATUS_COLORS[form.status] ?? 'bg-gray-100 text-gray-600'}`}
-        >
-          {CV_STATUSES.map(s => (
-            <option key={s.value} value={s.value}>{s.label}</option>
-          ))}
-        </select>
+        {/* CV Status — admin only, saves immediately */}
+        {isAdmin ? (
+          <select
+            value={form.status}
+            onChange={(e) => {
+              const newStatus = e.target.value;
+              set("status", newStatus);
+              if (savedId) {
+                updateCVSilent(savedId, {
+                  ...buildPayloadRef.current(),
+                  status: newStatus,
+                }).catch(() => {});
+              }
+            }}
+            className={`text-xs border rounded px-2 py-1 focus:outline-none shrink-0 font-medium ${CV_STATUS_COLORS[form.status] ?? "bg-gray-100 text-gray-600"}`}
+          >
+            {CV_STATUSES.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <span
+            className={`text-xs border rounded px-2 py-1 shrink-0 font-medium ${CV_STATUS_COLORS[form.status] ?? "bg-gray-100 text-gray-600"}`}
+          >
+            {CV_STATUSES.find((s) => s.value === form.status)?.label ??
+              form.status}
+          </span>
+        )}
 
         <div className="flex items-center gap-2 ml-auto shrink-0">
           {/* Auto-save status */}
-          <span className={`text-[10px] shrink-0 transition-colors ${
-            saveStatus === 'saving' ? 'text-amber-500' :
-            saveStatus === 'saved' ? 'text-green-600' :
-            'text-gray-300'
-          }`}>
-            {saveStatus === 'saving' && '● Saving…'}
-            {saveStatus === 'saved' && lastSavedAt && `✓ Saved ${formatLastSaved(lastSavedAt)}`}
-            {saveStatus === 'idle' && lastSavedAt && `✓ Saved ${formatLastSaved(lastSavedAt)}`}
+          <span
+            className={`text-[10px] shrink-0 transition-colors ${
+              saveStatus === "saving"
+                ? "text-amber-500"
+                : saveStatus === "saved"
+                  ? "text-green-600"
+                  : "text-gray-300"
+            }`}
+          >
+            {saveStatus === "saving" && "● Saving…"}
+            {saveStatus === "saved" &&
+              lastSavedAt &&
+              `✓ Saved ${formatLastSaved(lastSavedAt)}`}
+            {saveStatus === "idle" &&
+              lastSavedAt &&
+              `✓ Saved ${formatLastSaved(lastSavedAt)}`}
           </span>
           {form.job_link && (
-            <a href={form.job_link} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-1 px-2 py-1 text-[11px] text-gray-500 hover:text-gray-800 hover:underline">
+            <a
+              href={form.job_link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 px-2 py-1 text-[11px] text-gray-500 hover:text-gray-800 hover:underline"
+            >
               View Job <ExternalLink size={10} />
             </a>
           )}
@@ -2078,7 +2399,6 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
         </div>
       )}
 
-
       {/* ── Prior submission warning ── */}
       {companySubmission && (
         <div className="flex items-center gap-2 px-4 py-1.5 border-b border-amber-200 shrink-0 bg-amber-50 text-[11px] text-amber-800">
@@ -2095,49 +2415,101 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
       <div className="flex-1 flex overflow-hidden">
         {/* ── Left: Form ── */}
         <div
-          className="shrink-0 overflow-y-auto relative"
+          className={`shrink-0 relative ${rawDescExpanded ? "overflow-hidden" : "overflow-y-auto"}`}
           style={{ width: leftPanelWidth }}
         >
           {/* Full-panel expand overlay for Job Description */}
           {rawDescExpanded && (
-            <div className="absolute inset-0 z-10 flex flex-col bg-white p-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className={labelCls + " bg-blue-50 border border-blue-200 px-2 py-0.5 rounded flex-1"}>
+            <div className="absolute inset-0 z-10 flex flex-col bg-white p-3 gap-2">
+              {/* Header row */}
+              <div className="flex items-center gap-2 shrink-0">
+                <span
+                  className={
+                    labelCls +
+                    " bg-blue-50 border border-blue-200 px-2 py-0.5 rounded flex-1 truncate"
+                  }
+                >
                   {atsHighlightOn
-                    ? 'Job Description — hover CV keyword to locate it here'
-                    : 'Job Description — hover a keyword to highlight it on CV'}
+                    ? "Job Description — hover CV keyword to locate it here"
+                    : "Job Description — hover keyword to highlight on CV"}
                 </span>
-                <button type="button" onClick={() => { setRawDescExpanded(false); if (atsHighlightOn) setAtsHighlightOn(false) }}
-                  className="ml-2 text-blue-500 hover:text-blue-700" title="Collapse">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRawDescExpanded(false);
+                    setAtsManualSearch("");
+                    if (atsHighlightOn) setAtsHighlightOn(false);
+                  }}
+                  className="text-blue-500 hover:text-blue-700 shrink-0"
+                  title="Collapse"
+                >
                   <Minimize2 size={13} />
                 </button>
               </div>
+              {/* Manual search input */}
+              <div className="shrink-0 flex items-center gap-2">
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    value={atsManualSearch}
+                    onChange={(e) => setAtsManualSearch(e.target.value)}
+                    placeholder="Search & highlight in green…"
+                    className="w-full border border-green-300 rounded px-2 py-1 text-[10.5px] focus:outline-none focus:border-green-500 pr-6"
+                  />
+                  {atsManualSearch && (
+                    <button
+                      onClick={() => setAtsManualSearch("")}
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      <X size={10} />
+                    </button>
+                  )}
+                </div>
+                {atsManualSearch.trim() && (
+                  <span
+                    className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded whitespace-nowrap ${atsManualMatchCount > 0 ? "bg-green-100 text-green-700" : "bg-red-50 text-red-500"}`}
+                  >
+                    {atsManualMatchCount > 0
+                      ? `${atsManualMatchCount} match${atsManualMatchCount !== 1 ? "es" : ""}`
+                      : "no match"}
+                  </span>
+                )}
+              </div>
+              {/* Content */}
               {atsHighlightOn ? (
-                /* ATS mode: no highlights on raw desc; only scroll-to when CV keyword is hovered */
                 <div
                   ref={rawDescOverlayRef}
                   className="flex-1 overflow-y-auto text-[10.5px] leading-relaxed whitespace-pre-wrap bg-blue-50 border border-blue-200 rounded p-3"
                   dangerouslySetInnerHTML={{
-                    __html: highlightPlainTextToHtml(
-                      form.raw_description,
-                      hoveredKeyword ? new Set([hoveredKeyword]) : new Set(),
-                    ) || '<span style="color:#aaa;font-style:italic">Empty</span>',
+                    __html: applyManualHighlight(
+                      highlightPlainTextToHtml(
+                        form.raw_description,
+                        hoveredKeyword ? new Set([hoveredKeyword]) : new Set(),
+                      ) ||
+                        '<span style="color:#aaa;font-style:italic">Empty</span>',
+                      atsManualSearch,
+                    ),
                   }}
                 />
               ) : (
-                /* Left ATS mode: highlight raw desc words that EXIST IN CV content.
-                   Hover a highlighted word → that word appears highlighted on CV. */
                 <div
+                  ref={rawDescOverlayRef}
                   className="flex-1 overflow-y-auto text-[10.5px] leading-relaxed whitespace-pre-wrap bg-blue-50 border border-blue-200 rounded p-3"
                   dangerouslySetInnerHTML={{
-                    __html: highlightPlainTextToHtml(
-                      form.raw_description,
-                      cvContentKeywords,
-                    ) || '<span style="color:#aaa;font-style:italic">Empty</span>',
+                    __html: applyManualHighlight(
+                      highlightPlainTextToHtml(
+                        form.raw_description,
+                        cvContentKeywords,
+                      ) ||
+                        '<span style="color:#aaa;font-style:italic">Empty</span>',
+                      atsManualSearch,
+                    ),
                   }}
                   onMouseOver={(e) => {
-                    const word = (e.target as HTMLElement).getAttribute?.('data-word')
-                    if (word) setHoveredKeyword(word)
+                    const word = (e.target as HTMLElement).getAttribute?.(
+                      "data-word",
+                    );
+                    if (word) setHoveredKeyword(word);
                   }}
                   onMouseLeave={() => setHoveredKeyword(null)}
                 />
@@ -2196,11 +2568,18 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
                     >
                       <span>Job Description (for CV) *</span>
                       <div className="flex items-center gap-1 ml-2 shrink-0">
-                        <CopyPromptBtn rawDesc={form.raw_description} jobTitle={form.target_job_title} savedId={savedId} />
+                        <CopyPromptBtn
+                          rawDesc={form.raw_description}
+                          jobTitle={form.target_job_title}
+                          savedId={savedId}
+                        />
                         <button
                           type="button"
-                          onClick={() => { setAtsHighlightOn(false); setRawDescExpanded(true) }}
-                          className={`text-[9px] font-semibold px-1.5 py-0.5 rounded border transition-colors ${rawDescExpanded && !atsHighlightOn ? 'bg-amber-100 border-amber-400 text-amber-700' : 'bg-blue-50 border-blue-300 text-blue-600 hover:bg-blue-100'}`}
+                          onClick={() => {
+                            setAtsHighlightOn(false);
+                            setRawDescExpanded(true);
+                          }}
+                          className={`text-[9px] font-semibold px-1.5 py-0.5 rounded border transition-colors ${rawDescExpanded && !atsHighlightOn ? "bg-amber-100 border-amber-400 text-amber-700" : "bg-blue-50 border-blue-300 text-blue-600 hover:bg-blue-100"}`}
                           title="Highlight CV keywords in this description"
                         >
                           ATS Keywords
@@ -2409,7 +2788,11 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
                         onClick={() => setShowCoreSkillsEditor((p) => !p)}
                         className="flex items-center gap-1 text-[10px] text-gray-400 uppercase font-semibold hover:text-gray-600"
                       >
-                        {showCoreSkillsEditor ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                        {showCoreSkillsEditor ? (
+                          <ChevronUp size={11} />
+                        ) : (
+                          <ChevronDown size={11} />
+                        )}
                         Core Skills
                       </button>
                       {showCoreSkillsEditor && (
@@ -2428,48 +2811,50 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
                         "Cloud"…
                       </p>
                     )}
-                    {showCoreSkillsEditor && <div className="space-y-2">
-                      {coreSkills.map((group, i) => (
-                        <div
-                          key={i}
-                          className="border border-gray-200 rounded p-2 space-y-1.5"
-                        >
-                          <div className="flex items-center gap-1.5">
-                            <input
-                              className={`${inputCls} font-medium`}
-                              placeholder="Category, e.g. Front-End"
-                              value={group.category}
+                    {showCoreSkillsEditor && (
+                      <div className="space-y-2">
+                        {coreSkills.map((group, i) => (
+                          <div
+                            key={i}
+                            className="border border-gray-200 rounded p-2 space-y-1.5"
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                className={`${inputCls} font-medium`}
+                                placeholder="Category, e.g. Front-End"
+                                value={group.category}
+                                onChange={(e) =>
+                                  updateSkillCategory(i, {
+                                    category: e.target.value,
+                                  })
+                                }
+                              />
+                              <button
+                                type="button"
+                                onClick={() => removeSkillCategory(i)}
+                                className="text-gray-300 hover:text-red-500 shrink-0"
+                              >
+                                <Trash2 size={11} />
+                              </button>
+                            </div>
+                            <textarea
+                              rows={2}
+                              className={`${inputCls} resize-y`}
+                              placeholder="TypeScript, Next.js, React…"
+                              value={group.skills.join(", ")}
                               onChange={(e) =>
                                 updateSkillCategory(i, {
-                                  category: e.target.value,
+                                  skills: e.target.value
+                                    .split(",")
+                                    .map((s) => s.trim())
+                                    .filter(Boolean),
                                 })
                               }
                             />
-                            <button
-                              type="button"
-                              onClick={() => removeSkillCategory(i)}
-                              className="text-gray-300 hover:text-red-500 shrink-0"
-                            >
-                              <Trash2 size={11} />
-                            </button>
                           </div>
-                          <textarea
-                            rows={2}
-                            className={`${inputCls} resize-y`}
-                            placeholder="TypeScript, Next.js, React…"
-                            value={group.skills.join(", ")}
-                            onChange={(e) =>
-                              updateSkillCategory(i, {
-                                skills: e.target.value
-                                  .split(",")
-                                  .map((s) => s.trim())
-                                  .filter(Boolean),
-                              })
-                            }
-                          />
-                        </div>
-                      ))}
-                    </div>}
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="border border-gray-200 rounded overflow-hidden">
                     <button
@@ -2972,11 +3357,19 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
               data={cvData}
               // ATS on → CV highlights all raw_description keywords
               // Expand-only → CV highlights only the hovered keyword from raw desc panel
-              highlightEnabled={atsHighlightOn || (rawDescExpanded && !!hoveredKeyword)}
-              forceKeywords={!atsHighlightOn && rawDescExpanded && hoveredKeyword ? new Set([hoveredKeyword]) : undefined}
+              highlightEnabled={
+                atsHighlightOn || (rawDescExpanded && !!hoveredKeyword)
+              }
+              forceKeywords={
+                !atsHighlightOn && rawDescExpanded && hoveredKeyword
+                  ? new Set([hoveredKeyword])
+                  : undefined
+              }
               fontSettings={fontSettings}
               onSkillsReorder={(newSkills) => set("skills", newSkills)}
-              onEdit={(atsHighlightOn || !!hoveredKeyword) ? undefined : cvEditCallbacks}
+              onEdit={
+                atsHighlightOn || !!hoveredKeyword ? undefined : cvEditCallbacks
+              }
               onKeywordHover={atsHighlightOn ? setHoveredKeyword : undefined}
             />
           </div>
@@ -3037,7 +3430,11 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
                 highlightEnabled={atsHighlightOn}
                 fontSettings={fontSettings}
                 onSkillsReorder={(newSkills) => set("skills", newSkills)}
-                onEdit={(atsHighlightOn || !!hoveredKeyword) ? undefined : cvEditCallbacks}
+                onEdit={
+                  atsHighlightOn || !!hoveredKeyword
+                    ? undefined
+                    : cvEditCallbacks
+                }
                 onKeywordHover={setHoveredKeyword}
               />
             </div>
@@ -3048,7 +3445,7 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
       {showLLMPopup && (
         <LLMGeneratorPopup
           prompt={buildPrompt(
-            (form.cv_title.trim() || form.target_job_title.trim()),
+            form.cv_title.trim() || form.target_job_title.trim(),
             form.raw_description.trim() || "(No job description provided)",
             experienceItems.length,
             linkedInTitles,
@@ -3185,6 +3582,99 @@ function ExperienceCard({
               </div>
             </div>
           )}
+
+          {/* Dates */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className={lc}>From Date</label>
+              <div className="flex gap-1">
+                <select
+                  className={ic}
+                  value={(exp.from_date ?? "").split("-")[1] ?? ""}
+                  onChange={(e) => {
+                    const [y = ""] = (exp.from_date ?? "").split("-");
+                    if (y)
+                      onUpdateField({ from_date: `${y}-${e.target.value}` });
+                  }}
+                >
+                  <option value="">Month</option>
+                  {EXP_MONTHS.map((mn, i) => (
+                    <option key={i} value={String(i + 1).padStart(2, "0")}>
+                      {mn}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className={ic}
+                  value={(exp.from_date ?? "").split("-")[0] ?? ""}
+                  onChange={(e) => {
+                    const m = (exp.from_date ?? "").split("-")[1] ?? "";
+                    onUpdateField({
+                      from_date: m ? `${e.target.value}-${m}` : e.target.value,
+                    });
+                  }}
+                >
+                  <option value="">Year</option>
+                  {EXP_YEARS.map((yr) => (
+                    <option key={yr} value={yr}>
+                      {yr}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className={lc}>To Date</label>
+              <div className="flex gap-1">
+                <select
+                  className={ic}
+                  value={
+                    exp.currently_working
+                      ? "__present__"
+                      : ((exp.to_date ?? "").split("-")[1] ?? "")
+                  }
+                  onChange={(e) => {
+                    if (e.target.value === "__present__") {
+                      onUpdateField({ currently_working: true, to_date: null });
+                    } else {
+                      const [y = ""] = (exp.to_date ?? "").split("-");
+                      onUpdateField({
+                        currently_working: false,
+                        to_date: y ? `${y}-${e.target.value}` : undefined,
+                      });
+                    }
+                  }}
+                >
+                  <option value="">Month</option>
+                  <option value="__present__">Present</option>
+                  {EXP_MONTHS.map((mn, i) => (
+                    <option key={i} value={String(i + 1).padStart(2, "0")}>
+                      {mn}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className={ic}
+                  disabled={!!exp.currently_working}
+                  value={(exp.to_date ?? "").split("-")[0] ?? ""}
+                  onChange={(e) => {
+                    const m = (exp.to_date ?? "").split("-")[1] ?? "";
+                    onUpdateField({
+                      currently_working: false,
+                      to_date: m ? `${e.target.value}-${m}` : e.target.value,
+                    });
+                  }}
+                >
+                  <option value="">Year</option>
+                  {EXP_YEARS.map((yr) => (
+                    <option key={yr} value={yr}>
+                      {yr}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
 
           {/* Job Type & Nature */}
           <div className="grid grid-cols-2 gap-2">

@@ -8,6 +8,8 @@ export interface ContextMenuItem {
     onClick: () => void
     separator?: boolean
     variant?: 'default' | 'danger'
+    disabled?: boolean
+    disabledTitle?: string
 }
 
 interface Props {
@@ -49,8 +51,10 @@ export default function ContextMenu({ x, y, items, onClose }: Props) {
                     {item.separator && i > 0 && <div className="border-t border-gray-100 my-1" />}
                     <button
                         type="button"
-                        onClick={() => { item.onClick(); onClose() }}
-                        className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-left hover:bg-gray-50 transition-colors ${item.variant === 'danger' ? 'text-red-600 hover:bg-red-50' : 'text-gray-700'}`}
+                        disabled={item.disabled}
+                        title={item.disabled ? item.disabledTitle : undefined}
+                        onClick={() => { if (!item.disabled) { item.onClick(); onClose() } }}
+                        className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-left transition-colors ${item.disabled ? 'text-gray-300 cursor-not-allowed' : item.variant === 'danger' ? 'text-red-600 hover:bg-red-50' : 'text-gray-700 hover:bg-gray-50'}`}
                     >
                         <span className="shrink-0 opacity-60">{item.icon}</span>
                         {item.label}

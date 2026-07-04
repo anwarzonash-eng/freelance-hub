@@ -436,10 +436,16 @@ export default function CvsPage() {
                                             className="p-1 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded">
                                             <ExternalLink size={12} />
                                         </a>
-                                        <button onClick={() => setEditingCV(row)} title="Edit CV"
-                                            className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded">
-                                            <Pencil size={12} />
-                                        </button>
+                                        {['cv_reviewed', 'cv_sent'].includes(row.status) ? (
+                                            <span title="CV can't be altered" className="p-1 text-gray-300 cursor-not-allowed">
+                                                <Pencil size={12} />
+                                            </span>
+                                        ) : (
+                                            <button onClick={() => setEditingCV(row)} title="Edit CV"
+                                                className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded">
+                                                <Pencil size={12} />
+                                            </button>
+                                        )}
                                         {row.job_id && (
                                             <a href={`/jobs/listed-jobs?job_id=${row.job_id}`} title="View this job"
                                                 className="p-1 text-gray-500 hover:text-teal-700 hover:bg-teal-50 rounded">
@@ -508,7 +514,7 @@ export default function CvsPage() {
                 const r = ctxMenu.row
                 const items: ContextMenuItem[] = [
                     { icon: <ExternalLink size={13} />, label: 'View CV', onClick: () => window.open(`/viewCV/${r.id}`, '_blank') },
-                    { icon: <Pencil size={13} />, label: 'Edit CV', onClick: () => setEditingCV(r) },
+                    { icon: <Pencil size={13} />, label: 'Edit CV', disabled: ['cv_reviewed', 'cv_sent'].includes(r.status), disabledTitle: "CV can't be altered", onClick: () => setEditingCV(r) },
                     ...(r.job_id ? [{ icon: <Briefcase size={13} />, label: 'View Job', onClick: () => window.open(`/jobs/listed-jobs?job_id=${r.job_id}`, '_blank') }] : []),
                     ...(r.company_id ? [{ icon: <Building2 size={13} />, label: 'View Company', onClick: () => window.open(`/jobs/companies?keyword=${encodeURIComponent(r.company_id)}`, '_blank') }] : []),
                     { icon: <Link size={13} />, label: 'Copy Link', separator: true, onClick: () => navigator.clipboard.writeText(`${window.location.origin}/viewCV/${r.id}`) },

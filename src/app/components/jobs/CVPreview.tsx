@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useState, useRef, useEffect, type ReactNode } from 'react'
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
@@ -193,6 +193,75 @@ function InlineArea({ value, onSave, style, placeholder = 'Click to edit', rows 
     )
 }
 
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+const CUR_YEAR = new Date().getFullYear()
+const YEARS_DESC = Array.from({ length: CUR_YEAR - 1984 }, (_, i) => String(CUR_YEAR - i))
+
+function parseDateParts(v: string) {
+    const [y = '', m = ''] = (v ?? '').split('-')
+    return { y, m }
+}
+function fmtDateDisplay(v: string) {
+    if (v === '__present__') return 'Present'
+    const { y, m } = parseDateParts(v)
+    const mName = m ? MONTH_NAMES[parseInt(m, 10) - 1] : ''
+    return [mName, y].filter(Boolean).join(' ')
+}
+
+function InlineDateSelect({ value, onSave, onPresent, allowPresent, style }: {
+    value: string; onSave?: (v: string) => void
+    onPresent?: () => void; allowPresent?: boolean; style?: React.CSSProperties
+}) {
+    const [open, setOpen] = useState(false)
+    const [y, setY] = useState('')
+    const [m, setM] = useState('')
+    const ref = useRef<HTMLSpanElement>(null)
+
+    useEffect(() => {
+        if (!open) return
+        const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+        document.addEventListener('mousedown', h)
+        return () => document.removeEventListener('mousedown', h)
+    }, [open])
+
+    const commit = (newY: string, newM: string) => {
+        if (newY && newM) { onSave?.(`${newY}-${newM.padStart(2, '0')}`); setOpen(false) }
+    }
+
+    if (!onSave) return <span style={style}>{fmtDateDisplay(value) || ''}</span>
+
+    const display = fmtDateDisplay(value) || <span style={{ color: '#bbb', fontStyle: 'italic' }}>—</span>
+
+    return (
+        <span ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
+            <span onClick={() => { const p = parseDateParts(value); setY(p.y); setM(p.m); setOpen(true) }}
+                title="Click to change date"
+                style={{ ...style, cursor: 'pointer', borderRadius: '2px', transition: 'background 0.1s' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(52,152,219,0.08)' }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}>
+                {display}
+            </span>
+            {open && (
+                <span className="no-print" style={{ position: 'absolute', top: '100%', left: 0, zIndex: 9999, background: '#fff', border: '1px solid #ddd', borderRadius: '6px', boxShadow: '0 4px 16px rgba(0,0,0,0.13)', padding: '6px 8px', display: 'flex', gap: '4px', alignItems: 'center', whiteSpace: 'nowrap', marginTop: '2px' }}>
+                    <select value={m} autoFocus
+                        onChange={e => { const v = e.target.value; if (v === '__present__') { onPresent?.(); setOpen(false) } else { setM(v); commit(y, v) } }}
+                        style={{ fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', padding: '2px 4px', cursor: 'pointer' }}>
+                        <option value="">Month</option>
+                        {allowPresent && <option value="__present__">Present</option>}
+                        {MONTH_NAMES.map((mn, i) => <option key={i} value={String(i + 1).padStart(2, '0')}>{mn}</option>)}
+                    </select>
+                    <select value={y}
+                        onChange={e => { setY(e.target.value); commit(e.target.value, m) }}
+                        style={{ fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', padding: '2px 4px', cursor: 'pointer' }}>
+                        <option value="">Year</option>
+                        {YEARS_DESC.map(yr => <option key={yr} value={yr}>{yr}</option>)}
+                    </select>
+                </span>
+            )}
+        </span>
+    )
+}
+
 // Wraps any CV row and shows a small floating action pill on hover (hidden from print).
 // Keeps the CV layout clean — buttons never take up space in the normal flow.
 type HoverAction = { label: string; onClick: () => void; color?: string }
@@ -208,7 +277,7 @@ function HoverActions({ children, actions, style }: {
             {children}
             {show && (
                 <div className="no-print" style={{
-                    position: 'absolute', top: 0, right: 0,
+                    position: 'absolute', top: 0, left: 0,
                     display: 'flex', gap: '2px', alignItems: 'center',
                     background: 'rgba(255,255,255,0.97)',
                     border: '1px solid #ddd', borderRadius: '5px',
@@ -531,17 +600,40 @@ export default function CVPreview({
                                         {exp.company_name && <InlineText value={exp.company_name}
                                             onSave={onEdit?.expField ? v => onEdit.expField!(i, 'company_name', v) : undefined}
                                             style={{ fontWeight: 700, fontSize: `${fs.expCompany}pt`, color: NAVY }} placeholder="Company" />}
-                                        {meta ? <span style={{ fontWeight: 700, fontSize: `${fs.expCompany}pt`, color: NAVY }}> ({meta})</span> : ''}
+                                        {(exp.show_job_type && exp.job_type) || (exp.show_job_nature && exp.job_nature) ? (
+                                            <span style={{ fontWeight: 700, fontSize: `${fs.expCompany}pt`, color: NAVY }}>
+                                                {' ('}
+                                                {exp.show_job_type && exp.job_type && (
+                                                    <InlineText value={exp.job_type}
+                                                        onSave={onEdit?.expField ? v => onEdit.expField!(i, 'job_type', v) : undefined}
+                                                        style={{ fontWeight: 700, fontSize: `${fs.expCompany}pt`, color: NAVY }} placeholder="Type" />
+                                                )}
+                                                {exp.show_job_type && exp.job_type && exp.show_job_nature && exp.job_nature ? ', ' : ''}
+                                                {exp.show_job_nature && exp.job_nature && (
+                                                    <InlineText value={exp.job_nature}
+                                                        onSave={onEdit?.expField ? v => onEdit.expField!(i, 'job_nature', v) : undefined}
+                                                        style={{ fontWeight: 700, fontSize: `${fs.expCompany}pt`, color: NAVY }} placeholder="Nature" />
+                                                )}
+                                                {')'}
+                                            </span>
+                                        ) : ''}
                                     </span>
                                     <span style={{ fontStyle: 'italic', fontSize: `${fs.expDates}pt`, color: SLATE, whiteSpace: 'nowrap', marginLeft: '10px' }}>
-                                        <InlineText value={exp.from_date ?? ''}
+                                        <InlineDateSelect value={exp.from_date ?? ''}
                                             onSave={onEdit?.expField ? v => onEdit.expField!(i, 'from_date', v) : undefined}
-                                            style={{ fontStyle: 'italic', fontSize: `${fs.expDates}pt`, color: SLATE }} placeholder="YYYY-MM" />
+                                            style={{ fontStyle: 'italic', fontSize: `${fs.expDates}pt`, color: SLATE }} />
                                         {' – '}
-                                        {exp.currently_working ? 'Present' :
-                                            <InlineText value={exp.to_date ?? ''}
+                                        {exp.currently_working
+                                            ? <InlineDateSelect value="__present__"
+                                                onSave={onEdit?.expField ? v => { onEdit.expField!(i, 'currently_working', false as any); onEdit.expField!(i, 'to_date', v) } : undefined}
+                                                onPresent={undefined}
+                                                allowPresent={false}
+                                                style={{ fontStyle: 'italic', fontSize: `${fs.expDates}pt`, color: SLATE }} />
+                                            : <InlineDateSelect value={exp.to_date ?? ''}
                                                 onSave={onEdit?.expField ? v => onEdit.expField!(i, 'to_date', v) : undefined}
-                                                style={{ fontStyle: 'italic', fontSize: `${fs.expDates}pt`, color: SLATE }} placeholder="YYYY-MM" />
+                                                onPresent={onEdit?.expField ? () => onEdit.expField!(i, 'currently_working', true as any) : undefined}
+                                                allowPresent={!!onEdit?.expField}
+                                                style={{ fontStyle: 'italic', fontSize: `${fs.expDates}pt`, color: SLATE }} />
                                         }
                                     </span>
                                 </div>

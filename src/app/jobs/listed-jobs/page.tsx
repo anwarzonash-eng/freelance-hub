@@ -29,13 +29,25 @@ const TABLE_COLS = [
     { key: 'submission',  label: 'Submission',  default: true  },
     { key: 'assigned_to', label: 'Assigned To', default: true  },
     { key: 'status',      label: 'Status',      default: true  },
+    { key: 'cv_status',   label: 'CV Status',   default: true  },
 ]
 const DEFAULT_TABLE_COLS = new Set(TABLE_COLS.filter(c => c.default).map(c => c.key))
 
 const JOBS_COL_WIDTHS: Record<string, number> = {
     num: 36, job_title: 200, company: 140, location: 130,
     type: 80, category: 130, sponsored: 84, tech_skills: 180,
-    closes: 100, submission: 160, assigned_to: 110, status: 60,
+    closes: 100, submission: 160, assigned_to: 110, status: 60, cv_status: 90,
+}
+
+const CV_STATUS_BADGE: Record<string, string> = {
+    cv_created: 'bg-gray-100 text-gray-600',
+    cv_reviewed: 'bg-yellow-100 text-yellow-700',
+    cv_sent: 'bg-green-100 text-green-700',
+}
+const CV_STATUS_LABEL: Record<string, string> = {
+    cv_created: 'Created',
+    cv_reviewed: 'Reviewed',
+    cv_sent: 'Sent',
 }
 const EMPTY_FILTERS = { keyword: '', is_job_sponsored: '', type: '', job_category: '', company_id: '', has_cv: false, cv_submitted: '', application_status: '', job_id: '', cv_status: '', assigned: '', assigned_to: '' }
 const APP_STATUS_FILTER_OPTIONS = [{ value: 'none', label: 'Not tracked' }, ...APPLICATION_STATUS_OPTIONS.filter(o => o.value)]
@@ -688,6 +700,7 @@ export default function ListedJobsPage() {
                             {col('submission') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.submission }}>Submission{rh('submission')}</th>}
                             {col('assigned_to') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.assigned_to }}>Assigned To{rh('assigned_to')}</th>}
                             {col('status') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.status }}>Status{rh('status')}</th>}
+                            {col('cv_status') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.cv_status }}>CV Status{rh('cv_status')}</th>}
                         </tr>
                     </thead>
                     <tbody>
@@ -726,12 +739,19 @@ export default function ListedJobsPage() {
                                                 className="flex items-center p-1.5 border border-gray-300 rounded hover:bg-gray-50 text-gray-600">
                                                 <Eye size={12} />
                                             </button>
-                                            <button
-                                                onClick={() => openCvForJob(row)}
-                                                title={cvMap[row.id] ? 'Edit CV for this job' : 'Create CV for this job'}
-                                                className="flex items-center p-1.5 border border-gray-300 rounded hover:bg-gray-50 text-gray-600">
-                                                <FileText size={12} />
-                                            </button>
+                                            {cvMap[row.id] && ['cv_reviewed', 'cv_sent'].includes(cvMap[row.id].status) ? (
+                                                <span title="CV can't be altered"
+                                                    className="flex items-center p-1.5 border border-gray-200 rounded text-gray-300 cursor-not-allowed">
+                                                    <FileText size={12} />
+                                                </span>
+                                            ) : (
+                                                <button
+                                                    onClick={() => openCvForJob(row)}
+                                                    title={cvMap[row.id] ? 'Edit CV for this job' : 'Create CV for this job'}
+                                                    className="flex items-center p-1.5 border border-gray-300 rounded hover:bg-gray-50 text-gray-600">
+                                                    <FileText size={12} />
+                                                </button>
+                                            )}
                                             {row.company_id && (
                                                 <a
                                                     href={`/jobs/companies?id=${encodeURIComponent(row.company_id)}`}
@@ -820,6 +840,15 @@ export default function ListedJobsPage() {
                                             <ApplicationStatusIcon job={row} />
                                         </td>
                                     )}
+                                    {col('cv_status') && (
+                                        <td className="px-2 py-1.5 border-r border-gray-100">
+                                            {cvMap[row.id] && (
+                                                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${CV_STATUS_BADGE[cvMap[row.id].status] ?? 'bg-gray-100 text-gray-600'}`}>
+                                                    {CV_STATUS_LABEL[cvMap[row.id].status] ?? cvMap[row.id].status}
+                                                </span>
+                                            )}
+                                        </td>
+                                    )}
                                 </tr>
                             )
                         })}
@@ -832,7 +861,7 @@ export default function ListedJobsPage() {
                 const cv = cvMap[r.id]
                 const items: ContextMenuItem[] = [
                     { icon: <Eye size={13} />, label: 'View Job', onClick: () => setViewingJob(r) },
-                    { icon: <FileText size={13} />, label: cv ? 'Edit CV' : 'Create CV', onClick: () => openCvForJob(r) },
+                    { icon: <FileText size={13} />, label: cv ? 'Edit CV' : 'Create CV', disabled: !!(cv && ['cv_reviewed', 'cv_sent'].includes(cv.status)), disabledTitle: "CV can't be altered", onClick: () => openCvForJob(r) },
                     ...(cv ? [{ icon: <ExternalLink size={13} />, label: 'View CV', onClick: () => window.open(`/viewCV/${cv.id}`, '_blank') }] : []),
                     ...(r.company_id ? [{ icon: <Building2 size={13} />, label: 'View Company', onClick: () => window.open(`/jobs/companies?keyword=${encodeURIComponent(r.company_id)}`, '_blank') }] : []),
                     { icon: <Link size={13} />, label: 'Copy Link', separator: true, onClick: () => navigator.clipboard.writeText(`${window.location.origin}/jobs/listed-jobs?job_id=${r.id}`) },
