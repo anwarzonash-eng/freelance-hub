@@ -31,7 +31,7 @@ import {
   addCVHistoryEntry,
 } from "@/app/api_handlers/api/job-cvs.api";
 import { getAllJobs } from "@/app/api_handlers/api/sponsored-jobs.api";
-import { timeAgo } from "@/app/utils/time";
+import { timeAgo, formatHistoryDate } from "@/app/utils/time";
 import CVPreview, {
   CVData,
   CVExpItem,
@@ -2220,6 +2220,7 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
         setSaveStatus("saved");
         isDirtyRef.current = false
         onSaved?.();
+        if (showHistoryPanel) loadHistory(savedId)
         if (openAfter) window.open(`/viewCV/${savedId}`, "_blank");
         if (closeAfterSaveRef.current) { closeAfterSaveRef.current = false; onClose() }
       } else {
@@ -2230,6 +2231,7 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
         setSaveStatus("saved");
         isDirtyRef.current = false
         onSaved?.();
+        if (showHistoryPanel && newId) loadHistory(newId)
         if (openAfter && newId) window.open(`/viewCV/${newId}`, "_blank");
         if (closeAfterSaveRef.current) { closeAfterSaveRef.current = false; onClose() }
       }
@@ -2257,6 +2259,7 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
         const currentSavedId = savedIdRef.current;
         if (currentSavedId) {
           await updateCVSilent(currentSavedId, { ...buildPayloadRef.current(), _changed_by: getCurrentUserId() });
+          if (showHistoryPanel) loadHistory(currentSavedId)
         } else {
           const res: any = await createCV(buildPayloadRef.current());
           const newId = res?.data?.id ?? res?.id ?? null;
@@ -2387,15 +2390,25 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
         {isAdmin ? (
           <select
             value={form.status}
-            onChange={(e) => {
+            onChange={async (e) => {
               const newStatus = e.target.value;
+              const oldStatus = form.status;
+              if (newStatus === oldStatus) return;
               set("status", newStatus);
               if (savedId) {
-                updateCVSilent(savedId, {
+                const userId = getCurrentUserId();
+                await updateCVSilent(savedId, {
                   ...buildPayloadRef.current(),
                   status: newStatus,
-                  _changed_by: getCurrentUserId(),
-                }).then(() => { if (showHistoryPanel) loadHistory(savedId) }).catch(() => {});
+                  _changed_by: userId,
+                });
+                await addCVHistoryEntry(savedId, {
+                  event_type: 'status_change',
+                  from_status: oldStatus,
+                  to_status: newStatus,
+                  changed_by: userId ?? undefined,
+                });
+                loadHistory(savedId);
               }
             }}
             className={`text-xs border rounded px-2 py-1 focus:outline-none shrink-0 font-medium ${CV_STATUS_COLORS[form.status] ?? "bg-gray-100 text-gray-600"}`}
@@ -3559,33 +3572,39 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
               ) : historyEntries.map((entry: any) => (
                 <div key={entry.id} className="space-y-1">
                   {entry.event_type === 'status_change' ? (
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      {entry.from_status ? (
-                        <>
-                          <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${CV_STATUS_COLORS[entry.from_status] ?? 'bg-gray-100 text-gray-600'}`}>
-                            {CV_STATUS_LABELS[entry.from_status] ?? entry.from_status}
-                          </span>
-                          <span className="text-gray-400 text-[9px]">→</span>
-                        </>
-                      ) : null}
-                      <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${CV_STATUS_COLORS[entry.to_status] ?? 'bg-gray-100 text-gray-600'}`}>
-                        {CV_STATUS_LABELS[entry.to_status] ?? entry.to_status}
-                      </span>
-                    </div>
+                    <>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {entry.from_status ? (
+                          <>
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${CV_STATUS_COLORS[entry.from_status] ?? 'bg-gray-100 text-gray-600'}`}>
+                              {CV_STATUS_LABELS[entry.from_status] ?? entry.from_status}
+                            </span>
+                            <span className="text-gray-400 text-[9px]">→</span>
+                          </>
+                        ) : null}
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${CV_STATUS_COLORS[entry.to_status] ?? 'bg-gray-100 text-gray-600'}`}>
+                          {CV_STATUS_LABELS[entry.to_status] ?? entry.to_status}
+                        </span>
+                      </div>
+                      <p className="text-[9px] text-gray-500">
+                        {entry.changed_by ? <span className="font-semibold">{entry.changed_by}</span> : <span className="italic text-gray-400">Unknown</span>}
+                        <span className="text-gray-400"> · {entry.createdAt ? formatHistoryDate(entry.createdAt) : ''}</span>
+                      </p>
+                    </>
                   ) : (
-                    <div className="flex items-center gap-1">
-                      <MessageSquare size={10} className="text-purple-400 shrink-0" />
-                      <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${CV_STATUS_COLORS[entry.to_status] ?? 'bg-gray-100 text-gray-600'}`}>
-                        {CV_STATUS_LABELS[entry.to_status] ?? entry.to_status}
-                      </span>
-                    </div>
+                    <>
+                      <div className="flex items-center gap-1">
+                        <MessageSquare size={10} className="text-purple-400 shrink-0" />
+                        <span className="text-[9px] font-semibold text-purple-600">
+                          {entry.changed_by ?? 'Unknown'}
+                        </span>
+                        <span className="text-[9px] text-gray-400">noted</span>
+                        <span className="text-[9px] text-gray-400 ml-auto">{entry.createdAt ? formatHistoryDate(entry.createdAt) : ''}</span>
+                      </div>
+                      {entry.note && <p className="text-[11px] text-gray-700 leading-relaxed pl-1">{entry.note}</p>}
+                      {entry.audio_url && <audio controls src={entry.audio_url} className="h-7 w-full" />}
+                    </>
                   )}
-                  {entry.note && <p className="text-[11px] text-gray-700 leading-relaxed pl-1">{entry.note}</p>}
-                  {entry.audio_url && <audio controls src={entry.audio_url} className="h-7 w-full" />}
-                  <p className="text-[10px] text-gray-400">
-                    {entry.changed_by ? <span className="font-medium text-gray-500">{entry.changed_by} · </span> : null}
-                    {entry.createdAt ? timeAgo(entry.createdAt) : ''}
-                  </p>
                   <div className="border-b border-gray-100" />
                 </div>
               ))}

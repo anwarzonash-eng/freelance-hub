@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ExternalLink, ChevronDown, ChevronUp, Clock, CheckCircle2, XCircle, Copy, Check, X, Plus, Pencil } from 'lucide-react'
+import { ChevronDown, ChevronUp, Clock, CheckCircle2, XCircle, Copy, Check, X, Plus, Pencil } from 'lucide-react'
 import { timeAgo } from '@/app/utils/time'
 
 // Some uploaded job JSON has stray nested objects in fields expected to be plain
@@ -21,6 +21,7 @@ export const APPLICATION_STATUS_OPTIONS = [
     { value: 'in_progress', label: 'In Progress' },
     { value: 'positive', label: 'Positive Response' },
     { value: 'negative', label: 'Negative Response' },
+    { value: 'job_not_available', label: 'Job Not Available' },
 ]
 
 export function ApplicationStatusIcon({ job }: { job: any }) {
@@ -34,6 +35,9 @@ export function ApplicationStatusIcon({ job }: { job: any }) {
     }
     if (status === 'negative') {
         return <span title={job.application_status_note ? `Reason: ${job.application_status_note}` : 'Negative Response'} className="inline-flex"><XCircle size={13} className="text-red-600" /></span>
+    }
+    if (status === 'job_not_available') {
+        return <span title="Job Not Available" className="inline-flex"><XCircle size={13} className="text-gray-400" /></span>
     }
     return null
 }
@@ -79,17 +83,6 @@ export function JobPreview({ job, userMap }: { job: any; userMap?: Record<string
                             )}
                         </div>
                     </div>
-                    {job.link && (
-                        <a
-                            href={job.link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 shrink-0 whitespace-nowrap"
-                        >
-                            <ExternalLink size={12} />
-                            View Job
-                        </a>
-                    )}
                 </div>
             </div>
 

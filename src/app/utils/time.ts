@@ -1,3 +1,13 @@
+export function formatHistoryDate(dateString: string | Date | null | undefined): string {
+  if (!dateString) return ''
+  const d = dateString instanceof Date ? dateString : new Date(dateString)
+  if (isNaN(d.getTime())) return ''
+  const day = d.getDate()
+  const month = d.toLocaleString('en-US', { month: 'long' })
+  const time = d.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+  return `${day} ${month}, ${time}`
+}
+
 export function timeAgo(dateString: string | Date | null | undefined): string | null {
   if (!dateString) return null
   const date = dateString instanceof Date ? dateString : new Date(dateString)

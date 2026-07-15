@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { RefreshCw, ExternalLink, Pencil, Trash2, FileText, Search, X, Link, Briefcase, Building2, SlidersHorizontal, AlignLeft, User, Layers, Clock, Eye, MessageSquare } from 'lucide-react'
 import { useColResize } from '@/app/hooks/useColResize'
+import { formatHistoryDate } from '@/app/utils/time'
 
 function SponsorBadge({ value }: { value: string }) {
     const v = value?.toLowerCase()
@@ -17,6 +18,7 @@ import { getAllApplicants } from '@/app/api_handlers/api/job-applicants.api'
 import { getAllCompanies } from '@/app/api_handlers/api/sponsored-companies.api'
 import { listAuthUsers } from '@/app/api_handlers/api/auth.api'
 import JobCVModal from '@/app/components/jobs/JobCVModal'
+import { APPLICATION_STATUS_OPTIONS } from '@/app/components/jobs/JobPreviewEdit'
 import CVPreview, { CVData } from '@/app/components/jobs/CVPreview'
 import ContextMenu, { ContextMenuItem } from '@/app/components/jobs/ContextMenu'
 
@@ -66,6 +68,7 @@ const EMPTY_FILTERS = {
     exp_yrs: '',
     created_by: '',
     status: '',
+    job_application_status: '',
 }
 type CvFilters = typeof EMPTY_FILTERS
 
@@ -236,10 +239,10 @@ export default function CvsPage() {
             onMouseDown={e => startResize(key, e)} />
     )
 
-    const load = useCallback(async () => {
+    const load = useCallback(async (extraParams?: Record<string, string>) => {
         setLoading(true)
         try {
-            const res: any = await getAllCVs()
+            const res: any = await getAllCVs(extraParams)
             const payload = res?.data ?? res
             const list = Array.isArray(payload) ? payload : []
             setAllData(list)
@@ -262,6 +265,7 @@ export default function CvsPage() {
                 exp_yrs: searchParams.get('exp_yrs') || '',
                 created_by: searchParams.get('created_by') || '',
                 status: searchParams.get('status') || '',
+                job_application_status: searchParams.get('job_application_status') || '',
             }
             hydratedFromUrl.current = true
             setFilters(fromUrl)
@@ -333,6 +337,17 @@ export default function CvsPage() {
         }, 250)
         return () => clearTimeout(t)
     }, [companyQuery, showCompanyDd])
+
+    // Reload from backend when job_application_status filter changes (backend-side filter).
+    const prevJobAppStatus = useRef('')
+    useEffect(() => {
+        if (!hydratedFromUrl.current) return
+        if (filters.job_application_status === prevJobAppStatus.current) return
+        prevJobAppStatus.current = filters.job_application_status
+        const params: Record<string, string> = {}
+        if (filters.job_application_status) params.job_application_status = filters.job_application_status
+        load(params)
+    }, [filters.job_application_status, load])
 
     // Recompute the visible rows + keep the URL in sync whenever a filter changes.
     useEffect(() => {
@@ -499,6 +514,20 @@ export default function CvsPage() {
                         </select>
                     </div>
 
+                    <div className="flex flex-col gap-0.5">
+                        <label className="text-[10px] text-gray-400 uppercase">App Status</label>
+                        <select
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none min-w-[130px] transition-colors ${filters.job_application_status ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}
+                            value={filters.job_application_status}
+                            onChange={e => setFilters(f => ({ ...f, job_application_status: e.target.value }))}
+                        >
+                            <option value="">All</option>
+                            {APPLICATION_STATUS_OPTIONS.filter(o => o.value).map(o => (
+                                <option key={o.value} value={o.value}>{o.label}</option>
+                            ))}
+                        </select>
+                    </div>
+
                     {activeFilterCount > 0 && (
                         <button onClick={clearAllFilters} className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-white mt-auto">
                             Clear ({activeFilterCount})
@@ -636,16 +665,10 @@ export default function CvsPage() {
                                             className="p-1 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded">
                                             <ExternalLink size={12} />
                                         </a>
-                                        {['cv_reviewed', 'cv_sent'].includes(row.status) ? (
-                                            <span title="CV can't be altered" className="p-1 text-gray-300 cursor-not-allowed">
-                                                <Pencil size={12} />
-                                            </span>
-                                        ) : (
-                                            <button onClick={() => setEditingCV(row)} title="Edit CV"
-                                                className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded">
-                                                <Pencil size={12} />
-                                            </button>
-                                        )}
+                                        <button onClick={() => setEditingCV(row)} title="Edit CV"
+                                            className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded">
+                                            <Pencil size={12} />
+                                        </button>
                                         {row.job_id && (
                                             <a href={`/jobs/listed-jobs?job_id=${row.job_id}`} title="View this job"
                                                 className="p-1 text-gray-500 hover:text-teal-700 hover:bg-teal-50 rounded">
@@ -768,33 +791,39 @@ export default function CvsPage() {
                             ) : historyEntries.map((entry: any) => (
                                 <div key={entry.id} className="space-y-1 pb-2 border-b border-gray-100 last:border-0">
                                     {entry.event_type === 'status_change' ? (
-                                        <div className="flex items-center gap-1.5 flex-wrap">
-                                            {entry.from_status && (
-                                                <>
-                                                    <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${CV_STATUS_COLORS_MAP[entry.from_status] ?? 'bg-gray-100 text-gray-600'}`}>
-                                                        {CV_STATUS_LABELS[entry.from_status] ?? entry.from_status}
-                                                    </span>
-                                                    <span className="text-gray-400 text-[9px]">→</span>
-                                                </>
-                                            )}
-                                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${CV_STATUS_COLORS_MAP[entry.to_status] ?? 'bg-gray-100 text-gray-600'}`}>
-                                                {CV_STATUS_LABELS[entry.to_status] ?? entry.to_status}
-                                            </span>
-                                        </div>
+                                        <>
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                {entry.from_status && (
+                                                    <>
+                                                        <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${CV_STATUS_COLORS_MAP[entry.from_status] ?? 'bg-gray-100 text-gray-600'}`}>
+                                                            {CV_STATUS_LABELS[entry.from_status] ?? entry.from_status}
+                                                        </span>
+                                                        <span className="text-gray-400 text-[9px]">→</span>
+                                                    </>
+                                                )}
+                                                <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${CV_STATUS_COLORS_MAP[entry.to_status] ?? 'bg-gray-100 text-gray-600'}`}>
+                                                    {CV_STATUS_LABELS[entry.to_status] ?? entry.to_status}
+                                                </span>
+                                            </div>
+                                            <p className="text-[9px] text-gray-500">
+                                                {entry.changed_by ? <span className="font-semibold">{entry.changed_by}</span> : <span className="italic text-gray-400">Unknown</span>}
+                                                <span className="text-gray-400"> · {entry.createdAt ? formatHistoryDate(entry.createdAt) : ''}</span>
+                                            </p>
+                                        </>
                                     ) : (
-                                        <div className="flex items-center gap-1">
-                                            <MessageSquare size={10} className="text-purple-400 shrink-0" />
-                                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${CV_STATUS_COLORS_MAP[entry.to_status] ?? 'bg-gray-100 text-gray-600'}`}>
-                                                {CV_STATUS_LABELS[entry.to_status] ?? entry.to_status}
-                                            </span>
-                                        </div>
+                                        <>
+                                            <div className="flex items-center gap-1">
+                                                <MessageSquare size={10} className="text-purple-400 shrink-0" />
+                                                <span className="text-[9px] font-semibold text-purple-600">
+                                                    {entry.changed_by ?? 'Unknown'}
+                                                </span>
+                                                <span className="text-[9px] text-gray-400">noted</span>
+                                                <span className="text-[9px] text-gray-400 ml-auto">{entry.createdAt ? formatHistoryDate(entry.createdAt) : ''}</span>
+                                            </div>
+                                            {entry.note && <p className="text-[11px] text-gray-700 leading-relaxed">{entry.note}</p>}
+                                            {entry.audio_url && <audio controls src={entry.audio_url} className="h-7 w-full" />}
+                                        </>
                                     )}
-                                    {entry.note && <p className="text-[11px] text-gray-700 leading-relaxed">{entry.note}</p>}
-                                    {entry.audio_url && <audio controls src={entry.audio_url} className="h-7 w-full" />}
-                                    <p className="text-[9px] text-gray-400">
-                                        {entry.changed_by && <span className="font-medium text-gray-500">{entry.changed_by} · </span>}
-                                        {entry.createdAt ? new Date(entry.createdAt).toLocaleString() : ''}
-                                    </p>
                                 </div>
                             ))}
                         </div>
@@ -865,7 +894,7 @@ export default function CvsPage() {
                 const r = ctxMenu.row
                 const items: ContextMenuItem[] = [
                     { icon: <ExternalLink size={13} />, label: 'View CV', onClick: () => window.open(`/viewCV/${r.id}`, '_blank') },
-                    { icon: <Pencil size={13} />, label: 'Edit CV', disabled: ['cv_reviewed', 'cv_sent'].includes(r.status), disabledTitle: "CV can't be altered", onClick: () => setEditingCV(r) },
+                    { icon: <Pencil size={13} />, label: 'Edit CV', onClick: () => setEditingCV(r) },
                     ...(r.job_id ? [{ icon: <Briefcase size={13} />, label: 'View Job', onClick: () => window.open(`/jobs/listed-jobs?job_id=${r.job_id}`, '_blank') }] : []),
                     ...(r.company_id ? [{ icon: <Building2 size={13} />, label: 'View Company', onClick: () => window.open(`/jobs/companies?keyword=${encodeURIComponent(r.company_id)}`, '_blank') }] : []),
                     { icon: <Link size={13} />, label: 'Copy Link', separator: true, onClick: () => navigator.clipboard.writeText(`${window.location.origin}/viewCV/${r.id}`) },

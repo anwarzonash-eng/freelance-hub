@@ -41,6 +41,6 @@ export async function getCVHistory(cvId: number) {
     return apiClient(JobCVsAPIRoutes.GET_HISTORY.replace(':id', String(cvId)), ApiMethod.GET)
 }
 
-export async function addCVHistoryEntry(cvId: number, data: { note?: string; audio_url?: string; changed_by?: string }) {
+export async function addCVHistoryEntry(cvId: number, data: { event_type?: string; from_status?: string; to_status?: string; note?: string; audio_url?: string; changed_by?: string }) {
     return apiClient(JobCVsAPIRoutes.ADD_HISTORY.replace(':id', String(cvId)), ApiMethod.POST, data, undefined, {}, false, false)
 }

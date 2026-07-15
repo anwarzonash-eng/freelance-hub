@@ -118,9 +118,16 @@ const SPONSORSHIP_STATUS_COLORS: Record<string, string> = {
     'Working Right Required': 'bg-orange-100 text-orange-700',
     'Nothing Mentioned': 'bg-gray-100 text-gray-500',
 }
-function SponsorshipStatusBadge({ value }: { value: string }) {
+function SponsorshipStatusBadge({ value, tooltip }: { value: string; tooltip?: string }) {
     const v = value || 'Nothing Mentioned'
-    return <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${SPONSORSHIP_STATUS_COLORS[v] ?? 'bg-gray-100 text-gray-500'}`}>{v}</span>
+    return (
+        <span
+            title={tooltip || undefined}
+            className={`text-[9px] px-1.5 py-0.5 rounded font-medium cursor-default ${SPONSORSHIP_STATUS_COLORS[v] ?? 'bg-gray-100 text-gray-500'} ${tooltip ? 'underline decoration-dotted' : ''}`}
+        >
+            {v}
+        </span>
+    )
 }
 
 function TechSkillsCell({ skills }: { skills: string[] }) {
@@ -676,7 +683,7 @@ export default function ListedJobsPage() {
                                     }}
                                 />
                             </th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.actions ?? 120 }}>
+                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative" style={{ width: colW.actions ?? 120 }}>
                                 <div className="flex items-center justify-between gap-1">
                                     <span>Actions</span>
                                     <div className="flex items-center gap-1">
@@ -837,8 +844,7 @@ export default function ListedJobsPage() {
                                     )}
                                     {col('sponsored') && (
                                         <td className="px-2 py-1.5 border-r border-gray-100 whitespace-nowrap">
-                                            <SponsorBadge value={row.is_job_sponsored} />
-                                            <SponsorshipStatusBadge value={row.sponsorship_status} />
+                                            <SponsorshipStatusBadge value={row.sponsorship_status} tooltip={row.visa_sponsorship_text || undefined} />
                                         </td>
                                     )}
                                     {col('tech_skills') && (
