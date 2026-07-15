@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { RefreshCw, ExternalLink, Pencil, Trash2, FileText, Search, X, Link, Briefcase, Building2, SlidersHorizontal, AlignLeft, User, Layers, Clock, Eye, MessageSquare } from 'lucide-react'
 import { useColResize } from '@/app/hooks/useColResize'
@@ -806,7 +806,7 @@ export default function CvsPage() {
             {/* Short view popup */}
             {shortView && (() => {
                 const { row, type } = shortView
-                const VIEW_TABS: { key: typeof type; label: string; icon: JSX.Element }[] = [
+                const VIEW_TABS: { key: typeof type; label: string; icon: React.JSX.Element }[] = [
                     { key: 'summary',    label: 'Summary',     icon: <FileText size={12} /> },
                     { key: 'full',       label: 'Full CV',     icon: <Eye size={12} /> },
                     { key: 'skills',     label: 'Core Skills', icon: <Layers size={12} /> },
