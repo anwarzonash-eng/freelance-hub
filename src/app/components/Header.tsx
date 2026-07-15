@@ -32,6 +32,8 @@ import {
   BriefcaseBusiness,
   SlidersHorizontal,
   ShieldCheck,
+  Wrench,
+  ListTree,
 } from "lucide-react";
 import LogoutButton from "./auth/LogoutButton";
 import NotificationBell from "./notifications/NotificationBell";
@@ -96,6 +98,8 @@ const iconMap: { [key: string]: LucideIcon } = {
   GlobalSettings: SlidersHorizontal,
   VerifaliaCredentials: ShieldCheck,
   Jobs: BriefcaseBusiness,
+  Tools: Wrench,
+  AParse: ListTree,
 };
 
 // --- 2. Flat Menu Data Structure ---
@@ -251,6 +255,17 @@ const navItems: NavItem[] = [
       },
     ],
   },
+  {
+    title: "Tools",
+    icon: "Tools",
+    children: [
+      {
+        title: "A Parse",
+        href: "/tools/a-parse",
+        icon: "AParse",
+      },
+    ],
+  },
 ];
 // ...existing code...
 // ------------------------------------------
@@ -345,6 +360,7 @@ export function getAllNavRoles(
     { label: "Email Campaigns", value: "/professionals/email-campaigns" },
     { label: "Clients", value: "/clients" },
     { label: "Applicants", value: "/applicants" },
+    { label: "A Parse", value: "/tools/a-parse" },
     { label: "Settings", value: "/settings" },
   ];
   // const roles: { label: string; value: string }[] = [];

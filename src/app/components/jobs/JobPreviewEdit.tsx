@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ExternalLink, ChevronDown, ChevronUp, Clock, CheckCircle2, XCircle } from 'lucide-react'
+import { ExternalLink, ChevronDown, ChevronUp, Clock, CheckCircle2, XCircle, Copy, Check, X, Plus, Pencil } from 'lucide-react'
 import { timeAgo } from '@/app/utils/time'
 
 // Some uploaded job JSON has stray nested objects in fields expected to be plain
@@ -100,6 +100,7 @@ export function JobPreview({ job, userMap }: { job: any; userMap?: Record<string
                     { label: 'Category', value: job.job_category },
                     { label: 'Experience Required', value: job.experience_required },
                     { label: 'Visa Sponsorship', value: job.visa_sponsorship_text, highlight: true },
+                    { label: 'Sponsorship Status', value: job.sponsorship_status, highlight: true },
                     { label: 'Application Start', value: job.application_start_date },
                     { label: 'Application Closing', value: job.application_closing_date },
                     { label: 'Qualification Required', value: job.qualification_required },
@@ -246,10 +247,27 @@ function SkillsFoundInDescription({ skills, description, label }: { skills: stri
     )
 }
 
+const QA_PROMPT = `You are helping extract application questions from a job posting page.
+
+Look at the current job application page carefully. Find ALL questions, form fields, and prompts that require a written response when submitting a job application — such as cover letter prompts, motivational questions, eligibility questions, custom screening questions, or any other text-input fields.
+
+Return ONLY a raw JSON array of strings — no explanation, no markdown, no code fences. Example format:
+["Why do you want to work here?", "Do you have the right to work in the UK?", "Describe your experience with React."]
+
+Do NOT include standard personal detail fields like name, email, phone number, address, or CV/resume upload.`
+
 export function JobEditForm({ job, setJob, userMap }: { job: any; setJob: (job: any) => void; userMap?: Record<string, string> }) {
     const inputCls = 'w-full border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-gray-500'
     const labelCls = 'text-[10px] text-gray-400 uppercase font-medium mb-0.5 block'
     const textareaCls = 'w-full border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-gray-500 resize-none'
+
+    const [activeTab, setActiveTab] = useState<'basic' | 'qa'>('basic')
+    const [promptCopied, setPromptCopied] = useState(false)
+    const [qaJsonPaste, setQaJsonPaste] = useState('')
+    const [qaParseError, setQaParseError] = useState('')
+    const [editingQIdx, setEditingQIdx] = useState<number | null>(null)
+
+    const qaList: { question: string; answer: string }[] = job.additional_fields?.qa_list ?? []
 
     const handleFieldChange = (field: string, value: any) => {
         setJob({ ...job, [field]: value })
@@ -275,7 +293,72 @@ export function JobEditForm({ job, setJob, userMap }: { job: any; setJob: (job: 
         setJob({ ...job, additional_fields: newAdditional })
     }
 
+    const setQaList = (list: { question: string; answer: string }[]) => {
+        setJob({ ...job, additional_fields: { ...(job.additional_fields || {}), qa_list: list } })
+    }
+
+    const copyPrompt = () => {
+        navigator.clipboard.writeText(QA_PROMPT).then(() => {
+            setPromptCopied(true)
+            setTimeout(() => setPromptCopied(false), 2000)
+        })
+    }
+
+    const parseQaJson = () => {
+        setQaParseError('')
+        try {
+            const parsed = JSON.parse(qaJsonPaste.trim())
+            if (!Array.isArray(parsed) || !parsed.every(q => typeof q === 'string')) {
+                setQaParseError('Must be a JSON array of strings e.g. ["Q1","Q2"]')
+                return
+            }
+            const merged = parsed.map((q: string) => {
+                const existing = qaList.find(e => e.question === q)
+                return { question: q, answer: existing?.answer ?? '' }
+            })
+            setQaList(merged)
+            setQaJsonPaste('')
+        } catch {
+            setQaParseError('Invalid JSON — paste the raw array from Claude.')
+        }
+    }
+
+    const updateAnswer = (idx: number, answer: string) => {
+        const updated = qaList.map((item, i) => i === idx ? { ...item, answer } : item)
+        setQaList(updated)
+    }
+
+    const removeQuestion = (idx: number) => {
+        setQaList(qaList.filter((_, i) => i !== idx))
+        if (editingQIdx === idx) setEditingQIdx(null)
+    }
+
+    const updateQuestion = (idx: number, question: string) => {
+        const updated = qaList.map((item, i) => i === idx ? { ...item, question } : item)
+        setQaList(updated)
+    }
+
+    const addQuestion = () => {
+        const newIdx = qaList.length
+        setQaList([...qaList, { question: '', answer: '' }])
+        setEditingQIdx(newIdx)
+    }
+
     return (
+        <div className="flex flex-col h-full">
+            {/* Tabs */}
+            <div className="flex gap-0 border-b border-gray-200 mb-4 shrink-0">
+                {(['basic', 'qa'] as const).map(tab => (
+                    <button key={tab} type="button"
+                        onClick={() => setActiveTab(tab)}
+                        className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${activeTab === tab ? 'border-gray-800 text-gray-800' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+                        {tab === 'basic' ? 'Basic Details' : `Q/A${qaList.length ? ` (${qaList.length})` : ''}`}
+                    </button>
+                ))}
+            </div>
+
+            {/* Basic Details Tab */}
+            {activeTab === 'basic' && (
         <div className="space-y-4 grid grid-cols-2 gap-4">
             {/* Left Column - Main Fields */}
             <div className="space-y-4">
@@ -325,9 +408,19 @@ export function JobEditForm({ job, setJob, userMap }: { job: any; setJob: (job: 
 
                 <div>
                     <p className="text-[10px] text-gray-400 uppercase font-semibold mb-2 bg-amber-50 border-2 border-amber-300 p-2 rounded">🔴 Visa Sponsorship</p>
-                    <div className="bg-amber-50 border-2 border-amber-300 rounded p-3">
-                        <label className={labelCls}>Visa Sponsorship Text</label>
-                        <textarea value={job.visa_sponsorship_text || ''} onChange={e => handleFieldChange('visa_sponsorship_text', e.target.value)} className={`${textareaCls} h-16 bg-white`} />
+                    <div className="bg-amber-50 border-2 border-amber-300 rounded p-3 space-y-2">
+                        <div>
+                            <label className={labelCls}>Sponsorship Status</label>
+                            <select value={job.sponsorship_status || 'Nothing Mentioned'} onChange={e => handleFieldChange('sponsorship_status', e.target.value)} className={`${inputCls} bg-white`}>
+                                <option value="Visa Sponsorship Available">Visa Sponsorship Available</option>
+                                <option value="Working Right Required">Working Right Required</option>
+                                <option value="Nothing Mentioned">Nothing Mentioned</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className={labelCls}>Visa Sponsorship Text</label>
+                            <textarea value={job.visa_sponsorship_text || ''} onChange={e => handleFieldChange('visa_sponsorship_text', e.target.value)} className={`${textareaCls} h-16 bg-white`} />
+                        </div>
                     </div>
                 </div>
 
@@ -536,6 +629,92 @@ export function JobEditForm({ job, setJob, userMap }: { job: any; setJob: (job: 
                     </div>
                 </div>
             </div>
+        </div>
+            )}
+
+            {/* Q/A Tab */}
+            {activeTab === 'qa' && (
+                <div className="space-y-4">
+                    {/* Prompt copy */}
+                    <div className="bg-indigo-50 border border-indigo-200 rounded p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                            <p className="text-[10px] font-semibold text-indigo-700 uppercase">Step 1 — Copy Claude Prompt</p>
+                            <button type="button" onClick={copyPrompt}
+                                className={`flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-semibold rounded border transition-colors ${promptCopied ? 'bg-teal-100 border-teal-400 text-teal-700' : 'bg-indigo-600 border-indigo-600 text-white hover:bg-indigo-700'}`}>
+                                {promptCopied ? <><Check size={10} /> Copied!</> : <><Copy size={10} /> Copy Prompt</>}
+                            </button>
+                        </div>
+                        <p className="text-[9px] text-indigo-500">Paste this prompt into the Claude browser extension on the job application page, then paste the JSON array back below.</p>
+                    </div>
+
+                    <div className="space-y-1.5">
+                        <p className="text-[10px] font-semibold text-gray-500 uppercase">Step 2 — Paste Claude's JSON Response</p>
+                        <div className="flex gap-2">
+                            <textarea
+                                rows={3}
+                                className={`${textareaCls} flex-1 font-mono text-[10px] resize-y`}
+                                placeholder='["Why do you want this role?","Do you have the right to work in the UK?"]'
+                                value={qaJsonPaste}
+                                onChange={e => { setQaJsonPaste(e.target.value); setQaParseError('') }}
+                            />
+                            <button type="button" onClick={parseQaJson}
+                                className="shrink-0 self-end px-3 py-1.5 text-xs font-semibold bg-gray-800 text-white rounded hover:bg-gray-900">
+                                Add Questions
+                            </button>
+                        </div>
+                        {qaParseError && <p className="text-[10px] text-red-500">{qaParseError}</p>}
+                    </div>
+
+                    {/* Question list */}
+                    <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                            <p className="text-[10px] font-semibold text-gray-500 uppercase">{qaList.length} Question{qaList.length !== 1 ? 's' : ''}</p>
+                            <button type="button" onClick={addQuestion}
+                                className="flex items-center gap-1 px-2 py-1 text-[10px] font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700 rounded">
+                                <Plus size={10} /> Add Question
+                            </button>
+                        </div>
+                        {qaList.length === 0 && (
+                            <p className="text-[10px] text-gray-400 italic text-center py-6">No questions yet — copy the prompt, run it on the job page, then paste the JSON array above.</p>
+                        )}
+                        {qaList.map((item, idx) => (
+                            <div key={idx} className="border border-gray-200 rounded p-3 space-y-1.5 bg-white">
+                                <div className="flex items-start justify-between gap-2">
+                                    {editingQIdx === idx ? (
+                                        <input
+                                            autoFocus
+                                            className={`${inputCls} flex-1 text-[11px] font-semibold`}
+                                            value={item.question}
+                                            placeholder="Question title…"
+                                            onChange={e => updateQuestion(idx, e.target.value)}
+                                            onBlur={() => setEditingQIdx(null)}
+                                            onKeyDown={e => { if (e.key === 'Enter') setEditingQIdx(null) }}
+                                        />
+                                    ) : (
+                                        <p className="text-[11px] font-semibold text-gray-700 flex-1 cursor-pointer hover:text-gray-900 group/q flex items-start gap-1"
+                                            onClick={() => setEditingQIdx(idx)}>
+                                            <span className="text-gray-400 shrink-0">{idx + 1}.</span>
+                                            <span className="flex-1">{item.question || <span className="italic text-gray-400">Click to edit question…</span>}</span>
+                                            <Pencil size={10} className="text-gray-300 group-hover/q:text-gray-500 shrink-0 mt-0.5" />
+                                        </p>
+                                    )}
+                                    <button type="button" onClick={() => removeQuestion(idx)}
+                                        className="text-gray-300 hover:text-red-500 shrink-0 mt-0.5">
+                                        <X size={11} />
+                                    </button>
+                                </div>
+                                <textarea
+                                    rows={3}
+                                    className={`${textareaCls} resize-y text-[11px]`}
+                                    placeholder="Your answer…"
+                                    value={item.answer}
+                                    onChange={e => updateAnswer(idx, e.target.value)}
+                                />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

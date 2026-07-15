@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { RefreshCw, ExternalLink, Pencil, Trash2, FileText, Search, X, Link, Briefcase, Building2 } from 'lucide-react'
+import { RefreshCw, ExternalLink, Pencil, Trash2, FileText, Search, X, Link, Briefcase, Building2, SlidersHorizontal, AlignLeft, User, Layers, Clock, Eye, MessageSquare } from 'lucide-react'
 import { useColResize } from '@/app/hooks/useColResize'
 
 function SponsorBadge({ value }: { value: string }) {
@@ -12,17 +12,23 @@ function SponsorBadge({ value }: { value: string }) {
         : 'bg-gray-100 text-gray-500'
     return <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${cls}`}>{value}</span>
 }
-import { getAllCVs, deleteCV } from '@/app/api_handlers/api/job-cvs.api'
+import { getAllCVs, deleteCV, getCVHistory } from '@/app/api_handlers/api/job-cvs.api'
 import { getAllApplicants } from '@/app/api_handlers/api/job-applicants.api'
 import { getAllCompanies } from '@/app/api_handlers/api/sponsored-companies.api'
 import { listAuthUsers } from '@/app/api_handlers/api/auth.api'
 import JobCVModal from '@/app/components/jobs/JobCVModal'
+import CVPreview, { CVData } from '@/app/components/jobs/CVPreview'
 import ContextMenu, { ContextMenuItem } from '@/app/components/jobs/ContextMenu'
 
 const CV_STATUSES = [
     { value: 'cv_created', label: 'CV Created', cls: 'bg-gray-100 text-gray-600' },
+    { value: 'cv_ready_for_edit', label: 'Ready for Edit', cls: 'bg-sky-100 text-sky-700' },
+    { value: 'cv_ready_for_review', label: 'Ready for Review', cls: 'bg-blue-100 text-blue-700' },
     { value: 'cv_reviewed', label: 'CV Reviewed', cls: 'bg-yellow-100 text-yellow-700' },
     { value: 'cv_sent', label: 'CV Sent', cls: 'bg-green-100 text-green-700' },
+    { value: 'cv_required_qa', label: 'CV Required Q/A', cls: 'bg-purple-100 text-purple-700' },
+    { value: 'cv_qa_review_required', label: 'CV Q/A Review Required', cls: 'bg-orange-100 text-orange-700' },
+    { value: 'cv_qa_review_done', label: 'CV Q/A Review Done', cls: 'bg-teal-100 text-teal-700' },
 ]
 
 function CvStatusBadge({ value }: { value: string }) {
@@ -31,8 +37,23 @@ function CvStatusBadge({ value }: { value: string }) {
     return <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${s.cls}`}>{s.label}</span>
 }
 
+const CVS_TABLE_COLS = [
+    { key: 'cv_title',      label: 'CV Title',      default: true  },
+    { key: 'applicant',     label: 'Applicant',     default: true  },
+    { key: 'organisation',  label: 'Organisation',  default: true  },
+    { key: 'sponsorship',   label: 'Sponsorship',   default: false },
+    { key: 'job_link',      label: 'Job Link',      default: false },
+    { key: 'email',         label: 'Email',         default: false },
+    { key: 'exp_yrs',       label: 'Exp (yrs)',     default: true  },
+    { key: 'status',        label: 'CV Status',     default: true  },
+    { key: 'created',       label: 'Created',       default: true  },
+    { key: 'created_by',    label: 'Created By',    default: false },
+]
+const CVS_DEFAULT_COLS = new Set(CVS_TABLE_COLS.filter(c => c.default).map(c => c.key))
+
 const CVS_COL_WIDTHS: Record<string, number> = {
-    num: 36, cv_title: 200, applicant: 120, organisation: 140,
+    actions: 160,
+    cv_title: 200, applicant: 120, organisation: 140,
     sponsorship: 90, job_link: 70, email: 180, exp_yrs: 70,
     status: 100, created: 90, created_by: 90,
 }
@@ -93,6 +114,14 @@ function filterCvs(list: any[], f: CvFilters) {
     return out
 }
 
+function highlightRaw(text: string, term: string): string {
+    const safe = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    if (!term.trim()) return safe
+    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    return safe.replace(new RegExp(`(${escaped})`, 'gi'),
+        m => `<mark class="raw-hl" style="background:#fef08a;color:#713f12;border-radius:2px;padding:0 2px">${m}</mark>`)
+}
+
 function buildQueryString(f: CvFilters): string {
     const params = new URLSearchParams()
     Object.entries(f).forEach(([k, v]) => { if (v) params.set(k, v) })
@@ -113,11 +142,94 @@ export default function CvsPage() {
     const [companyQuery, setCompanyQuery] = useState('')
     const [companyResults, setCompanyResults] = useState<{ id: string; name: string }[]>([])
     const [showCompanyDd, setShowCompanyDd] = useState(false)
+    const [showColDd, setShowColDd] = useState(false)
+    const [visibleCols, setVisibleCols] = useState<Set<string>>(() => new Set(CVS_DEFAULT_COLS))
     const companyDdRef = useRef<HTMLDivElement>(null)
+    const colDdRef = useRef<HTMLDivElement>(null)
     const hydratedFromUrl = useRef(false)
     const { widths: colW, startResize } = useColResize(CVS_COL_WIDTHS, 'cvs_col_widths')
 
-    const tableWidth = 120 + Object.keys(CVS_COL_WIDTHS).reduce((s, k) => s + (colW[k] ?? CVS_COL_WIDTHS[k] ?? 100), 0)
+    const col = (key: string) => visibleCols.has(key)
+    const tableWidth = (colW.actions ?? 160) + 110 + CVS_TABLE_COLS.filter(c => col(c.key)).reduce((s, c) => s + (colW[c.key] ?? CVS_COL_WIDTHS[c.key] ?? 100), 0)
+
+    // Raw description sidebar
+    const [rawSidebarRow, setRawSidebarRow] = useState<any | null>(null)
+    const [rawSidebarSearch, setRawSidebarSearch] = useState('')
+    const rawSidebarContentRef = useRef<HTMLDivElement>(null)
+    const [rawSidebarWidth, setRawSidebarWidth] = useState<number>(() => {
+        try { return Number(localStorage.getItem('cvs_rawsidebar_width')) || 340 } catch { return 340 }
+    })
+    const rawSidebarResizing = useRef(false)
+    const rawSidebarStartX = useRef(0)
+    const rawSidebarStartW = useRef(0)
+    const startRawResize = (e: React.MouseEvent) => {
+        e.preventDefault()
+        rawSidebarResizing.current = true
+        rawSidebarStartX.current = e.clientX
+        rawSidebarStartW.current = rawSidebarWidth
+        const onMove = (ev: MouseEvent) => {
+            if (!rawSidebarResizing.current) return
+            const delta = rawSidebarStartX.current - ev.clientX
+            const next = Math.max(220, Math.min(700, rawSidebarStartW.current + delta))
+            setRawSidebarWidth(next)
+            try { localStorage.setItem('cvs_rawsidebar_width', String(next)) } catch {}
+        }
+        const onUp = () => {
+            rawSidebarResizing.current = false
+            window.removeEventListener('mousemove', onMove)
+            window.removeEventListener('mouseup', onUp)
+        }
+        window.addEventListener('mousemove', onMove)
+        window.addEventListener('mouseup', onUp)
+    }
+
+    useEffect(() => {
+        if (!rawSidebarSearch.trim() || !rawSidebarContentRef.current) return
+        const t = setTimeout(() => {
+            const el = rawSidebarContentRef.current?.querySelector('.raw-hl')
+            el?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+        }, 80)
+        return () => clearTimeout(t)
+    }, [rawSidebarSearch])
+
+    const rawSidebarMatchCount = useMemo(() => {
+        if (!rawSidebarSearch.trim() || !rawSidebarRow?.raw_description) return 0
+        const escaped = rawSidebarSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        return (rawSidebarRow.raw_description.match(new RegExp(escaped, 'gi')) || []).length
+    }, [rawSidebarSearch, rawSidebarRow])
+
+    // History side panel (read-only; notes/audio can only be added from CV Edit popup)
+    const [historyRow, setHistoryRow] = useState<any | null>(null)
+    const [historyEntries, setHistoryEntries] = useState<any[]>([])
+    const [historyLoading, setHistoryLoading] = useState(false)
+
+    const loadHistory = useCallback(async (cvId: number) => {
+        setHistoryLoading(true)
+        try {
+            const res: any = await getCVHistory(cvId)
+            const entries = res?.data ?? res ?? []
+            setHistoryEntries(Array.isArray(entries) ? entries : [])
+        } catch { setHistoryEntries([]) }
+        finally { setHistoryLoading(false) }
+    }, [])
+
+    const openHistory = (row: any) => {
+        if (historyRow?.id === row.id) { setHistoryRow(null); return }
+        setHistoryRow(row)
+        loadHistory(row.id)
+    }
+
+    // Short view popup
+    const [shortView, setShortView] = useState<{ row: any; type: 'summary' | 'full' | 'skills' | 'experience' } | null>(null)
+    const shortViewRef = useRef<HTMLDivElement>(null)
+    useEffect(() => {
+        if (!shortView) return
+        const handler = (e: MouseEvent) => {
+            if (shortViewRef.current && !shortViewRef.current.contains(e.target as Node)) setShortView(null)
+        }
+        document.addEventListener('mousedown', handler)
+        return () => document.removeEventListener('mousedown', handler)
+    }, [shortView])
 
     const rh = (key: string) => (
         <div className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-blue-400/40 active:bg-blue-500/60 select-none"
@@ -187,8 +299,22 @@ export default function CvsPage() {
     }, [])
 
     useEffect(() => {
+        const savedCols = localStorage.getItem('cvs_visible_cols')
+        if (savedCols) setVisibleCols(new Set(JSON.parse(savedCols)))
+    }, [])
+
+    const toggleCol = (key: string) =>
+        setVisibleCols(prev => {
+            const s = new Set(prev)
+            if (s.has(key)) s.delete(key); else s.add(key)
+            localStorage.setItem('cvs_visible_cols', JSON.stringify(Array.from(s)))
+            return s
+        })
+
+    useEffect(() => {
         const handler = (e: MouseEvent) => {
             if (companyDdRef.current && !companyDdRef.current.contains(e.target as Node)) setShowCompanyDd(false)
+            if (colDdRef.current && !colDdRef.current.contains(e.target as Node)) setShowColDd(false)
         }
         document.addEventListener('mousedown', handler)
         return () => document.removeEventListener('mousedown', handler)
@@ -242,7 +368,7 @@ export default function CvsPage() {
     }
 
     return (
-        <div className="p-3 bg-white min-h-screen">
+        <div className="p-3 bg-white min-h-screen flex flex-col">
             <div className="flex items-center justify-between mb-3 border-b border-gray-200 pb-2">
                 <div className="flex items-center gap-2">
                     <FileText size={14} className="text-gray-500" />
@@ -387,42 +513,116 @@ export default function CvsPage() {
                 </div>
             </div>
 
-            <div className="border border-gray-200 rounded overflow-x-auto min-h-[60vh]">
+            <div className="flex gap-0 flex-1 min-h-[60vh]">
+            {/* Raw description sidebar */}
+            {rawSidebarRow && (
+                <div className="relative flex shrink-0 border border-gray-200 rounded-l bg-white" style={{ width: rawSidebarWidth }}>
+                    {/* Drag handle on left edge */}
+                    <div className="absolute left-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-400/40 active:bg-blue-500/60 z-10 select-none"
+                        onMouseDown={startRawResize} />
+                    <div className="flex flex-col w-full overflow-hidden">
+                        <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 shrink-0 bg-gray-50">
+                            <div className="min-w-0">
+                                <p className="text-[10px] font-semibold text-gray-700 truncate">{rawSidebarRow.cv_title || rawSidebarRow.organization_name || 'Raw Description'}</p>
+                                <p className="text-[9px] text-gray-400">Job Description</p>
+                            </div>
+                            <button onClick={() => { setRawSidebarRow(null); setRawSidebarSearch('') }} className="text-gray-400 hover:text-gray-700 shrink-0 ml-2">
+                                <X size={13} />
+                            </button>
+                        </div>
+                        {/* Search bar */}
+                        <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-gray-100 shrink-0 bg-white">
+                            <Search size={11} className="text-gray-400 shrink-0" />
+                            <input
+                                type="text"
+                                value={rawSidebarSearch}
+                                onChange={e => setRawSidebarSearch(e.target.value)}
+                                placeholder="Search…"
+                                className="flex-1 text-[11px] outline-none min-w-0"
+                            />
+                            {rawSidebarSearch && (
+                                <>
+                                    <span className="text-[9px] text-gray-400 shrink-0">{rawSidebarMatchCount} match{rawSidebarMatchCount !== 1 ? 'es' : ''}</span>
+                                    <button onClick={() => setRawSidebarSearch('')} className="text-gray-300 hover:text-gray-600 shrink-0"><X size={10} /></button>
+                                </>
+                            )}
+                        </div>
+                        <div ref={rawSidebarContentRef} className="flex-1 overflow-y-auto p-3">
+                            {rawSidebarRow.raw_description
+                                ? <pre className="text-[10px] text-gray-700 whitespace-pre-wrap leading-relaxed"
+                                    dangerouslySetInnerHTML={{ __html: highlightRaw(rawSidebarRow.raw_description, rawSidebarSearch) }} />
+                                : <p className="text-[10px] text-gray-400 italic">No raw description available.</p>
+                            }
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <div className={`border border-gray-200 ${rawSidebarRow ? 'rounded-r' : ''} ${historyRow ? 'rounded-l' : ''} ${!rawSidebarRow && !historyRow ? 'rounded' : ''} overflow-x-auto flex-1 min-w-0`}>
                 <table className="text-xs border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
                     <thead>
                         <tr className="bg-gray-100 border-b border-gray-300">
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 flex items-center justify-between" style={{ width: 120 }}>
+                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.actions ?? 160 }}>
+                                <div className="flex items-center justify-between">
                                 <span>Actions</span>
-                                <button
-                                    onClick={() => setData(filterCvs(allData, filters))}
-                                    disabled={loading}
-                                    title="Refresh results with current filter"
-                                    className="p-0.5 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded transition-colors disabled:opacity-50"
-                                >
-                                    <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
-                                </button>
+                                <div className="flex items-center gap-1">
+
+                                    <button
+                                        onClick={() => setData(filterCvs(allData, filters))}
+                                        disabled={loading}
+                                        title="Refresh results with current filter"
+                                        className="p-0.5 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded transition-colors disabled:opacity-50"
+                                    >
+                                        <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+                                    </button>
+                                    <div className="relative" ref={colDdRef}>
+                                        <button onClick={() => setShowColDd(p => !p)}
+                                            title="Show/hide columns"
+                                            className={`p-0.5 hover:bg-gray-200 rounded transition-colors relative ${showColDd ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}>
+                                            <SlidersHorizontal size={12} />
+                                            {visibleCols.size !== CVS_DEFAULT_COLS.size && (
+                                                <span className="absolute -top-1 -right-1 bg-indigo-500 text-white text-[7px] rounded-full w-2.5 h-2.5 flex items-center justify-center font-bold leading-none">·</span>
+                                            )}
+                                        </button>
+                                        {showColDd && (
+                                            <div className="absolute left-0 top-full mt-1 z-40 bg-white border border-gray-200 rounded shadow-lg p-2 min-w-40">
+                                                <p className="text-[9px] text-gray-400 uppercase font-semibold px-1 mb-1">Columns</p>
+                                                {CVS_TABLE_COLS.map(({ key, label }) => (
+                                                    <label key={key} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded">
+                                                        <input type="checkbox" className="w-3 h-3"
+                                                            checked={visibleCols.has(key)}
+                                                            onChange={() => toggleCol(key)} />
+                                                        <span className="text-xs text-gray-700">{label}</span>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                                </div>
+                                {rh('actions')}
                             </th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-500 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.num }}>#&nbsp;{rh('num')}</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.cv_title }}>CV Title{rh('cv_title')}</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.applicant }}>Applicant{rh('applicant')}</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.organisation }}>Organisation{rh('organisation')}</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.sponsorship }}>Sponsorship{rh('sponsorship')}</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.job_link }}>Job Link{rh('job_link')}</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.email }}>Email{rh('email')}</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.exp_yrs }}>Exp (yrs){rh('exp_yrs')}</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.status }}>Status{rh('status')}</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.created }}>Created{rh('created')}</th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.created_by }}>Created By{rh('created_by')}</th>
+                            {col('cv_title') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.cv_title }}>CV Title{rh('cv_title')}</th>}
+                            {col('applicant') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.applicant }}>Applicant{rh('applicant')}</th>}
+                            {col('organisation') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.organisation }}>Organisation{rh('organisation')}</th>}
+                            {col('sponsorship') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.sponsorship }}>Sponsorship{rh('sponsorship')}</th>}
+                            {col('job_link') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.job_link }}>Job Link{rh('job_link')}</th>}
+                            {col('email') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.email }}>Email{rh('email')}</th>}
+                            {col('exp_yrs') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.exp_yrs }}>Exp (yrs){rh('exp_yrs')}</th>}
+                            {col('status') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.status }}>CV Status{rh('status')}</th>}
+                            {col('created') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.created }}>Created{rh('created')}</th>}
+                            {col('created_by') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.created_by }}>Created By{rh('created_by')}</th>}
+                            <th className="px-2 py-1.5 text-left font-medium text-gray-500 border-r border-gray-200" style={{ width: 110 }}>Short Views</th>
                         </tr>
                     </thead>
                     <tbody>
                         {loading && (
-                            <tr><td colSpan={12} className="text-center py-10 text-gray-400" style={{ minWidth: tableWidth }}>
+                            <tr><td colSpan={2 + visibleCols.size} className="text-center py-10 text-gray-400" style={{ minWidth: tableWidth }}>
                                 <div className="flex items-center justify-center gap-2"><RefreshCw size={13} className="animate-spin" /> Loading…</div>
                             </td></tr>
                         )}
                         {!loading && data.length === 0 && (
-                            <tr><td colSpan={12} className="text-center py-10 text-gray-400">
+                            <tr><td colSpan={2 + visibleCols.size} className="text-center py-10 text-gray-400">
                                 {activeFilterCount > 0 ? 'No CVs match your filters.' : 'No CVs yet. Create one from the Listed Jobs page.'}
                             </td></tr>
                         )}
@@ -458,57 +658,208 @@ export default function CvsPage() {
                                                 <Building2 size={12} />
                                             </a>
                                         )}
+                                        <button onClick={() => {
+                                            if (rawSidebarRow?.id === row.id) { setRawSidebarRow(null); setRawSidebarSearch('') }
+                                            else { setRawSidebarRow(row); setRawSidebarSearch('') }
+                                        }}
+                                            title="View raw job description"
+                                            className={`p-1 rounded ${rawSidebarRow?.id === row.id ? 'text-amber-600 bg-amber-50' : 'text-gray-400 hover:text-amber-600 hover:bg-amber-50'}`}>
+                                            <AlignLeft size={12} />
+                                        </button>
+                                        <button onClick={() => openHistory(row)} title="View history &amp; notes"
+                                            className={`p-1 rounded ${historyRow?.id === row.id ? 'text-purple-600 bg-purple-50' : 'text-gray-400 hover:text-purple-600 hover:bg-purple-50'}`}>
+                                            <Clock size={12} />
+                                        </button>
                                         <button onClick={() => handleDelete(row.id)} title="Delete CV"
                                             className="p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded">
                                             <Trash2 size={12} />
                                         </button>
                                     </div>
                                 </td>
-                                <td className="px-2 py-1.5 text-gray-400 border-r border-gray-100 cursor-pointer select-none"
-                                    title={`Click to copy ID: ${row.id}`}
-                                    onClick={() => navigator.clipboard.writeText(String(row.id))}>
-                                    {idx + 1}
-                                </td>
-                                <td className="px-2 py-1.5 border-r border-gray-100 max-w-[200px]">
+                                {col('cv_title') && <td className="px-2 py-1.5 border-r border-gray-100 max-w-[200px]">
                                     <div className="truncate font-medium text-gray-800">{row.cv_title || '—'}</div>
-                                </td>
-                                <td className="px-2 py-1.5 border-r border-gray-100">
+                                </td>}
+                                {col('applicant') && <td className="px-2 py-1.5 border-r border-gray-100">
                                     <div className="text-gray-700">{row.applicant_name || '—'}</div>
-                                </td>
-                                <td className="px-2 py-1.5 border-r border-gray-100 max-w-[140px]">
+                                </td>}
+                                {col('organisation') && <td className="px-2 py-1.5 border-r border-gray-100 max-w-[140px]">
                                     <div className="truncate text-gray-600">{row.organization_name || '—'}</div>
-                                </td>
-                                <td className="px-2 py-1.5 border-r border-gray-100 whitespace-nowrap">
+                                </td>}
+                                {col('sponsorship') && <td className="px-2 py-1.5 border-r border-gray-100 whitespace-nowrap">
                                     {row.sponsorship ? <SponsorBadge value={row.sponsorship} /> : <span className="text-gray-300">—</span>}
-                                </td>
-                                <td className="px-2 py-1.5 border-r border-gray-100">
+                                </td>}
+                                {col('job_link') && <td className="px-2 py-1.5 border-r border-gray-100">
                                     {row.job_link ? (
                                         <a href={row.job_link} target="_blank" rel="noopener noreferrer"
                                             className="flex items-center gap-0.5 text-blue-500 hover:underline text-[10px]">
                                             <Link size={9} /> Link
                                         </a>
                                     ) : <span className="text-gray-300">—</span>}
-                                </td>
-                                <td className="px-2 py-1.5 border-r border-gray-100 max-w-[180px]">
+                                </td>}
+                                {col('email') && <td className="px-2 py-1.5 border-r border-gray-100 max-w-[180px]">
                                     <div className="truncate text-gray-500">{row.selected_email || '—'}</div>
-                                </td>
-                                <td className="px-2 py-1.5 border-r border-gray-100 text-center text-gray-600">
+                                </td>}
+                                {col('exp_yrs') && <td className="px-2 py-1.5 border-r border-gray-100 text-center text-gray-600">
                                     {row.years_of_experience ?? '—'}
-                                </td>
-                                <td className="px-2 py-1.5 border-r border-gray-100 whitespace-nowrap">
+                                </td>}
+                                {col('status') && <td className="px-2 py-1.5 border-r border-gray-100 whitespace-nowrap">
                                     <CvStatusBadge value={row.status ?? 'cv_created'} />
-                                </td>
-                                <td className="px-2 py-1.5 border-r border-gray-100 text-gray-400 text-[10px] whitespace-nowrap">
+                                </td>}
+                                {col('created') && <td className="px-2 py-1.5 border-r border-gray-100 text-gray-400 text-[10px] whitespace-nowrap">
                                     {row.createdAt ? new Date(row.createdAt).toLocaleDateString() : '—'}
-                                </td>
-                                <td className="px-2 py-1.5 border-r border-gray-100 text-gray-600 text-[10px] whitespace-nowrap">
+                                </td>}
+                                {col('created_by') && <td className="px-2 py-1.5 border-r border-gray-100 text-gray-600 text-[10px] whitespace-nowrap">
                                     {row.created_by ? (userMap[row.created_by] || row.created_by) : '—'}
+                                </td>}
+                                <td className="px-2 py-1.5 border-r border-gray-100">
+                                    <div className="flex items-center gap-1">
+                                        {([
+                                            { type: 'summary', icon: <User size={12} />, title: 'Summary', color: 'text-blue-500 hover:bg-blue-50' },
+                                            { type: 'full', icon: <FileText size={12} />, title: 'Full CV', color: 'text-gray-500 hover:bg-gray-100' },
+                                            { type: 'skills', icon: <Layers size={12} />, title: 'Core Skills', color: 'text-teal-500 hover:bg-teal-50' },
+                                            { type: 'experience', icon: <Clock size={12} />, title: 'Experience', color: 'text-purple-500 hover:bg-purple-50' },
+                                        ] as const).map(({ type, icon, title, color }) => (
+                                            <button key={type} title={title}
+                                                onClick={() => {
+                                                    setShortView(prev => prev?.row.id === row.id && prev.type === type ? null : { row, type })
+                                                }}
+                                                className={`p-1 rounded transition-colors ${shortView?.row.id === row.id && shortView.type === type ? 'bg-indigo-100 text-indigo-600' : color}`}>
+                                                {icon}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </td>
                             </tr>
                         ))}
                     </tbody>
                 </table>
             </div>
+
+            {/* History sidebar (right of table) */}
+            {historyRow && (() => {
+                const CV_STATUS_LABELS: Record<string, string> = Object.fromEntries(CV_STATUSES.map(s => [s.value, s.label]))
+                const CV_STATUS_COLORS_MAP: Record<string, string> = {
+                    cv_created: 'bg-gray-100 text-gray-600',
+                    cv_ready_for_edit: 'bg-sky-100 text-sky-700',
+                    cv_ready_for_review: 'bg-blue-100 text-blue-700',
+                    cv_reviewed: 'bg-yellow-100 text-yellow-700',
+                    cv_sent: 'bg-green-100 text-green-700',
+                    cv_required_qa: 'bg-purple-100 text-purple-700',
+                    cv_qa_review_required: 'bg-orange-100 text-orange-700',
+                    cv_qa_review_done: 'bg-teal-100 text-teal-700',
+                }
+                return (
+                    <div className="w-72 shrink-0 border border-l-0 border-gray-200 rounded-r flex flex-col bg-white overflow-hidden">
+                        <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100 shrink-0 bg-gray-50">
+                            <Clock size={12} className="text-purple-500" />
+                            <div className="flex-1 min-w-0">
+                                <p className="text-[10px] font-semibold text-gray-700 truncate">{historyRow.cv_title || historyRow.applicant_name || 'History'}</p>
+                                <p className="text-[9px] text-gray-400">Status History</p>
+                            </div>
+                            <button onClick={() => setHistoryRow(null)} className="text-gray-400 hover:text-gray-700 shrink-0"><X size={13} /></button>
+                        </div>
+
+                        {/* History entries */}
+                        <div className="flex-1 overflow-y-auto p-3 space-y-3">
+                            {historyLoading ? (
+                                <div className="flex items-center justify-center py-6"><RefreshCw size={14} className="animate-spin text-gray-300" /></div>
+                            ) : historyEntries.length === 0 ? (
+                                <p className="text-[10px] text-gray-400 text-center py-4">No history yet</p>
+                            ) : historyEntries.map((entry: any) => (
+                                <div key={entry.id} className="space-y-1 pb-2 border-b border-gray-100 last:border-0">
+                                    {entry.event_type === 'status_change' ? (
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                            {entry.from_status && (
+                                                <>
+                                                    <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${CV_STATUS_COLORS_MAP[entry.from_status] ?? 'bg-gray-100 text-gray-600'}`}>
+                                                        {CV_STATUS_LABELS[entry.from_status] ?? entry.from_status}
+                                                    </span>
+                                                    <span className="text-gray-400 text-[9px]">→</span>
+                                                </>
+                                            )}
+                                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${CV_STATUS_COLORS_MAP[entry.to_status] ?? 'bg-gray-100 text-gray-600'}`}>
+                                                {CV_STATUS_LABELS[entry.to_status] ?? entry.to_status}
+                                            </span>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-1">
+                                            <MessageSquare size={10} className="text-purple-400 shrink-0" />
+                                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${CV_STATUS_COLORS_MAP[entry.to_status] ?? 'bg-gray-100 text-gray-600'}`}>
+                                                {CV_STATUS_LABELS[entry.to_status] ?? entry.to_status}
+                                            </span>
+                                        </div>
+                                    )}
+                                    {entry.note && <p className="text-[11px] text-gray-700 leading-relaxed">{entry.note}</p>}
+                                    {entry.audio_url && <audio controls src={entry.audio_url} className="h-7 w-full" />}
+                                    <p className="text-[9px] text-gray-400">
+                                        {entry.changed_by && <span className="font-medium text-gray-500">{entry.changed_by} · </span>}
+                                        {entry.createdAt ? new Date(entry.createdAt).toLocaleString() : ''}
+                                    </p>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )
+            })()}
+            </div>{/* end flex row */}
+
+            {/* Short view popup */}
+            {shortView && (() => {
+                const { row, type } = shortView
+                const VIEW_TABS: { key: typeof type; label: string; icon: JSX.Element }[] = [
+                    { key: 'summary',    label: 'Summary',     icon: <FileText size={12} /> },
+                    { key: 'full',       label: 'Full CV',     icon: <Eye size={12} /> },
+                    { key: 'skills',     label: 'Core Skills', icon: <Layers size={12} /> },
+                    { key: 'experience', label: 'Experience',  icon: <Clock size={12} /> },
+                ]
+                const buildCVData = (): CVData => {
+                    const base: CVData = {
+                        applicant_name: row.applicant_name,
+                        headline: row.headline,
+                        location: row.location,
+                        selected_email: row.selected_email,
+                        selected_phone: row.selected_phone,
+                        linkedin: row.linkedin,
+                        github: row.github,
+                        portfolios: row.portfolios,
+                    }
+                    if (type === 'full') {
+                        return { ...base, summary: row.summary, skills: row.skills, core_skills: row.core_skills, experience_items: row.experience_items, education: row.education, projects: row.projects }
+                    }
+                    if (type === 'summary') return { ...base, summary: row.summary, skills: row.skills }
+                    if (type === 'skills')  return { ...base, core_skills: row.core_skills, skills: row.skills }
+                    if (type === 'experience') return { ...base, experience_items: row.experience_items, education: row.education, projects: row.projects }
+                    return base
+                }
+                return (
+                    <div className="fixed inset-0 z-[9988] flex items-center justify-center" onClick={e => { if (e.target === e.currentTarget) setShortView(null) }}>
+                        <div ref={shortViewRef}
+                            className="bg-white border border-gray-200 rounded-xl shadow-2xl flex flex-col overflow-hidden"
+                            style={{ width: 700, maxWidth: '95vw', height: '85vh' }}>
+                            {/* Header */}
+                            <div className="flex items-center gap-3 px-4 py-2.5 border-b border-gray-100 shrink-0 bg-gray-50">
+                                <Eye size={13} className="text-indigo-500 shrink-0" />
+                                <span className="text-[11px] font-semibold text-gray-700 flex-1 truncate">{row.cv_title || row.applicant_name || 'CV Preview'}</span>
+                                {/* Section tabs */}
+                                <div className="flex items-center gap-1">
+                                    {VIEW_TABS.map(tab => (
+                                        <button key={tab.key}
+                                            onClick={() => setShortView(prev => prev ? { ...prev, type: tab.key } : null)}
+                                            className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium transition-colors ${type === tab.key ? 'bg-indigo-600 text-white' : 'bg-white border border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+                                            {tab.icon}{tab.label}
+                                        </button>
+                                    ))}
+                                </div>
+                                <button onClick={() => setShortView(null)} className="text-gray-300 hover:text-gray-600 ml-1 shrink-0"><X size={13} /></button>
+                            </div>
+                            {/* CV Preview */}
+                            <div className="flex-1 overflow-y-auto">
+                                <CVPreview data={buildCVData()} highlightEnabled={false} />
+                            </div>
+                        </div>
+                    </div>
+                )
+            })()}
 
             {ctxMenu && (() => {
                 const r = ctxMenu.row
@@ -526,7 +877,7 @@ export default function CvsPage() {
             {editingCV && (
                 <JobCVModal
                     cv={editingCV}
-                    onClose={() => setEditingCV(null)}
+                    onClose={() => { setEditingCV(null); load() }}
                     onSaved={load}
                 />
             )}

@@ -1,0 +1,1024 @@
+'use client'
+
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { ListTree, ChevronRight, ChevronDown, Download, Trash2, Wand2, Bot, User, TerminalSquare, Copy, Check, MessageSquareText, Sparkles, X, Eye, EyeOff, PanelRight, Search } from 'lucide-react'
+
+/* ------------------------------------------------------------------ *
+ * Parsing
+ * ------------------------------------------------------------------ *
+ * The transcript is segmented by markers that sit ALONE on their own
+ * line — a line whose entire content is "(2)", "(3)", "(4)", …  A line
+ * like `db.exec("insert into t values(1)")` is NOT a marker because it
+ * has other text on it. Markers must also continue an increasing
+ * sequence (first marker seeds it, each later one must be prev+1), so a
+ * stray `(1)` on its own line still won't break a 2,3,4… run.
+ *
+ * Segments alternate labels starting with "Function Assist":
+ *   (2) → Function Assist,  (3) → Function Result,  (4) → Function Assist …
+ *
+ * Cleanup applied to every segment:
+ *   - "Tokens Remaining: total …" lines are removed.
+ * Per kind:
+ *   - Function Assist segments that contain a standalone `bash` /
+ *     `command:` block are treated as bash (optional leading prose +
+ *     the command).
+ *   - Function Result segments get their "Function Results" / "Collapse"
+ *     header lines stripped.
+ * ------------------------------------------------------------------ */
+
+type Kind = 'bash' | 'result' | 'text'
+
+export interface ParsedItem {
+    num: number
+    label: 'Function Assist' | 'Function Result'
+    kind: Kind
+    content: string      // cleaned content (used for copy/download/preview)
+    prose?: string       // leading prose before a bash block
+    command?: string     // extracted bash command
+}
+
+function stripTokenLines(text: string): string {
+    return text
+        .split('\n')
+        .filter(l => !/^\s*Tokens Remaining\s*:/i.test(l))
+        .join('\n')
+        .trim()
+}
+
+function extractBash(content: string): { prose: string; command: string } | null {
+    const lines = content.split('\n')
+    const bashIdx = lines.findIndex(l => l.trim().toLowerCase() === 'bash')
+    if (bashIdx === -1) return null
+    const prose = lines.slice(0, bashIdx).join('\n').trim()
+    let rest = lines.slice(bashIdx + 1)
+    if (rest[0] && rest[0].trim().toLowerCase() === 'command:') rest = rest.slice(1)
+    return { prose, command: rest.join('\n').trim() }
+}
+
+function stripResultHeader(content: string): string {
+    const lines = content.split('\n')
+    let i = 0
+    while (
+        i < lines.length &&
+        (lines[i].trim() === '' ||
+            /^function results?$/i.test(lines[i].trim()) ||
+            /^collapse$/i.test(lines[i].trim()))
+    ) i++
+    return lines.slice(i).join('\n').trim()
+}
+
+function parseTranscript(text: string): ParsedItem[] {
+    if (!text || !text.trim()) return []
+
+    const lines = text.split(/\r?\n/)
+    const markerRe = /^\s*\((\d+)\)\s*$/
+
+    // Marker lines, then keep only those that continue the sequence.
+    const raw: { num: number; line: number }[] = []
+    lines.forEach((line, i) => {
+        const m = markerRe.exec(line)
+        if (m) raw.push({ num: Number(m[1]), line: i })
+    })
+    const accepted: { num: number; line: number }[] = []
+    let expected: number | null = null
+    for (const mk of raw) {
+        if (expected === null) { expected = mk.num; accepted.push(mk); expected++ }
+        else if (mk.num === expected) { accepted.push(mk); expected++ }
+    }
+
+    const items: ParsedItem[] = []
+    for (let i = 0; i < accepted.length; i++) {
+        const cur = accepted[i]
+        const next = accepted[i + 1]
+        const rawContent = lines.slice(cur.line + 1, next ? next.line : lines.length).join('\n')
+        const content = stripTokenLines(rawContent)
+        const label = i % 2 === 0 ? 'Function Assist' : 'Function Result'
+
+        if (label === 'Function Result') {
+            items.push({ num: cur.num, label, kind: 'result', content: stripResultHeader(content) })
+            continue
+        }
+
+        // Function Assist — bash if it holds a standalone `bash` block.
+        const bash = extractBash(content)
+        if (bash) {
+            items.push({ num: cur.num, label, kind: 'bash', content, prose: bash.prose, command: bash.command })
+        } else {
+            items.push({ num: cur.num, label, kind: 'text', content })
+        }
+    }
+    return items
+}
+
+/* ------------------------------------------------------------------ *
+ * Evaluation prompt for ChatGPT
+ * ------------------------------------------------------------------ *
+ * Builds a prompt that asks ChatGPT to explain each numbered turn in
+ * 1-2 lines and return a JSON object keyed by turn number, which is
+ * pasted back here and bound to each turn.
+ * ------------------------------------------------------------------ */
+function buildEvalPrompt(items: ParsedItem[], originalPrompt: string): string {
+    const header = `You are reviewing the transcript of an AI coding agent that executed a long, multi-step task. The run is split into numbered turns like (2), (3), (4)… Turns alternate between the agent taking an action ("Function Assist") and the resulting tool/function output ("Function Result").
+
+For EACH numbered turn below, write a concise explanation (NO MORE than 1-2 lines) of what that turn is doing or showing.
+
+Return ONLY a raw JSON object — no markdown code fences, no commentary before or after. Keys are the turn numbers as strings; values are your explanations. Example:
+{"2": "Runs version checks for node/npm/tsc and pings the npm registry.", "3": "Shows the returned tool versions and a successful registry ping."}`
+
+    const promptCtx = originalPrompt.trim()
+        ? `\n\nOriginal task prompt given to the agent:\n"""\n${originalPrompt.trim()}\n"""`
+        : ''
+
+    const body = items.map(it => {
+        const c = it.kind === 'bash'
+            ? [it.prose, it.command].filter(Boolean).join('\n')
+            : it.content
+        return `(${it.num}) [${it.label}]\n${c || '(empty)'}`
+    }).join('\n\n')
+
+    return `${header}${promptCtx}\n\nTranscript:\n${body}`
+}
+
+/** Accepts ChatGPT's reply (raw JSON, or JSON wrapped in prose/fences) → { "2": "…" }. */
+function parseRemarksJson(raw: string): Record<string, string> {
+    let text = raw.trim()
+    if (!text) throw new Error('empty')
+    // strip ```json fences if present
+    const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/i)
+    if (fence) text = fence[1].trim()
+    // fall back to the first {...} block
+    if (!text.startsWith('{')) {
+        const brace = text.match(/\{[\s\S]*\}/)
+        if (brace) text = brace[0]
+    }
+    const obj = JSON.parse(text)
+    if (obj === null || typeof obj !== 'object' || Array.isArray(obj)) throw new Error('not an object')
+    const out: Record<string, string> = {}
+    for (const [k, v] of Object.entries(obj)) {
+        const key = String(k).replace(/[()\s]/g, '') // "(2)" / " 2 " → "2"
+        out[key] = typeof v === 'string' ? v : JSON.stringify(v)
+    }
+    return out
+}
+
+/* ------------------------------------------------------------------ *
+ * Search helpers
+ * ------------------------------------------------------------------ */
+function escHtml(s: string): string {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+/** Escape HTML then wrap case-insensitive matches of `term` in a <mark>. */
+function highlightHtml(text: string, term: string): string {
+    const safe = escHtml(text)
+    if (!term.trim()) return safe
+    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    return safe.replace(new RegExp(`(${escaped})`, 'gi'),
+        m => `<mark class="aparse-hl" style="background:#fde68a;color:#78350f;border-radius:2px;padding:0 1px">${m}</mark>`)
+}
+
+/** All searchable text of a turn, lowercased. */
+function itemHaystack(it: ParsedItem): string {
+    return [`(${it.num})`, it.label, it.prose, it.command, it.content].filter(Boolean).join('\n').toLowerCase()
+}
+
+/** Highlight matches in already-rendered HTML without touching tag internals. */
+function highlightInHtml(html: string, term: string): string {
+    if (!term.trim()) return html
+    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const re = new RegExp(`(${escaped})`, 'gi')
+    return html
+        .split(/(<[^>]+>)/g)
+        .map(part => part.startsWith('<')
+            ? part
+            : part.replace(re, m => `<mark class="aparse-hl" style="background:#fde68a;color:#78350f;border-radius:2px;padding:0 1px">${m}</mark>`))
+        .join('')
+}
+
+/* ------------------------------------------------------------------ *
+ * Lightweight Markdown → HTML (no dependency).
+ * Beautifies plain/prose turns; the raw text is what gets downloaded.
+ * ------------------------------------------------------------------ */
+function renderMarkdown(md: string): string {
+    if (!md || !md.trim()) return ''
+
+    // Pull fenced code blocks out first so their contents aren't reprocessed.
+    const blocks: string[] = []
+    const src = md.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, _lang, code) => {
+        const idx = blocks.length
+        blocks.push(`<pre class="apmd-code bg-gray-900 text-gray-100 rounded px-2.5 py-2 overflow-x-auto text-[10px] font-mono my-1.5"><code>${escHtml(code.replace(/\n$/, ''))}</code></pre>`)
+        return ` CB${idx} `
+    })
+
+    const inline = (t: string) => {
+        let s = escHtml(t)
+        s = s.replace(/`([^`]+)`/g, '<code class="apmd-inline bg-gray-100 text-pink-700 rounded px-1 py-0.5 text-[10px] font-mono">$1</code>')
+        s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        s = s.replace(/__([^_]+)__/g, '<strong>$1</strong>')
+        s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>')
+        s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="apmd-link text-blue-600 underline">$1</a>')
+        return s
+    }
+
+    const out: string[] = []
+    let listType: 'ul' | 'ol' | null = null
+    const closeList = () => { if (listType) { out.push(`</${listType}>`); listType = null } }
+
+    for (const line of src.split('\n')) {
+        const cb = line.match(/^ CB(\d+) $/)
+        if (cb) { closeList(); out.push(blocks[Number(cb[1])]); continue }
+        if (/^\s*$/.test(line)) { closeList(); continue }
+
+        let m: RegExpMatchArray | null
+        if ((m = line.match(/^(#{1,6})\s+(.*)$/))) {
+            closeList()
+            const lvl = Math.min(6, m[1].length)
+            const size = lvl <= 1 ? 'text-sm' : lvl === 2 ? 'text-[13px]' : 'text-xs'
+            out.push(`<div class="apmd-h ${size} font-semibold text-gray-800 mt-2 mb-1">${inline(m[2])}</div>`)
+            continue
+        }
+        if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)) { closeList(); out.push('<hr class="my-2 border-gray-200"/>'); continue }
+        if ((m = line.match(/^\s*>\s?(.*)$/))) {
+            closeList()
+            out.push(`<blockquote class="apmd-quote border-l-2 border-gray-300 pl-2 text-gray-600 italic my-1">${inline(m[1])}</blockquote>`)
+            continue
+        }
+        if ((m = line.match(/^\s*[-*+]\s+(.*)$/))) {
+            if (listType !== 'ul') { closeList(); out.push('<ul class="apmd-ul list-disc pl-5 my-1 space-y-0.5">'); listType = 'ul' }
+            out.push(`<li>${inline(m[1])}</li>`)
+            continue
+        }
+        if ((m = line.match(/^\s*\d+\.\s+(.*)$/))) {
+            if (listType !== 'ol') { closeList(); out.push('<ol class="apmd-ol list-decimal pl-5 my-1 space-y-0.5">'); listType = 'ol' }
+            out.push(`<li>${inline(m[1])}</li>`)
+            continue
+        }
+        closeList()
+        out.push(`<p class="my-1 leading-relaxed">${inline(line)}</p>`)
+    }
+    closeList()
+    return out.join('')
+}
+
+/* ------------------------------------------------------------------ *
+ * Copy button
+ * ------------------------------------------------------------------ */
+function CopyBtn({ text, className = '' }: { text: string; className?: string }) {
+    const [copied, setCopied] = useState(false)
+    return (
+        <button
+            onClick={e => {
+                e.stopPropagation()
+                navigator.clipboard.writeText(text).then(() => {
+                    setCopied(true)
+                    setTimeout(() => setCopied(false), 1200)
+                })
+            }}
+            title="Copy"
+            className={`p-0.5 rounded shrink-0 ${className}`}
+        >
+            {copied ? <Check size={11} className="text-green-500" /> : <Copy size={11} />}
+        </button>
+    )
+}
+
+/* ------------------------------------------------------------------ *
+ * Turn body renderer (used both inline when expanded and in the side
+ * panel). `term` highlights matches across bash/command/result/text.
+ * ------------------------------------------------------------------ */
+function DetailBody({ item, term }: { item: ParsedItem; term: string }) {
+    if (item.kind === 'bash') {
+        return (
+            <div className="space-y-2">
+                {item.prose && (
+                    <div className="apmd text-[11px] text-gray-700"
+                        dangerouslySetInnerHTML={{ __html: highlightInHtml(renderMarkdown(item.prose), term) }} />
+                )}
+                <div className="border border-gray-200 rounded overflow-hidden">
+                    <div className="flex items-center justify-between px-2 py-1 bg-gray-100 border-b border-gray-200">
+                        <span className="flex items-center gap-1 text-[10px] font-mono text-gray-500">
+                            <TerminalSquare size={11} /> bash
+                        </span>
+                        <CopyBtn text={item.command ?? ''} className="text-gray-400 hover:text-gray-700 hover:bg-gray-200" />
+                    </div>
+                    <pre className="text-[10px] text-gray-800 whitespace-pre-wrap leading-relaxed px-2.5 py-2 bg-white overflow-x-auto font-mono"
+                        dangerouslySetInnerHTML={{ __html: highlightHtml(item.command || '', term) }} />
+                </div>
+            </div>
+        )
+    }
+    if (item.kind === 'result') {
+        const lines = item.content ? item.content.split('\n') : []
+        return (
+            <div className="rounded overflow-hidden border border-gray-800">
+                <pre className="text-[10px] leading-relaxed bg-[#1e1e1e] text-gray-100 px-0 py-1.5 overflow-x-auto font-mono">
+                    {lines.length ? lines.map((l, i) => (
+                        <div key={i} className="flex px-2">
+                            <span className="text-gray-600 select-none w-7 shrink-0 text-right pr-2">{i + 1}</span>
+                            <span className="whitespace-pre-wrap break-all"
+                                dangerouslySetInnerHTML={{ __html: highlightHtml(l || ' ', term) }} />
+                        </div>
+                    )) : <div className="px-3 text-gray-500 italic">empty</div>}
+                </pre>
+            </div>
+        )
+    }
+    if (!item.content) return <p className="text-[11px] text-gray-300 italic px-1 py-1">empty</p>
+    return (
+        <div className="apmd text-[11px] text-gray-700 px-1 py-1"
+            dangerouslySetInnerHTML={{ __html: highlightInHtml(renderMarkdown(item.content), term) }} />
+    )
+}
+
+/* ------------------------------------------------------------------ *
+ * Single collapsible transcript row
+ * ------------------------------------------------------------------ */
+function TranscriptRow({
+    item,
+    open,
+    onToggle,
+    remark,
+    highlight = '',
+    onOpenDetail,
+    detailActive,
+    dataIdx,
+}: {
+    item: ParsedItem
+    open: boolean
+    onToggle: () => void
+    remark?: string
+    highlight?: string
+    onOpenDetail?: () => void
+    detailActive?: boolean
+    dataIdx?: number
+}) {
+    const isAssist = item.label === 'Function Assist'
+    // Preview: prefer whichever field actually contains the search term so the
+    // collapsed row shows (and highlights) the match — remark, command, or content.
+    const hl = highlight.trim().toLowerCase()
+    const fields = [remark, item.kind === 'bash' ? item.command : item.content, item.prose, item.content].filter(Boolean) as string[]
+    let base = remark || (item.kind === 'bash' ? item.command : item.content) || ''
+    if (hl) {
+        const match = fields.find(f => f.toLowerCase().includes(hl))
+        if (match) base = match
+    }
+    let previewText = base.replace(/\s+/g, ' ').trim()
+    if (hl) {
+        const i = previewText.toLowerCase().indexOf(hl)
+        if (i > 40) previewText = '…' + previewText.slice(i - 37)
+    }
+    previewText = previewText.slice(0, 160)
+    // In single-model view (onOpenDetail set) a row click opens the side panel;
+    // inline expand/collapse is then driven only by the left chevron.
+    const handleRowClick = onOpenDetail ?? onToggle
+    return (
+        <div data-row-idx={dataIdx}
+            className={`border-b border-gray-100 last:border-0 border-l-[3px] ${detailActive ? 'bg-indigo-100 border-l-indigo-500 ring-1 ring-inset ring-indigo-300' : 'border-l-transparent'}`}>
+            <div
+                onClick={handleRowClick}
+                className={`flex items-center gap-1.5 px-2 py-1 cursor-pointer select-none ${detailActive ? '' : 'hover:bg-gray-50'}`}
+            >
+                <button
+                    onClick={e => { e.stopPropagation(); onToggle() }}
+                    title={open ? 'Collapse' : 'Expand'}
+                    className="shrink-0 text-gray-400 hover:text-gray-700 hover:bg-gray-200 rounded"
+                >
+                    {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                </button>
+                <span className="text-[9px] text-gray-400 font-mono w-8 shrink-0">({item.num})</span>
+                {isAssist
+                    ? <Bot size={11} className="text-blue-500 shrink-0" />
+                    : <User size={11} className="text-teal-500 shrink-0" />}
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${isAssist ? 'bg-blue-100 text-blue-700' : 'bg-teal-100 text-teal-700'}`}>
+                    {item.label}
+                </span>
+                {item.kind === 'bash' && (
+                    <span className="text-[9px] px-1 py-0.5 rounded bg-gray-800 text-gray-100 font-mono shrink-0">bash</span>
+                )}
+                {remark && (
+                    <span title="Has ChatGPT remark" className="shrink-0"><Sparkles size={10} className="text-amber-500" /></span>
+                )}
+                <span className="text-[10px] text-gray-400 truncate flex-1 min-w-0"
+                    dangerouslySetInnerHTML={{ __html: open ? '' : highlightHtml(previewText, highlight) }} />
+                {onOpenDetail && (
+                    <button onClick={e => { e.stopPropagation(); onOpenDetail() }}
+                        title="View this turn in the side panel"
+                        className={`p-0.5 rounded shrink-0 ${detailActive ? 'text-indigo-600 bg-indigo-100' : 'text-gray-300 hover:text-indigo-600 hover:bg-indigo-50'}`}>
+                        <PanelRight size={11} />
+                    </button>
+                )}
+                <CopyBtn text={item.content} className="text-gray-300 hover:text-gray-600 hover:bg-gray-100" />
+            </div>
+            {open && (
+                <div className="bg-gray-50 border-t border-gray-100 px-3 py-2 space-y-2">
+                    {remark && (
+                        <div className="flex items-start gap-1.5 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+                            <Sparkles size={11} className="text-amber-500 shrink-0 mt-0.5" />
+                            <p className="text-[11px] text-amber-900 leading-relaxed">{remark}</p>
+                        </div>
+                    )}
+                    <DetailBody item={item} term={highlight} />
+                </div>
+            )}
+        </div>
+    )
+}
+
+/* ------------------------------------------------------------------ *
+ * One model panel (reused for Model A and Model B)
+ * ------------------------------------------------------------------ */
+function ModelPanel({ modelKey, title, singleMode }: { modelKey: 'a' | 'b'; title: string; singleMode: boolean }) {
+    const INPUT_LS_KEY = `aparse_model_${modelKey}_input`
+    const OPEN_LS_KEY = `aparse_model_${modelKey}_open`
+    const REMARKS_LS_KEY = `aparse_model_${modelKey}_remarks`
+    const SHOWINPUT_LS_KEY = `aparse_model_${modelKey}_showinput`
+    const SIDEW_LS_KEY = `aparse_model_${modelKey}_sidewidth`
+    const downloadName = `Transcript ${title}`
+
+    const [input, setInput] = useState('')
+    const [openSet, setOpenSet] = useState<Set<number>>(new Set())
+    const [remarks, setRemarks] = useState<Record<string, string>>({})
+    const [showInput, setShowInput] = useState(true)
+    const [search, setSearch] = useState('')
+    const [hydrated, setHydrated] = useState(false)
+
+    // Evaluate modal
+    const [showEval, setShowEval] = useState(false)
+    const [pasteJson, setPasteJson] = useState('')
+    const [pasteErr, setPasteErr] = useState('')
+
+    // Detail side panel (single-model view only)
+    const [detailIdx, setDetailIdx] = useState<number | null>(null)
+    const [detailSearch, setDetailSearch] = useState('')
+    const [sideWidth, setSideWidth] = useState(420)
+    const detailContentRef = useRef<HTMLDivElement>(null)
+    const listRef = useRef<HTMLDivElement>(null)
+    const resizing = useRef(false)
+
+    // Load persisted state on mount.
+    useEffect(() => {
+        try {
+            const savedInput = localStorage.getItem(INPUT_LS_KEY)
+            if (savedInput != null) setInput(savedInput)
+            const savedOpen = localStorage.getItem(OPEN_LS_KEY)
+            if (savedOpen) setOpenSet(new Set(JSON.parse(savedOpen)))
+            const savedRemarks = localStorage.getItem(REMARKS_LS_KEY)
+            if (savedRemarks) setRemarks(JSON.parse(savedRemarks))
+            const savedShowInput = localStorage.getItem(SHOWINPUT_LS_KEY)
+            if (savedShowInput != null) setShowInput(savedShowInput === '1')
+            const savedSideW = Number(localStorage.getItem(SIDEW_LS_KEY))
+            if (savedSideW) setSideWidth(savedSideW)
+        } catch { /* ignore */ }
+        setHydrated(true)
+    }, [])
+
+    // Persist input.
+    useEffect(() => {
+        if (!hydrated) return
+        try { localStorage.setItem(INPUT_LS_KEY, input) } catch { /* ignore */ }
+    }, [input, hydrated])
+
+    // Persist open state.
+    useEffect(() => {
+        if (!hydrated) return
+        try { localStorage.setItem(OPEN_LS_KEY, JSON.stringify(Array.from(openSet))) } catch { /* ignore */ }
+    }, [openSet, hydrated])
+
+    // Persist remarks.
+    useEffect(() => {
+        if (!hydrated) return
+        try { localStorage.setItem(REMARKS_LS_KEY, JSON.stringify(remarks)) } catch { /* ignore */ }
+    }, [remarks, hydrated])
+
+    // Persist input visibility.
+    useEffect(() => {
+        if (!hydrated) return
+        try { localStorage.setItem(SHOWINPUT_LS_KEY, showInput ? '1' : '0') } catch { /* ignore */ }
+    }, [showInput, hydrated])
+
+    // Persist side-panel width.
+    useEffect(() => {
+        if (!hydrated) return
+        try { localStorage.setItem(SIDEW_LS_KEY, String(sideWidth)) } catch { /* ignore */ }
+    }, [sideWidth, hydrated])
+
+    const items = useMemo(() => parseTranscript(input), [input])
+
+    // Turn search — keep original indices so open/remark bindings stay stable.
+    const kw = search.trim().toLowerCase()
+    const displayItems = useMemo(() => {
+        const withIdx = items.map((it, idx) => ({ it, idx }))
+        if (!kw) return withIdx
+        return withIdx.filter(({ it, idx }) =>
+            itemHaystack(it).includes(kw) || (remarks[String(it.num)] ?? '').toLowerCase().includes(kw))
+    }, [items, kw, remarks])
+
+    // Close the detail panel if we leave single-model view or the turn disappears.
+    useEffect(() => {
+        if (!singleMode) setDetailIdx(null)
+        else if (detailIdx != null && detailIdx >= items.length) setDetailIdx(null)
+    }, [singleMode, items.length, detailIdx])
+
+    // Scroll the detail panel to the first in-detail match.
+    useEffect(() => {
+        if (!detailSearch.trim() || !detailContentRef.current) return
+        const t = setTimeout(() => {
+            detailContentRef.current?.querySelector('.aparse-hl')?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+        }, 80)
+        return () => clearTimeout(t)
+    }, [detailSearch, detailIdx])
+
+    // Keep the selected row visible when the detail selection changes.
+    useEffect(() => {
+        if (detailIdx == null || !listRef.current) return
+        listRef.current.querySelector(`[data-row-idx="${detailIdx}"]`)?.scrollIntoView({ block: 'nearest' })
+    }, [detailIdx])
+
+    // Arrow-key navigation between turns while the detail panel is open.
+    useEffect(() => {
+        if (!singleMode || detailIdx == null) return
+        const order = displayItems.map(d => d.idx)
+        const handler = (e: KeyboardEvent) => {
+            if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+            const tag = (e.target as HTMLElement)?.tagName
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+            const pos = order.indexOf(detailIdx)
+            if (pos === -1) return
+            e.preventDefault()
+            const nextPos = e.key === 'ArrowDown'
+                ? Math.min(order.length - 1, pos + 1)
+                : Math.max(0, pos - 1)
+            if (order[nextPos] !== detailIdx) setDetailIdx(order[nextPos])
+        }
+        window.addEventListener('keydown', handler)
+        return () => window.removeEventListener('keydown', handler)
+    }, [singleMode, detailIdx, displayItems])
+
+    const startSideResize = (e: React.MouseEvent) => {
+        e.preventDefault()
+        resizing.current = true
+        const startX = e.clientX
+        const startW = sideWidth
+        const onMove = (ev: MouseEvent) => {
+            if (!resizing.current) return
+            // panel sits on the right, so dragging left widens it
+            const next = Math.max(300, Math.min(900, startW + (startX - ev.clientX)))
+            setSideWidth(next)
+        }
+        const onUp = () => {
+            resizing.current = false
+            window.removeEventListener('mousemove', onMove)
+            window.removeEventListener('mouseup', onUp)
+        }
+        window.addEventListener('mousemove', onMove)
+        window.addEventListener('mouseup', onUp)
+    }
+
+    const evalPrompt = useMemo(
+        () => buildEvalPrompt(items, (() => { try { return localStorage.getItem('aparse_prompt') || '' } catch { return '' } })()),
+        [items, showEval],
+    )
+    const remarkCount = Object.keys(remarks).length
+
+    const applyRemarks = () => {
+        try {
+            const parsed = parseRemarksJson(pasteJson)
+            if (!Object.keys(parsed).length) { setPasteErr('No turns found in that JSON.'); return }
+            setRemarks(parsed)
+            setPasteErr('')
+            setPasteJson('')
+            setShowEval(false)
+        } catch {
+            setPasteErr('Could not parse JSON. Paste the raw {"2": "…", "3": "…"} object.')
+        }
+    }
+
+    const clearRemarks = () => { setRemarks({}); setPasteErr('') }
+
+    const toggle = useCallback((idx: number) => {
+        setOpenSet(prev => {
+            const s = new Set(prev)
+            if (s.has(idx)) s.delete(idx); else s.add(idx)
+            return s
+        })
+    }, [])
+
+    const expandAll = () => setOpenSet(new Set(items.map((_, i) => i)))
+    const collapseAll = () => setOpenSet(new Set())
+
+    const clear = () => {
+        if (!confirm(`Clear all input for ${title}?`)) return
+        setInput('')
+        setOpenSet(new Set())
+        setRemarks({})
+    }
+
+    const download = () => {
+        const sep = '='.repeat(64)
+        const header = [
+            sep,
+            `${downloadName.toUpperCase()}`,
+            sep,
+            '',
+            `This is the transcript of "${title}" — one of two AI coding-agent runs`,
+            'captured for side-by-side comparison in the A Parse tool.',
+            '',
+            'FORMAT',
+            '------',
+            'The run is a sequence of numbered turns. Each turn is written as:',
+            '',
+            '    (N) <Label>[ bash]',
+            '    ----------------------------------------',
+            '    <raw turn content>',
+            '',
+            'Where:',
+            '  • (N)             = the turn number, in the original increasing order.',
+            '  • <Label>         = "Function Assist" (the agent taking an action) or',
+            '                      "Function Result" (the tool/function output it got back).',
+            '                      Turns alternate: Assist, Result, Assist, Result, …',
+            '  • [bash]          = present when the Assist turn ran a shell command.',
+            '  • <raw content>   = the turn text exactly as captured (commands, terminal',
+            '                      output, or the agent\'s prose), with the per-turn',
+            '                      "Tokens Remaining" lines removed.',
+            '',
+            `TURNS: ${items.length} (${assistCount} assist / ${resultCount} result)`,
+            sep,
+            '',
+            '',
+        ].join('\n')
+
+        const body = items.length
+            ? header + items.map(it => `(${it.num}) ${it.label}${it.kind === 'bash' ? ' [bash]' : ''}\n${'-'.repeat(40)}\n${it.content}\n`).join('\n')
+            : input
+        const blob = new Blob([body], { type: 'text/plain;charset=utf-8' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${downloadName}.txt`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+    }
+
+    const assistCount = items.filter(i => i.label === 'Function Assist').length
+    const resultCount = items.length - assistCount
+
+    return (
+        <div className="flex gap-2 flex-1 min-h-0 min-w-0">
+        <div className="flex flex-col border border-gray-200 rounded bg-white min-w-0 flex-1 min-h-0">
+            {/* Panel header */}
+            <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-gray-200 bg-gray-50">
+                <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-xs font-semibold text-gray-800">{title}</span>
+                    <span className="text-[10px] text-gray-400">
+                        {items.length} segments · {assistCount} assist / {resultCount} result
+                        {remarkCount > 0 && <span className="text-amber-600"> · {remarkCount} remarks</span>}
+                    </span>
+                </div>
+                <div className="flex items-center gap-1">
+                    <button onClick={() => { setShowEval(true); setPasteErr('') }} disabled={!items.length}
+                        title="Generate a ChatGPT prompt and paste back explanations"
+                        className="flex items-center gap-1 text-[10px] border border-amber-300 text-amber-700 rounded px-1.5 py-0.5 hover:bg-amber-50 disabled:opacity-40">
+                        <Sparkles size={11} /> Evaluate
+                    </button>
+                    <button onClick={() => setShowInput(v => !v)}
+                        title={showInput ? 'Hide input textarea' : 'Show input textarea'}
+                        className="flex items-center gap-1 text-[10px] border border-gray-300 rounded px-1.5 py-0.5 hover:bg-white text-gray-600">
+                        {showInput ? <EyeOff size={11} /> : <Eye size={11} />} {showInput ? 'Hide input' : 'Show input'}
+                    </button>
+                    <button onClick={expandAll} disabled={!items.length}
+                        className="text-[10px] border border-gray-300 rounded px-1.5 py-0.5 hover:bg-white text-gray-600 disabled:opacity-40">
+                        Expand all
+                    </button>
+                    <button onClick={collapseAll} disabled={!items.length}
+                        className="text-[10px] border border-gray-300 rounded px-1.5 py-0.5 hover:bg-white text-gray-600 disabled:opacity-40">
+                        Collapse all
+                    </button>
+                    <button onClick={download} disabled={!input.trim()}
+                        title={`Download ${downloadName}.txt`}
+                        className="flex items-center gap-1 text-[10px] border border-teal-300 text-teal-700 rounded px-1.5 py-0.5 hover:bg-teal-50 disabled:opacity-40">
+                        <Download size={11} /> Download
+                    </button>
+                    <button onClick={clear} disabled={!input}
+                        title="Clear input"
+                        className="p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded disabled:opacity-40">
+                        <Trash2 size={12} />
+                    </button>
+                </div>
+            </div>
+
+            {/* Input */}
+            {showInput && (
+                <div className="p-2 border-b border-gray-100">
+                    <textarea
+                        value={input}
+                        onChange={e => setInput(e.target.value)}
+                        placeholder="Paste transcript — markers like (2), (3), (4)… each on their own line…"
+                        spellCheck={false}
+                        className="w-full h-28 border border-gray-300 rounded px-2 py-1.5 text-[11px] font-mono leading-relaxed resize-y focus:outline-none focus:border-blue-400"
+                    />
+                </div>
+            )}
+
+            {/* Search across turns */}
+            <div className="flex items-center gap-1.5 px-2 py-1 border-b border-gray-100 bg-white shrink-0">
+                <Search size={12} className="text-gray-400 shrink-0" />
+                <input
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    placeholder="Search turns — e.g. failed, error, npm…"
+                    className="flex-1 text-[11px] outline-none min-w-0 bg-transparent"
+                />
+                {search && (
+                    <>
+                        <span className="text-[9px] text-gray-400 shrink-0">{displayItems.length}/{items.length}</span>
+                        <button onClick={() => setSearch('')} className="text-gray-300 hover:text-gray-600 shrink-0"><X size={11} /></button>
+                    </>
+                )}
+            </div>
+
+            {/* Parsed list */}
+            <div ref={listRef} className="flex-1 overflow-y-auto min-h-0">
+                {items.length === 0 ? (
+                    <div className="flex items-center justify-center gap-2 py-10 text-gray-300 text-xs">
+                        <Wand2 size={13} /> Paste a transcript above to parse it.
+                    </div>
+                ) : displayItems.length === 0 ? (
+                    <div className="flex items-center justify-center gap-2 py-10 text-gray-300 text-xs">
+                        <Search size={13} /> No turns match “{search}”.
+                    </div>
+                ) : (
+                    displayItems.map(({ it, idx }) => (
+                        <TranscriptRow
+                            key={idx}
+                            dataIdx={idx}
+                            item={it}
+                            open={openSet.has(idx)}
+                            onToggle={() => toggle(idx)}
+                            remark={remarks[String(it.num)]}
+                            highlight={search}
+                            onOpenDetail={singleMode ? () => setDetailIdx(idx) : undefined}
+                            detailActive={detailIdx === idx}
+                        />
+                    ))
+                )}
+            </div>
+            </div>{/* end panel card */}
+
+            {/* Detail side panel — single-model view only, resizable */}
+            {singleMode && detailIdx != null && items[detailIdx] && (() => {
+                const it = items[detailIdx]
+                const rmk = remarks[String(it.num)]
+                const matchCount = detailSearch.trim()
+                    ? (`${it.prose ?? ''}\n${it.command ?? ''}\n${it.content}\n${rmk ?? ''}`
+                        .match(new RegExp(detailSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')) || []).length
+                    : 0
+                return (
+                    <div className="relative flex shrink-0 border border-gray-200 rounded bg-white min-h-0" style={{ width: sideWidth }}>
+                        {/* drag handle on the left edge */}
+                        <div className="absolute left-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-indigo-400/40 active:bg-indigo-500/60 z-10 select-none"
+                            onMouseDown={startSideResize} />
+                        <div className="flex flex-col w-full overflow-hidden">
+                            <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-200 bg-gray-50 shrink-0">
+                                <PanelRight size={12} className="text-indigo-500 shrink-0" />
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-[11px] font-semibold text-gray-700 truncate">
+                                        Turn ({it.num}) · {it.label}{it.kind === 'bash' ? ' · bash' : ''}
+                                    </p>
+                                    <p className="text-[9px] text-gray-400">Detail view</p>
+                                </div>
+                                <CopyBtn text={it.content} className="text-gray-400 hover:text-gray-700 hover:bg-gray-100" />
+                                <button onClick={() => { setDetailIdx(null); setDetailSearch('') }} className="text-gray-400 hover:text-gray-700 shrink-0"><X size={14} /></button>
+                            </div>
+                            {/* in-detail search */}
+                            <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-gray-100 bg-white shrink-0">
+                                <Search size={11} className="text-gray-400 shrink-0" />
+                                <input
+                                    value={detailSearch}
+                                    onChange={e => setDetailSearch(e.target.value)}
+                                    placeholder="Search in this turn…"
+                                    className="flex-1 text-[11px] outline-none min-w-0"
+                                />
+                                {detailSearch && (
+                                    <>
+                                        <span className="text-[9px] text-gray-400 shrink-0">{matchCount} match{matchCount !== 1 ? 'es' : ''}</span>
+                                        <button onClick={() => setDetailSearch('')} className="text-gray-300 hover:text-gray-600 shrink-0"><X size={10} /></button>
+                                    </>
+                                )}
+                            </div>
+                            <div ref={detailContentRef} className="flex-1 overflow-y-auto p-3 space-y-2 min-h-0">
+                                {rmk && (
+                                    <div className="flex items-start gap-1.5 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+                                        <Sparkles size={11} className="text-amber-500 shrink-0 mt-0.5" />
+                                        <p className="text-[11px] text-amber-900 leading-relaxed"
+                                            dangerouslySetInnerHTML={{ __html: highlightInHtml(escHtml(rmk), detailSearch) }} />
+                                    </div>
+                                )}
+                                <DetailBody item={it} term={detailSearch} />
+                            </div>
+                        </div>
+                    </div>
+                )
+            })()}
+
+            {/* Evaluate modal */}
+            {showEval && (
+                <div className="fixed inset-0 z-[9990] flex items-center justify-center bg-black/30"
+                    onClick={e => { if (e.target === e.currentTarget) setShowEval(false) }}>
+                    <div className="bg-white border border-gray-200 rounded-xl shadow-2xl flex flex-col overflow-hidden"
+                        style={{ width: 720, maxWidth: '95vw', maxHeight: '88vh' }}>
+                        {/* Header */}
+                        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-100 shrink-0 bg-gray-50">
+                            <Sparkles size={13} className="text-amber-500 shrink-0" />
+                            <span className="text-[11px] font-semibold text-gray-700 flex-1">Evaluate {title} — {items.length} turns</span>
+                            <button onClick={() => setShowEval(false)} className="text-gray-300 hover:text-gray-600 shrink-0"><X size={14} /></button>
+                        </div>
+
+                        <div className="overflow-y-auto p-4 space-y-4">
+                            {/* Step 1: prompt for ChatGPT */}
+                            <div>
+                                <div className="flex items-center justify-between mb-1">
+                                    <p className="text-[11px] font-semibold text-gray-700">1. Copy this prompt into ChatGPT</p>
+                                    <CopyBtn text={evalPrompt} className="text-gray-400 hover:text-gray-700 hover:bg-gray-100 border border-gray-200" />
+                                </div>
+                                <pre className="text-[10px] text-gray-600 whitespace-pre-wrap leading-relaxed bg-gray-50 border border-gray-200 rounded px-2.5 py-2 max-h-52 overflow-y-auto font-mono">
+                                    {evalPrompt}
+                                </pre>
+                            </div>
+
+                            {/* Step 2: paste JSON back */}
+                            <div>
+                                <p className="text-[11px] font-semibold text-gray-700 mb-1">2. Paste ChatGPT&apos;s JSON reply here</p>
+                                <textarea
+                                    value={pasteJson}
+                                    onChange={e => { setPasteJson(e.target.value); setPasteErr('') }}
+                                    placeholder={'{\n  "2": "Runs version checks…",\n  "3": "Shows the returned versions…"\n}'}
+                                    spellCheck={false}
+                                    className="w-full h-32 border border-gray-300 rounded px-2 py-1.5 text-[11px] font-mono leading-relaxed resize-y focus:outline-none focus:border-amber-400"
+                                />
+                                {pasteErr && <p className="text-[10px] text-red-500 mt-1">{pasteErr}</p>}
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-t border-gray-100 shrink-0 bg-gray-50">
+                            <span className="text-[10px] text-gray-400">
+                                {remarkCount > 0 ? `${remarkCount} remarks currently applied` : 'No remarks applied yet'}
+                            </span>
+                            <div className="flex items-center gap-2">
+                                {remarkCount > 0 && (
+                                    <button onClick={clearRemarks}
+                                        className="text-[11px] border border-gray-300 rounded px-2.5 py-1 hover:bg-white text-gray-600">
+                                        Clear remarks
+                                    </button>
+                                )}
+                                <button onClick={applyRemarks} disabled={!pasteJson.trim()}
+                                    className="flex items-center gap-1 text-[11px] bg-amber-500 text-white rounded px-3 py-1 hover:bg-amber-600 disabled:opacity-40">
+                                    <Check size={12} /> Apply remarks
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    )
+}
+
+/* ------------------------------------------------------------------ *
+ * Shared prompt block — the original prompt both models were run on.
+ * ------------------------------------------------------------------ */
+function PromptSection() {
+    const PROMPT_LS_KEY = 'aparse_prompt'
+    const PROMPT_OPEN_LS_KEY = 'aparse_prompt_open'
+
+    const [prompt, setPrompt] = useState('')
+    const [open, setOpen] = useState(true)
+    const [hydrated, setHydrated] = useState(false)
+
+    useEffect(() => {
+        try {
+            const savedPrompt = localStorage.getItem(PROMPT_LS_KEY)
+            if (savedPrompt != null) setPrompt(savedPrompt)
+            const savedOpen = localStorage.getItem(PROMPT_OPEN_LS_KEY)
+            if (savedOpen != null) setOpen(savedOpen === '1')
+        } catch { /* ignore */ }
+        setHydrated(true)
+    }, [])
+
+    useEffect(() => {
+        if (!hydrated) return
+        try { localStorage.setItem(PROMPT_LS_KEY, prompt) } catch { /* ignore */ }
+    }, [prompt, hydrated])
+
+    useEffect(() => {
+        if (!hydrated) return
+        try { localStorage.setItem(PROMPT_OPEN_LS_KEY, open ? '1' : '0') } catch { /* ignore */ }
+    }, [open, hydrated])
+
+    const preview = prompt.trim().replace(/\s+/g, ' ').slice(0, 140)
+
+    return (
+        <div className="border border-gray-200 rounded bg-white mb-3">
+            <div
+                onClick={() => setOpen(o => !o)}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 cursor-pointer hover:bg-gray-50 select-none border-b border-transparent"
+            >
+                {open
+                    ? <ChevronDown size={13} className="text-gray-400 shrink-0" />
+                    : <ChevronRight size={13} className="text-gray-400 shrink-0" />}
+                <MessageSquareText size={12} className="text-indigo-500 shrink-0" />
+                <span className="text-xs font-semibold text-gray-800 shrink-0">Prompt</span>
+                <span className="text-[10px] text-gray-400 truncate flex-1 min-w-0">
+                    {!open && (preview || 'No prompt yet — click to add')}
+                </span>
+                {prompt.trim() && <CopyBtn text={prompt} className="text-gray-300 hover:text-gray-600 hover:bg-gray-100" />}
+            </div>
+            {open && (
+                <div className="p-2 border-t border-gray-100">
+                    <textarea
+                        value={prompt}
+                        onChange={e => setPrompt(e.target.value)}
+                        placeholder="Paste the prompt both Model A and Model B were run on…"
+                        spellCheck={false}
+                        className="w-full h-24 border border-gray-300 rounded px-2 py-1.5 text-[11px] leading-relaxed resize-y focus:outline-none focus:border-indigo-400"
+                    />
+                </div>
+            )}
+        </div>
+    )
+}
+
+/* ------------------------------------------------------------------ *
+ * Page
+ * ------------------------------------------------------------------ */
+type ModelView = 'a' | 'b' | 'both'
+
+export default function AParsePage() {
+    const [showPrompt, setShowPrompt] = useState(true)
+    const [view, setView] = useState<ModelView>('both')
+    const [hydrated, setHydrated] = useState(false)
+
+    useEffect(() => {
+        try {
+            const sp = localStorage.getItem('aparse_show_prompt')
+            if (sp != null) setShowPrompt(sp === '1')
+            const v = localStorage.getItem('aparse_view')
+            if (v === 'a' || v === 'b' || v === 'both') setView(v)
+        } catch { /* ignore */ }
+        setHydrated(true)
+    }, [])
+
+    useEffect(() => {
+        if (!hydrated) return
+        try { localStorage.setItem('aparse_show_prompt', showPrompt ? '1' : '0') } catch { /* ignore */ }
+    }, [showPrompt, hydrated])
+
+    useEffect(() => {
+        if (!hydrated) return
+        try { localStorage.setItem('aparse_view', view) } catch { /* ignore */ }
+    }, [view, hydrated])
+
+    const VIEW_OPTS: { key: ModelView; label: string }[] = [
+        { key: 'a', label: 'Model A' },
+        { key: 'b', label: 'Model B' },
+        { key: 'both', label: 'Both' },
+    ]
+
+    return (
+        <div className="p-3 bg-white h-full flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between mb-3 border-b border-gray-200 pb-2 shrink-0">
+                <div className="flex items-center gap-2">
+                    <ListTree size={14} className="text-gray-500" />
+                    <h1 className="text-sm font-semibold text-gray-800">A Parse</h1>
+                    <span className="text-[10px] text-gray-400">Compare two model runs — Model A vs Model B</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    {/* Show/hide prompt */}
+                    <button onClick={() => setShowPrompt(v => !v)}
+                        title={showPrompt ? 'Hide prompt section' : 'Show prompt section'}
+                        className={`flex items-center gap-1 text-[10px] border rounded px-1.5 py-1 transition-colors ${showPrompt ? 'border-indigo-300 text-indigo-700 bg-indigo-50' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
+                        <MessageSquareText size={11} /> {showPrompt ? 'Hide prompt' : 'Show prompt'}
+                    </button>
+                    {/* Model selector */}
+                    <div className="flex items-center border border-gray-300 rounded overflow-hidden">
+                        {VIEW_OPTS.map(o => (
+                            <button key={o.key} onClick={() => setView(o.key)}
+                                className={`text-[10px] px-2 py-1 transition-colors ${view === o.key ? 'bg-gray-800 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>
+                                {o.label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            </div>
+
+            {showPrompt && <div className="shrink-0"><PromptSection /></div>}
+
+            <div className="flex gap-3 flex-1 min-h-0 flex-col xl:flex-row">
+                {view !== 'b' && <ModelPanel modelKey="a" title="Model A" singleMode={view === 'a'} />}
+                {view !== 'a' && <ModelPanel modelKey="b" title="Model B" singleMode={view === 'b'} />}
+            </div>
+        </div>
+    )
+}

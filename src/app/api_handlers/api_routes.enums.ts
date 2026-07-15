@@ -236,6 +236,9 @@ export enum JobCVsAPIRoutes {
     CREATE = 'job-cvs',
     UPDATE = 'job-cvs/:id',
     DELETE = 'job-cvs/:id',
+    UPLOAD_AUDIO = 'job-cvs/upload-audio',
+    GET_HISTORY = 'job-cvs/:id/history',
+    ADD_HISTORY = 'job-cvs/:id/history',
 }
 
 export enum ShowErrorMessageOptionsRoutes {

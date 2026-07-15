@@ -81,6 +81,7 @@ const TABLE_COLS = [
 const DEFAULT_TABLE_COLS = new Set(TABLE_COLS.filter(c => c.default).map(c => c.key))
 
 const COMPANIES_COL_WIDTHS: Record<string, number> = {
+    actions: 80,
     num: 36, id: 120, rank: 50, organisation: 220, city: 110,
     sponsor_type: 110, sponsor_route: 90, links: 80, category: 110,
     is_deleted: 50, visa: 50, checked: 90, has_it_jobs: 80,
@@ -173,7 +174,7 @@ export default function CompaniesPage() {
     const col = (key: string) => visibleCols.has(key)
 
     // 80 = actions column (fixed, not resizable)
-    const tableWidth = 80 + TABLE_COLS.filter(c => col(c.key)).reduce((s, c) => s + (colW[c.key] ?? COMPANIES_COL_WIDTHS[c.key] ?? 100), 0)
+    const tableWidth = (colW.actions ?? 80) + TABLE_COLS.filter(c => col(c.key)).reduce((s, c) => s + (colW[c.key] ?? COMPANIES_COL_WIDTHS[c.key] ?? 100), 0)
 
     const rh = (key: string) => (
         <div className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-blue-400/40 active:bg-blue-500/60 select-none"
@@ -851,7 +852,7 @@ export default function CompaniesPage() {
                 <table className="text-xs border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
                     <thead>
                         <tr className="bg-gray-100 border-b border-gray-300">
-                            <th className="px-1 py-1 font-medium text-gray-600 border-r border-gray-200" style={{ width: 80 }}>
+                            <th className="px-1 py-1 font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.actions ?? 80 }}>
                                 <div className="flex items-center justify-end gap-1.5 pr-1">
                                     {/* Refresh */}
                                     <button onClick={refresh} disabled={loading} title="Refresh"
@@ -921,6 +922,7 @@ export default function CompaniesPage() {
                                     <button onClick={() => setAdding(true)} title="Add company"
                                         className="text-gray-400 hover:text-gray-800"><Plus size={12} /></button>
                                 </div>
+                                {rh('actions')}
                             </th>
                             {col('num')          && <th className="px-2 py-1 text-left font-medium text-gray-500 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.num }}>#&nbsp;{rh('num')}</th>}
                             {col('id')           && <th className="px-2 py-1 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.id }}>ID{rh('id')}</th>}

@@ -17,12 +17,18 @@ import {
   Minimize2,
   Type,
   RotateCcw,
+  Clock,
+  MessageSquare,
 } from "lucide-react";
 import { getAllApplicants } from "@/app/api_handlers/api/job-applicants.api";
 import {
   createCV,
   updateCV,
   updateCVSilent,
+  getCVById,
+  uploadCVAudio,
+  getCVHistory,
+  addCVHistoryEntry,
 } from "@/app/api_handlers/api/job-cvs.api";
 import { getAllJobs } from "@/app/api_handlers/api/sponsored-jobs.api";
 import { timeAgo } from "@/app/utils/time";
@@ -1329,14 +1335,24 @@ interface Props {
 
 const CV_STATUSES = [
   { value: "cv_created", label: "CV Created" },
+  { value: "cv_ready_for_edit", label: "Ready for Edit" },
+  { value: "cv_ready_for_review", label: "Ready for Review" },
   { value: "cv_reviewed", label: "CV Reviewed" },
   { value: "cv_sent", label: "CV Sent" },
+  { value: "cv_required_qa", label: "CV Required Q/A" },
+  { value: "cv_qa_review_required", label: "CV Q/A Review Required" },
+  { value: "cv_qa_review_done", label: "CV Q/A Review Done" },
 ] as const;
 
 const CV_STATUS_COLORS: Record<string, string> = {
   cv_created: "bg-gray-100 text-gray-600",
+  cv_ready_for_edit: "bg-sky-100 text-sky-700",
+  cv_ready_for_review: "bg-blue-100 text-blue-700",
   cv_reviewed: "bg-yellow-100 text-yellow-700",
   cv_sent: "bg-green-100 text-green-700",
+  cv_required_qa: "bg-purple-100 text-purple-700",
+  cv_qa_review_required: "bg-orange-100 text-orange-700",
+  cv_qa_review_done: "bg-teal-100 text-teal-700",
 };
 
 const INIT_FORM = {
@@ -1358,11 +1374,13 @@ const INIT_FORM = {
   skills: "",
   years_of_experience: 5,
   status: "cv_created",
+  edit_notes: "",
+  edit_audio_url: "",
 };
 
 const inputCls =
-  "w-full border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-gray-500 bg-white";
-const labelCls = "text-[10px] text-gray-400 uppercase font-medium mb-0.5 block";
+  "w-full border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-gray-500 bg-white";
+const labelCls = "text-[0.8em] text-gray-400 uppercase font-medium mb-0.5 block";
 
 const EMPTY_PROJECT: CVProjectItem = {
   title: "",
@@ -1446,9 +1464,65 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
   >([]);
   const [saving, setSaving] = useState(false);
   const [savedId, setSavedId] = useState<number | null>(null);
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">(
-    "idle",
-  );
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [autoSaveEnabled, setAutoSaveEnabled] = useState(false);
+  const [editFontSize, setEditFontSize] = useState<number>(() => {
+    try { return Number(localStorage.getItem('cv_edit_font_size')) || 13 } catch { return 13 }
+  });
+  const changeEditFontSize = (delta: number) => {
+    setEditFontSize(prev => {
+      const next = Math.max(9, Math.min(22, prev + delta))
+      try { localStorage.setItem('cv_edit_font_size', String(next)) } catch {}
+      return next
+    })
+  };
+
+  // Audio recording (for history notes)
+  const [isRecording, setIsRecording] = useState(false)
+  const [isUploadingAudio, setIsUploadingAudio] = useState(false)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
+
+  // History panel
+  const [showHistoryPanel, setShowHistoryPanel] = useState(false)
+  const [historyEntries, setHistoryEntries] = useState<any[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyNote, setHistoryNote] = useState('')
+  const [historyAudioUrl, setHistoryAudioUrl] = useState('')
+  const [isAddingNote, setIsAddingNote] = useState(false)
+
+  // Unsaved changes guard
+  const isDirtyRef = useRef(false)
+  const [closeConfirmPending, setCloseConfirmPending] = useState(false)
+  const closeAfterSaveRef = useRef(false)
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mr = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm' })
+      audioChunksRef.current = []
+      mr.ondataavailable = e => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
+      mr.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop())
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
+        setIsUploadingAudio(true)
+        try {
+          const url = await uploadCVAudio(blob)
+          if (url) setHistoryAudioUrl(url)
+        } catch {}
+        setIsUploadingAudio(false)
+      }
+      mr.start()
+      mediaRecorderRef.current = mr
+      setIsRecording(true)
+    } catch {}
+  }
+
+  const stopRecording = () => {
+    mediaRecorderRef.current?.stop()
+    mediaRecorderRef.current = null
+    setIsRecording(false)
+  }
   const isAdmin =
     typeof window !== "undefined" &&
     localStorage.getItem("userRole") === "admin";
@@ -1607,39 +1681,54 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
   }, []);
 
   // ── Pre-populate from existing CV ────────────────────────────────────────
+  const populateFromData = (data: any) => {
+    setSavedId(data.id ?? null);
+    setForm({
+      cv_title: data.cv_title ?? "",
+      applicant_name: data.applicant_name ?? "",
+      headline: data.headline ?? "",
+      target_job_title: data.target_job_title ?? "",
+      job_description: data.job_description ?? "",
+      raw_description: data.raw_description ?? "",
+      job_link: data.job_link ?? "",
+      organization_name: data.organization_name ?? "",
+      sponsorship: data.sponsorship ?? "",
+      location: data.location ?? "",
+      selected_email: data.selected_email ?? "",
+      selected_phone: data.selected_phone ?? "",
+      linkedin: data.linkedin ?? "",
+      github: data.github ?? "",
+      summary: data.summary ?? "",
+      skills: data.skills ?? "",
+      years_of_experience: data.years_of_experience ?? 5,
+      status: data.status ?? "cv_created",
+      edit_notes: data.edit_notes ?? "",
+      edit_audio_url: data.edit_audio_url ?? "",
+    });
+    setPortfolios(data.portfolios ?? []);
+    setExperienceItems(data.experience_items ?? []);
+    setEducation(data.education ?? []);
+    setProjects(data.projects ?? []);
+    setCoreSkills(data.core_skills ?? []);
+    setFontSettings({ ...DEFAULT_FONT_SETTINGS, ...(data.font_settings ?? {}) });
+    if (data.applicant_id) setSelectedApplicantId(data.applicant_id);
+    isDirtyRef.current = false
+  };
+
   useEffect(() => {
     if (cv) {
-      setSavedId(cv.id ?? null);
-      setForm({
-        cv_title: cv.cv_title ?? "",
-        applicant_name: cv.applicant_name ?? "",
-        headline: cv.headline ?? "",
-        target_job_title: cv.target_job_title ?? "",
-        job_description: cv.job_description ?? "",
-        raw_description: cv.raw_description ?? "",
-        job_link: cv.job_link ?? "",
-        organization_name: cv.organization_name ?? "",
-        sponsorship: cv.sponsorship ?? "",
-        location: cv.location ?? "",
-        selected_email: cv.selected_email ?? "",
-        selected_phone: cv.selected_phone ?? "",
-        linkedin: cv.linkedin ?? "",
-        github: cv.github ?? "",
-        summary: cv.summary ?? "",
-        skills: cv.skills ?? "",
-        years_of_experience: cv.years_of_experience ?? 5,
-        status: cv.status ?? "cv_created",
-      });
-      setPortfolios(cv.portfolios ?? []);
-      setExperienceItems(cv.experience_items ?? []);
-      setEducation(cv.education ?? []);
-      setProjects(cv.projects ?? []);
-      setCoreSkills(cv.core_skills ?? []);
-      setFontSettings({
-        ...DEFAULT_FONT_SETTINGS,
-        ...(cv.font_settings ?? {}),
-      });
-      if (cv.applicant_id) setSelectedApplicantId(cv.applicant_id);
+      if (cv.id) {
+        // Fetch fresh data from DB so we never edit stale cached data
+        getCVById(cv.id).then((res: any) => {
+          const fresh = res?.data ?? res;
+          populateFromData(fresh ?? cv);
+        }).catch(() => {
+          // Fallback to prop data if fetch fails
+          populateFromData(cv);
+        });
+      } else {
+        populateFromData(cv);
+      }
     } else if (job) {
       setForm((f) => ({
         ...f,
@@ -1652,7 +1741,8 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
         sponsorship: job.is_job_sponsored ?? "",
       }));
     }
-  }, [cv, job]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cv?.id, job]);
 
   // ── Build experience items from applicant + years ────────────────────────
   const buildExpItems = useCallback(
@@ -1744,8 +1834,10 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
     }
   };
 
-  const set = (field: string, val: any) =>
-    setForm((f) => ({ ...f, [field]: val }));
+  const set = (field: string, val: any) => {
+    isDirtyRef.current = true
+    setForm((f) => ({ ...f, [field]: val }))
+  };
 
   // ── Experience helpers ───────────────────────────────────────────────────
   const updateExpField = (expIdx: number, updates: Partial<CVExpItem>) =>
@@ -2112,25 +2204,34 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
     };
   };
 
+  const getCurrentUserId = () => {
+    try { return localStorage.getItem('userId') || null } catch { return null }
+  }
+
   const handleSave = async (openAfter = false) => {
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     setSaving(true);
     setSaveStatus("saving");
     try {
+      const changedBy = getCurrentUserId()
       if (savedId) {
-        await updateCV(savedId, buildPayload());
+        await updateCV(savedId, { ...buildPayload(), _changed_by: changedBy });
         setLastSavedAt(new Date());
         setSaveStatus("saved");
+        isDirtyRef.current = false
         onSaved?.();
         if (openAfter) window.open(`/viewCV/${savedId}`, "_blank");
+        if (closeAfterSaveRef.current) { closeAfterSaveRef.current = false; onClose() }
       } else {
-        const res: any = await createCV(buildPayload());
+        const res: any = await createCV({ ...buildPayload(), _changed_by: changedBy });
         const newId = res?.data?.id ?? res?.id ?? null;
         setSavedId(newId);
         setLastSavedAt(new Date());
         setSaveStatus("saved");
+        isDirtyRef.current = false
         onSaved?.();
         if (openAfter && newId) window.open(`/viewCV/${newId}`, "_blank");
+        if (closeAfterSaveRef.current) { closeAfterSaveRef.current = false; onClose() }
       }
     } catch {
       setSaveStatus("idle");
@@ -2146,6 +2247,7 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
   const savedIdRef = useRef<number | null>(null);
   savedIdRef.current = savedId;
   useEffect(() => {
+    if (!autoSaveEnabled) return;
     if (!form.applicant_name.trim()) return;
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     setSaveStatus("idle");
@@ -2154,7 +2256,7 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
       try {
         const currentSavedId = savedIdRef.current;
         if (currentSavedId) {
-          await updateCVSilent(currentSavedId, buildPayloadRef.current());
+          await updateCVSilent(currentSavedId, { ...buildPayloadRef.current(), _changed_by: getCurrentUserId() });
         } else {
           const res: any = await createCV(buildPayloadRef.current());
           const newId = res?.data?.id ?? res?.id ?? null;
@@ -2162,6 +2264,7 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
         }
         setLastSavedAt(new Date());
         setSaveStatus("saved");
+        onSaved?.();
       } catch {
         setSaveStatus("idle");
       }
@@ -2170,6 +2273,7 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
       if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     };
   }, [
+    autoSaveEnabled,
     form,
     coreSkills,
     experienceItems,
@@ -2179,13 +2283,56 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
     savedId,
   ]);
 
+  const loadHistory = useCallback(async (cvId: number) => {
+    setHistoryLoading(true)
+    try {
+      const res: any = await getCVHistory(cvId)
+      const entries = res?.data ?? res ?? []
+      setHistoryEntries(Array.isArray(entries) ? entries : [])
+    } catch { setHistoryEntries([]) }
+    finally { setHistoryLoading(false) }
+  }, [])
+
+  const toggleHistoryPanel = () => {
+    const next = !showHistoryPanel
+    setShowHistoryPanel(next)
+    if (next && savedId) loadHistory(savedId)
+  }
+
+  const addHistoryNote = async () => {
+    if (!savedId || (!historyNote.trim() && !historyAudioUrl)) return
+    setIsAddingNote(true)
+    try {
+      await addCVHistoryEntry(savedId, {
+        note: historyNote.trim() || undefined,
+        audio_url: historyAudioUrl || undefined,
+        changed_by: getCurrentUserId() || undefined,
+      })
+      setHistoryNote('')
+      setHistoryAudioUrl('')
+      await loadHistory(savedId)
+    } catch {} finally { setIsAddingNote(false) }
+  }
+
+  const handleClose = () => {
+    if (isDirtyRef.current && !autoSaveEnabled) {
+      setCloseConfirmPending(true)
+      return
+    }
+    onClose()
+  }
+
+  const CV_STATUS_LABELS: Record<string, string> = Object.fromEntries(
+    CV_STATUSES.map(s => [s.value, s.label])
+  )
+
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-white">
       {/* ── Header ── */}
       <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-200 shrink-0 bg-white shadow-sm">
         <button
-          onClick={onClose}
+          onClick={handleClose}
           className="text-gray-400 hover:text-gray-700 shrink-0 p-0.5"
         >
           <X size={15} />
@@ -2247,7 +2394,8 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
                 updateCVSilent(savedId, {
                   ...buildPayloadRef.current(),
                   status: newStatus,
-                }).catch(() => {});
+                  _changed_by: getCurrentUserId(),
+                }).then(() => { if (showHistoryPanel) loadHistory(savedId) }).catch(() => {});
               }
             }}
             className={`text-xs border rounded px-2 py-1 focus:outline-none shrink-0 font-medium ${CV_STATUS_COLORS[form.status] ?? "bg-gray-100 text-gray-600"}`}
@@ -2268,6 +2416,22 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
         )}
 
         <div className="flex items-center gap-2 ml-auto shrink-0">
+          {/* Auto-save toggle */}
+          <label className="flex items-center gap-1.5 cursor-pointer select-none shrink-0">
+            <input
+              type="checkbox"
+              checked={autoSaveEnabled}
+              onChange={e => {
+                const v = e.target.checked
+                setAutoSaveEnabled(v)
+                try { localStorage.setItem('cv_autosave', String(v)) } catch {}
+                if (!v && autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
+              }}
+              className="w-3 h-3 accent-indigo-600"
+            />
+            <span className="text-[10px] text-gray-500">Auto-save</span>
+          </label>
+
           {/* Auto-save status */}
           <span
             className={`text-[10px] shrink-0 transition-colors ${
@@ -2306,6 +2470,20 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
               View CV <ExternalLink size={10} />
             </a>
           )}
+          {/* History toggle */}
+          <button
+            onClick={toggleHistoryPanel}
+            title="Show status history &amp; notes"
+            className={`flex items-center gap-1 px-2 py-1.5 text-xs rounded border transition-colors ${
+              showHistoryPanel
+                ? "border-purple-400 bg-purple-50 text-purple-700"
+                : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            <Clock size={12} />
+            History
+          </button>
+
           <button
             onClick={() => setShowFontPanel((p) => !p)}
             title="Adjust font sizes"
@@ -2433,6 +2611,14 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
                     ? "Job Description — hover CV keyword to locate it here"
                     : "Job Description — hover keyword to highlight on CV"}
                 </span>
+                {/* Font size controls (expanded view) */}
+                <div className="flex items-center gap-0.5 border border-blue-200 rounded px-0.5 bg-white shrink-0">
+                  <button type="button" onClick={() => changeEditFontSize(-1)} disabled={editFontSize <= 9}
+                    className="text-gray-400 hover:text-gray-700 disabled:opacity-30 w-4 h-4 flex items-center justify-center text-xs font-bold leading-none">−</button>
+                  <span className="text-[9px] text-gray-500 w-5 text-center select-none">{editFontSize}</span>
+                  <button type="button" onClick={() => changeEditFontSize(1)} disabled={editFontSize >= 22}
+                    className="text-gray-400 hover:text-gray-700 disabled:opacity-30 w-4 h-4 flex items-center justify-center text-xs font-bold leading-none">+</button>
+                </div>
                 <button
                   type="button"
                   onClick={() => {
@@ -2479,7 +2665,8 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
               {atsHighlightOn ? (
                 <div
                   ref={rawDescOverlayRef}
-                  className="flex-1 overflow-y-auto text-[10.5px] leading-relaxed whitespace-pre-wrap bg-blue-50 border border-blue-200 rounded p-3"
+                  className="flex-1 overflow-y-auto leading-relaxed whitespace-pre-wrap bg-blue-50 border border-blue-200 rounded p-3"
+                  style={{ fontSize: editFontSize + 'px' }}
                   dangerouslySetInnerHTML={{
                     __html: applyManualHighlight(
                       highlightPlainTextToHtml(
@@ -2494,7 +2681,8 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
               ) : (
                 <div
                   ref={rawDescOverlayRef}
-                  className="flex-1 overflow-y-auto text-[10.5px] leading-relaxed whitespace-pre-wrap bg-blue-50 border border-blue-200 rounded p-3"
+                  className="flex-1 overflow-y-auto leading-relaxed whitespace-pre-wrap bg-blue-50 border border-blue-200 rounded p-3"
+                  style={{ fontSize: editFontSize + 'px' }}
                   dangerouslySetInnerHTML={{
                     __html: applyManualHighlight(
                       highlightPlainTextToHtml(
@@ -2573,6 +2761,14 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
                           jobTitle={form.target_job_title}
                           savedId={savedId}
                         />
+                        {/* Raw desc font size */}
+                        <div className="flex items-center gap-0.5 border border-blue-200 rounded px-0.5 bg-white">
+                          <button type="button" onClick={() => changeEditFontSize(-1)} disabled={editFontSize <= 9}
+                            className="text-gray-400 hover:text-gray-700 disabled:opacity-30 w-4 h-4 flex items-center justify-center text-xs font-bold leading-none">−</button>
+                          <span className="text-[9px] text-gray-500 w-5 text-center select-none">{editFontSize}</span>
+                          <button type="button" onClick={() => changeEditFontSize(1)} disabled={editFontSize >= 22}
+                            className="text-gray-400 hover:text-gray-700 disabled:opacity-30 w-4 h-4 flex items-center justify-center text-xs font-bold leading-none">+</button>
+                        </div>
                         <button
                           type="button"
                           onClick={() => {
@@ -2589,6 +2785,7 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
                     <textarea
                       rows={5}
                       className={`${inputCls} resize-y bg-blue-50 border-blue-200`}
+                      style={{ fontSize: editFontSize + 'px' }}
                       placeholder="Raw job description text for CV generation (required)…"
                       value={form.raw_description}
                       onChange={(e) => set("raw_description", e.target.value)}
@@ -3302,6 +3499,100 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
           className="w-1.5 shrink-0 cursor-col-resize bg-gray-200 hover:bg-blue-400 active:bg-blue-500 transition-colors"
         />
 
+        {/* ── History Panel ── */}
+        {showHistoryPanel && (
+          <div className="w-72 shrink-0 border-l border-gray-200 flex flex-col bg-white overflow-hidden">
+            <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100 shrink-0 bg-gray-50">
+              <Clock size={12} className="text-purple-500" />
+              <span className="text-[11px] font-semibold text-gray-700 flex-1">Status History &amp; Notes</span>
+              <button onClick={() => setShowHistoryPanel(false)} className="text-gray-300 hover:text-gray-600"><X size={12} /></button>
+            </div>
+
+            {/* Add note form */}
+            <div className="border-b border-gray-100 p-3 space-y-2 shrink-0">
+              <textarea
+                value={historyNote}
+                onChange={e => setHistoryNote(e.target.value)}
+                placeholder="Add a note for this CV…"
+                rows={3}
+                className="w-full text-[11px] border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:border-purple-400 resize-none"
+              />
+              {/* Audio recording */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {!isRecording ? (
+                  <button type="button" onClick={startRecording}
+                    className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium bg-white border border-gray-300 rounded hover:bg-gray-50 text-gray-600">
+                    🎙 Record Audio
+                  </button>
+                ) : (
+                  <button type="button" onClick={stopRecording}
+                    className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium bg-red-500 text-white rounded animate-pulse hover:bg-red-600">
+                    ⏹ Stop
+                  </button>
+                )}
+                {isUploadingAudio && <span className="text-[10px] text-purple-500 animate-pulse">Uploading…</span>}
+              </div>
+              {historyAudioUrl && (
+                <div className="flex items-center gap-2">
+                  <audio controls src={historyAudioUrl} className="h-7 flex-1 min-w-0" />
+                  <button type="button" onClick={() => setHistoryAudioUrl('')} title="Remove" className="text-gray-300 hover:text-red-500">
+                    <X size={11} />
+                  </button>
+                </div>
+              )}
+              <button
+                onClick={addHistoryNote}
+                disabled={isAddingNote || (!historyNote.trim() && !historyAudioUrl) || !savedId}
+                className="w-full px-2 py-1.5 text-[10px] font-medium bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                {isAddingNote ? 'Adding…' : 'Add Note'}
+              </button>
+              {!savedId && <p className="text-[10px] text-gray-400 text-center">Save the CV first to add notes</p>}
+            </div>
+
+            {/* History list */}
+            <div className="flex-1 overflow-y-auto p-3 space-y-3">
+              {historyLoading ? (
+                <div className="flex items-center justify-center py-6"><RefreshCw size={14} className="animate-spin text-gray-300" /></div>
+              ) : historyEntries.length === 0 ? (
+                <p className="text-[10px] text-gray-400 text-center py-4">No history yet</p>
+              ) : historyEntries.map((entry: any) => (
+                <div key={entry.id} className="space-y-1">
+                  {entry.event_type === 'status_change' ? (
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {entry.from_status ? (
+                        <>
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${CV_STATUS_COLORS[entry.from_status] ?? 'bg-gray-100 text-gray-600'}`}>
+                            {CV_STATUS_LABELS[entry.from_status] ?? entry.from_status}
+                          </span>
+                          <span className="text-gray-400 text-[9px]">→</span>
+                        </>
+                      ) : null}
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${CV_STATUS_COLORS[entry.to_status] ?? 'bg-gray-100 text-gray-600'}`}>
+                        {CV_STATUS_LABELS[entry.to_status] ?? entry.to_status}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1">
+                      <MessageSquare size={10} className="text-purple-400 shrink-0" />
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${CV_STATUS_COLORS[entry.to_status] ?? 'bg-gray-100 text-gray-600'}`}>
+                        {CV_STATUS_LABELS[entry.to_status] ?? entry.to_status}
+                      </span>
+                    </div>
+                  )}
+                  {entry.note && <p className="text-[11px] text-gray-700 leading-relaxed pl-1">{entry.note}</p>}
+                  {entry.audio_url && <audio controls src={entry.audio_url} className="h-7 w-full" />}
+                  <p className="text-[10px] text-gray-400">
+                    {entry.changed_by ? <span className="font-medium text-gray-500">{entry.changed_by} · </span> : null}
+                    {entry.createdAt ? timeAgo(entry.createdAt) : ''}
+                  </p>
+                  <div className="border-b border-gray-100" />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* ── Right: Preview ── */}
         <div className="flex-1 bg-gray-100 overflow-auto p-6 flex flex-col items-center">
           <div
@@ -3453,6 +3744,30 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
           isOpen={showLLMPopup}
           onClose={() => setShowLLMPopup(false)}
         />
+      )}
+
+      {/* Unsaved changes confirmation */}
+      {closeConfirmPending && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-2xl p-5 max-w-sm w-full mx-4 space-y-3">
+            <p className="text-sm font-semibold text-gray-800">Unsaved Changes</p>
+            <p className="text-xs text-gray-500">You have unsaved changes. What would you like to do?</p>
+            <div className="flex gap-2 justify-end pt-1">
+              <button onClick={() => setCloseConfirmPending(false)}
+                className="px-3 py-1.5 text-xs border border-gray-300 rounded hover:bg-gray-50">
+                Keep Editing
+              </button>
+              <button onClick={() => { setCloseConfirmPending(false); onClose() }}
+                className="px-3 py-1.5 text-xs border border-gray-300 text-red-600 rounded hover:bg-red-50">
+                Discard &amp; Close
+              </button>
+              <button onClick={() => { setCloseConfirmPending(false); closeAfterSaveRef.current = true; handleSave(false) }}
+                className="px-3 py-1.5 text-xs bg-gray-800 text-white rounded hover:bg-gray-700">
+                Save &amp; Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

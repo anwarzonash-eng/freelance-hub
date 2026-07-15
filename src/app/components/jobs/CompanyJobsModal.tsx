@@ -9,7 +9,7 @@ const REQUIRED_JOB_KEYS = [
     'link', 'job_title', 'company_name', 'location', 'job_complete_description',
     'type', 'experience_required', 'qualification_required', 'tech_skills',
     'soft_skills', 'application_closing_date', 'application_start_date',
-    'job_category', 'is_job_sponsored', 'visa_sponsorship_text',
+    'job_category', 'is_job_sponsored', 'visa_sponsorship_text', 'sponsorship_status',
 ]
 
 function parseLooseJson(input: string): any {
@@ -49,6 +49,7 @@ const SAMPLE_SINGLE_JOB = `{
       "job_category": "Engineering",
       "is_job_sponsored": true,
       "visa_sponsorship_text": "Yes, visa sponsorship available",
+      "sponsorship_status": "Visa Sponsorship Available",
       "is_security_cleared_required": false,
       "is_certifications_required": true
     }
@@ -74,6 +75,7 @@ const SAMPLE_MULTIPLE_JOBS = `{
       "job_category": "Engineering",
       "is_job_sponsored": true,
       "visa_sponsorship_text": "Yes, visa sponsorship available",
+      "sponsorship_status": "Visa Sponsorship Available",
       "is_security_cleared_required": false,
       "is_certifications_required": true
     },
@@ -93,6 +95,7 @@ const SAMPLE_MULTIPLE_JOBS = `{
       "job_category": "Product",
       "is_job_sponsored": false,
       "visa_sponsorship_text": "Visa sponsorship not available",
+      "sponsorship_status": "Working Right Required",
       "is_security_cleared_required": true,
       "is_certifications_required": false
     }

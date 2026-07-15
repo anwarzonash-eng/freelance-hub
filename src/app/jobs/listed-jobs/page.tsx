@@ -34,6 +34,7 @@ const TABLE_COLS = [
 const DEFAULT_TABLE_COLS = new Set(TABLE_COLS.filter(c => c.default).map(c => c.key))
 
 const JOBS_COL_WIDTHS: Record<string, number> = {
+    actions: 120,
     num: 36, job_title: 200, company: 140, location: 130,
     type: 80, category: 130, sponsored: 84, tech_skills: 180,
     closes: 100, submission: 160, assigned_to: 110, status: 60, cv_status: 90,
@@ -41,26 +42,41 @@ const JOBS_COL_WIDTHS: Record<string, number> = {
 
 const CV_STATUS_BADGE: Record<string, string> = {
     cv_created: 'bg-gray-100 text-gray-600',
+    cv_ready_for_edit: 'bg-sky-100 text-sky-700',
+    cv_ready_for_review: 'bg-blue-100 text-blue-700',
     cv_reviewed: 'bg-yellow-100 text-yellow-700',
     cv_sent: 'bg-green-100 text-green-700',
+    cv_required_qa: 'bg-purple-100 text-purple-700',
+    cv_qa_review_required: 'bg-orange-100 text-orange-700',
+    cv_qa_review_done: 'bg-teal-100 text-teal-700',
 }
 const CV_STATUS_LABEL: Record<string, string> = {
     cv_created: 'Created',
+    cv_ready_for_edit: 'Edit Ready',
+    cv_ready_for_review: 'Ready',
     cv_reviewed: 'Reviewed',
     cv_sent: 'Sent',
+    cv_required_qa: 'Q/A Required',
+    cv_qa_review_required: 'Q/A Review',
+    cv_qa_review_done: 'Q/A Done',
 }
-const EMPTY_FILTERS = { keyword: '', is_job_sponsored: '', type: '', job_category: '', company_id: '', has_cv: false, cv_submitted: '', application_status: '', job_id: '', cv_status: '', assigned: '', assigned_to: '' }
+const EMPTY_FILTERS = { keyword: '', sponsorship_status: '', type: '', job_category: '', company_id: '', has_cv: false, cv_submitted: '', application_status: '', job_id: '', cv_status: '', assigned: '', assigned_to: '' }
 const APP_STATUS_FILTER_OPTIONS = [{ value: 'none', label: 'Not tracked' }, ...APPLICATION_STATUS_OPTIONS.filter(o => o.value)]
 const CV_STATUS_OPTIONS = [
     { value: 'cv_created', label: 'CV Created' },
+    { value: 'cv_ready_for_edit', label: 'Ready for Edit' },
+    { value: 'cv_ready_for_review', label: 'Ready for Review' },
     { value: 'cv_reviewed', label: 'CV Reviewed' },
     { value: 'cv_sent', label: 'CV Sent' },
+    { value: 'cv_required_qa', label: 'CV Required Q/A' },
+    { value: 'cv_qa_review_required', label: 'CV Q/A Review Required' },
+    { value: 'cv_qa_review_done', label: 'CV Q/A Review Done' },
 ]
 
 function filtersToParams(f: typeof EMPTY_FILTERS, page: number, limit: number): URLSearchParams {
     const params = new URLSearchParams()
     if (f.keyword) params.set('keyword', f.keyword)
-    if (f.is_job_sponsored) params.set('is_job_sponsored', f.is_job_sponsored)
+    if (f.sponsorship_status) params.set('sponsorship_status', f.sponsorship_status)
     if (f.type) params.set('type', f.type)
     if (f.job_category) params.set('job_category', f.job_category)
     if (f.company_id) params.set('company_id', f.company_id)
@@ -95,6 +111,16 @@ function SponsorBadge({ value }: { value: string }) {
         : v === 'no' ? 'bg-red-100 text-red-700'
         : 'bg-gray-100 text-gray-500'
     return <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${cls}`}>{value || 'unknown'}</span>
+}
+
+const SPONSORSHIP_STATUS_COLORS: Record<string, string> = {
+    'Visa Sponsorship Available': 'bg-green-100 text-green-700',
+    'Working Right Required': 'bg-orange-100 text-orange-700',
+    'Nothing Mentioned': 'bg-gray-100 text-gray-500',
+}
+function SponsorshipStatusBadge({ value }: { value: string }) {
+    const v = value || 'Nothing Mentioned'
+    return <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${SPONSORSHIP_STATUS_COLORS[v] ?? 'bg-gray-100 text-gray-500'}`}>{v}</span>
 }
 
 function TechSkillsCell({ skills }: { skills: string[] }) {
@@ -199,7 +225,7 @@ export default function ListedJobsPage() {
         try {
             const q: any = { page: pg, limit: lim }
             if (af.keyword) q.keyword = af.keyword
-            if (af.is_job_sponsored) q.is_job_sponsored = af.is_job_sponsored
+            if (af.sponsorship_status) q.sponsorship_status = af.sponsorship_status
             if (af.type) q.type = af.type
             if (af.job_category) q.job_category = af.job_category
             if (af.company_id) q.company_id = af.company_id
@@ -248,7 +274,7 @@ export default function ListedJobsPage() {
         const hydratedCompanyId = searchParams.get('company_id') || ''
         const hydrated = {
             keyword: searchParams.get('keyword') || searchParams.get('id') || '',
-            is_job_sponsored: searchParams.get('is_job_sponsored') || '',
+            sponsorship_status: searchParams.get('sponsorship_status') || '',
             type: searchParams.get('type') || '',
             job_category: searchParams.get('job_category') || '',
             company_id: hydratedCompanyId,
@@ -363,7 +389,7 @@ export default function ListedJobsPage() {
     const col = (key: string) => visibleCols.has(key)
 
     // 32 = checkbox, 120 = actions (both fixed, not resizable)
-    const tableWidth = 32 + 120 + TABLE_COLS.filter(c => col(c.key)).reduce((s, c) => s + (colW[c.key] ?? JOBS_COL_WIDTHS[c.key] ?? 100), 0)
+    const tableWidth = 32 + (colW.actions ?? 120) + TABLE_COLS.filter(c => col(c.key)).reduce((s, c) => s + (colW[c.key] ?? JOBS_COL_WIDTHS[c.key] ?? 100), 0)
 
     const rh = (key: string) => (
         <div className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-blue-400/40 active:bg-blue-500/60 select-none"
@@ -446,13 +472,13 @@ export default function ListedJobsPage() {
 
                     <div className="flex flex-col gap-0.5">
                         <label className="text-[10px] text-gray-400 uppercase">Sponsorship</label>
-                        <select value={filters.is_job_sponsored}
-                            onChange={e => setFilters(f => ({ ...f, is_job_sponsored: e.target.value }))}
-                            className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.is_job_sponsored ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
-                            <option value="">All</option>
-                            <option value="yes">Yes</option>
-                            <option value="no">No</option>
-                            <option value="unknown">Unknown</option>
+                        <select value={filters.sponsorship_status}
+                            onChange={e => setFilters(f => ({ ...f, sponsorship_status: e.target.value }))}
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.sponsorship_status ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
+                            <option value="">All Sponsorship</option>
+                            <option value="Visa Sponsorship Available">Visa Available</option>
+                            <option value="Working Right Required">Right Required</option>
+                            <option value="Nothing Mentioned">Not Mentioned</option>
                         </select>
                     </div>
 
@@ -650,7 +676,7 @@ export default function ListedJobsPage() {
                                     }}
                                 />
                             </th>
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200" style={{ width: 120 }}>
+                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.actions ?? 120 }}>
                                 <div className="flex items-center justify-between gap-1">
                                     <span>Actions</span>
                                     <div className="flex items-center gap-1">
@@ -687,6 +713,7 @@ export default function ListedJobsPage() {
                                         </div>
                                     </div>
                                 </div>
+                                {rh('actions')}
                             </th>
                             {col('num') && <th className="px-2 py-1.5 text-left font-medium text-gray-500 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.num }}>#&nbsp;{rh('num')}</th>}
                             {col('job_title') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.job_title }}>Job Title{rh('job_title')}</th>}
@@ -811,6 +838,7 @@ export default function ListedJobsPage() {
                                     {col('sponsored') && (
                                         <td className="px-2 py-1.5 border-r border-gray-100 whitespace-nowrap">
                                             <SponsorBadge value={row.is_job_sponsored} />
+                                            <SponsorshipStatusBadge value={row.sponsorship_status} />
                                         </td>
                                     )}
                                     {col('tech_skills') && (
@@ -889,7 +917,7 @@ export default function ListedJobsPage() {
             {editingCVFromJob && (
                 <JobCVModal
                     cv={editingCVFromJob}
-                    onClose={() => setEditingCVFromJob(null)}
+                    onClose={() => { setEditingCVFromJob(null); loadCVs() }}
                     onSaved={() => { setEditingCVFromJob(null); loadCVs() }}
                 />
             )}
