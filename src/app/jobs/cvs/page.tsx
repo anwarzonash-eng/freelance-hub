@@ -125,6 +125,18 @@ function highlightRaw(text: string, term: string): string {
         m => `<mark class="raw-hl" style="background:#fef08a;color:#713f12;border-radius:2px;padding:0 2px">${m}</mark>`)
 }
 
+const CV_FILTER_ITEMS = [
+    { key: 'keyword',               label: 'Search' },
+    { key: 'applicant_id',          label: 'By Applicant' },
+    { key: 'company_id',            label: 'By Company' },
+    { key: 'email',                 label: 'By Email' },
+    { key: 'exp_yrs',               label: 'By Exp (yrs)' },
+    { key: 'created_by',            label: 'Created By' },
+    { key: 'status',                label: 'By Status' },
+    { key: 'job_application_status', label: 'By App Status' },
+]
+const CV_DEFAULT_VISIBLE_FILTERS = new Set(CV_FILTER_ITEMS.map(f => f.key))
+
 function buildQueryString(f: CvFilters): string {
     const params = new URLSearchParams()
     Object.entries(f).forEach(([k, v]) => { if (v) params.set(k, v) })
@@ -147,6 +159,12 @@ export default function CvsPage() {
     const [showCompanyDd, setShowCompanyDd] = useState(false)
     const [showColDd, setShowColDd] = useState(false)
     const [visibleCols, setVisibleCols] = useState<Set<string>>(() => new Set(CVS_DEFAULT_COLS))
+    const [visibleFilters, setVisibleFilters] = useState<Set<string>>(() => {
+        try { const s = localStorage.getItem('cvs_visible_filters'); if (s) return new Set(JSON.parse(s)) } catch {}
+        return new Set(CV_DEFAULT_VISIBLE_FILTERS)
+    })
+    const [showFilterDd, setShowFilterDd] = useState(false)
+    const filterDdRef = useRef<HTMLDivElement>(null)
     const companyDdRef = useRef<HTMLDivElement>(null)
     const colDdRef = useRef<HTMLDivElement>(null)
     const hydratedFromUrl = useRef(false)
@@ -290,8 +308,9 @@ export default function CvsPage() {
             }
         }).catch(() => { })
 
-        getAllApplicants().then((res: any) => {
-            const list = res?.data ?? res
+        getAllApplicants({ limit: 200 }).then((res: any) => {
+            const payload = res?.data ?? res
+            const list = Array.isArray(payload) ? payload : (payload?.data ?? [])
             if (Array.isArray(list)) {
                 setApplicants(
                     list
@@ -315,10 +334,19 @@ export default function CvsPage() {
             return s
         })
 
+    const toggleFilter = (key: string) =>
+        setVisibleFilters(prev => {
+            const s = new Set(prev)
+            if (s.has(key)) s.delete(key); else s.add(key)
+            localStorage.setItem('cvs_visible_filters', JSON.stringify(Array.from(s)))
+            return s
+        })
+
     useEffect(() => {
         const handler = (e: MouseEvent) => {
             if (companyDdRef.current && !companyDdRef.current.contains(e.target as Node)) setShowCompanyDd(false)
             if (colDdRef.current && !colDdRef.current.contains(e.target as Node)) setShowColDd(false)
+            if (filterDdRef.current && !filterDdRef.current.contains(e.target as Node)) setShowFilterDd(false)
         }
         document.addEventListener('mousedown', handler)
         return () => document.removeEventListener('mousedown', handler)
@@ -401,7 +429,31 @@ export default function CvsPage() {
             {/* Filter bar */}
             <div className="border border-gray-200 rounded p-2 mb-2 bg-gray-50">
                 <div className="flex items-end gap-1.5 flex-wrap">
-                    <div className="flex flex-col gap-0.5">
+                    {/* Filter visibility toggle */}
+                    <div className="relative self-end" ref={filterDdRef}>
+                        <button onClick={() => setShowFilterDd(p => !p)}
+                            title="Show/hide filters"
+                            className={`p-1 border rounded transition-colors relative ${showFilterDd ? 'border-indigo-400 bg-indigo-50 text-indigo-600' : 'border-gray-300 text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}>
+                            <SlidersHorizontal size={13} />
+                            {CV_FILTER_ITEMS.some(f => !visibleFilters.has(f.key)) && (
+                                <span className="absolute -top-1 -right-1 bg-indigo-500 text-white text-[7px] rounded-full w-2.5 h-2.5 flex items-center justify-center font-bold leading-none">·</span>
+                            )}
+                        </button>
+                        {showFilterDd && (
+                            <div className="absolute left-0 top-full mt-1 z-40 bg-white border border-gray-200 rounded shadow-lg p-2 min-w-44">
+                                <p className="text-[9px] text-gray-400 uppercase font-semibold px-1 mb-1">Filters</p>
+                                {CV_FILTER_ITEMS.map(({ key, label }) => (
+                                    <label key={key} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded">
+                                        <input type="checkbox" className="w-3 h-3"
+                                            checked={visibleFilters.has(key)}
+                                            onChange={() => toggleFilter(key)} />
+                                        <span className="text-xs text-gray-700">{label}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('keyword') ? '' : ' hidden'}`}>
                         <label className="text-[10px] text-gray-400 uppercase">Search</label>
                         <div className="relative">
                             <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -414,8 +466,8 @@ export default function CvsPage() {
                         </div>
                     </div>
 
-                    <div className="flex flex-col gap-0.5">
-                        <label className="text-[10px] text-gray-400 uppercase">Applicant</label>
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('applicant_id') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">By Applicant</label>
                         <select
                             className={`border rounded px-2 py-1 text-xs focus:outline-none min-w-[140px] transition-colors ${filters.applicant_id ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}
                             value={filters.applicant_id}
@@ -428,8 +480,8 @@ export default function CvsPage() {
                         </select>
                     </div>
 
-                    <div className="flex flex-col gap-0.5 relative" ref={companyDdRef}>
-                        <label className="text-[10px] text-gray-400 uppercase">Company</label>
+                    <div className={`flex flex-col gap-0.5 relative${visibleFilters.has('company_id') ? '' : ' hidden'}`} ref={companyDdRef}>
+                        <label className="text-[10px] text-gray-400 uppercase">By Company</label>
                         <div className="relative">
                             <input
                                 className={`border rounded pl-2 pr-6 py-1 text-xs focus:outline-none w-44 transition-colors ${filters.company_id ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}
@@ -464,8 +516,8 @@ export default function CvsPage() {
                         )}
                     </div>
 
-                    <div className="flex flex-col gap-0.5">
-                        <label className="text-[10px] text-gray-400 uppercase">Email</label>
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('email') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">By Email</label>
                         <input
                             className={`border rounded px-2 py-1 text-xs focus:outline-none w-40 transition-colors ${filters.email ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}
                             placeholder="email@example.com"
@@ -474,8 +526,8 @@ export default function CvsPage() {
                         />
                     </div>
 
-                    <div className="flex flex-col gap-0.5">
-                        <label className="text-[10px] text-gray-400 uppercase">Exp (yrs)</label>
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('exp_yrs') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">By Exp (yrs)</label>
                         <input
                             type="number"
                             min={0}
@@ -486,7 +538,7 @@ export default function CvsPage() {
                         />
                     </div>
 
-                    <div className="flex flex-col gap-0.5">
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('created_by') ? '' : ' hidden'}`}>
                         <label className="text-[10px] text-gray-400 uppercase">Created By</label>
                         <select
                             className={`border rounded px-2 py-1 text-xs focus:outline-none min-w-[110px] transition-colors ${filters.created_by ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}
@@ -500,8 +552,8 @@ export default function CvsPage() {
                         </select>
                     </div>
 
-                    <div className="flex flex-col gap-0.5">
-                        <label className="text-[10px] text-gray-400 uppercase">Status</label>
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('status') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">By Status</label>
                         <select
                             className={`border rounded px-2 py-1 text-xs focus:outline-none min-w-[110px] transition-colors ${filters.status ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}
                             value={filters.status}
@@ -514,8 +566,8 @@ export default function CvsPage() {
                         </select>
                     </div>
 
-                    <div className="flex flex-col gap-0.5">
-                        <label className="text-[10px] text-gray-400 uppercase">App Status</label>
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('job_application_status') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">By App Status</label>
                         <select
                             className={`border rounded px-2 py-1 text-xs focus:outline-none min-w-[130px] transition-colors ${filters.job_application_status ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}
                             value={filters.job_application_status}
@@ -591,7 +643,7 @@ export default function CvsPage() {
                 <table className="text-xs border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
                     <thead>
                         <tr className="bg-gray-100 border-b border-gray-300">
-                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.actions ?? 160 }}>
+                            <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative" style={{ width: colW.actions ?? 160 }}>
                                 <div className="flex items-center justify-between">
                                 <span>Actions</span>
                                 <div className="flex items-center gap-1">

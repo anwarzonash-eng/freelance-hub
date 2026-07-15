@@ -60,8 +60,22 @@ const CV_STATUS_LABEL: Record<string, string> = {
     cv_qa_review_required: 'Q/A Review',
     cv_qa_review_done: 'Q/A Done',
 }
-const EMPTY_FILTERS = { keyword: '', sponsorship_status: '', type: '', job_category: '', company_id: '', has_cv: false, cv_submitted: '', application_status: '', job_id: '', cv_status: '', assigned: '', assigned_to: '' }
+const EMPTY_FILTERS = { keyword: '', sponsorship_status: '', type: '', job_category: '', company_id: '', has_cv: '', cv_submitted: '', application_status: '', job_id: '', cv_status: '', assigned: '', assigned_to: '' }
 const APP_STATUS_FILTER_OPTIONS = [{ value: 'none', label: 'Not tracked' }, ...APPLICATION_STATUS_OPTIONS.filter(o => o.value)]
+const JOBS_FILTER_ITEMS = [
+    { key: 'keyword',            label: 'Search' },
+    { key: 'sponsorship_status', label: 'By Sponsorship' },
+    { key: 'type',               label: 'By Type' },
+    { key: 'job_category',       label: 'By Category' },
+    { key: 'company_id',         label: 'By Company' },
+    { key: 'has_cv',             label: 'By CV' },
+    { key: 'cv_submitted',       label: 'By CV Submission' },
+    { key: 'application_status', label: 'By App. Status' },
+    { key: 'assigned',           label: 'By Assigned' },
+    { key: 'assigned_to',        label: 'By Assigned To' },
+    { key: 'cv_status',          label: 'By CV Status' },
+]
+const JOBS_DEFAULT_VISIBLE_FILTERS = new Set(JOBS_FILTER_ITEMS.map(f => f.key))
 const CV_STATUS_OPTIONS = [
     { value: 'cv_created', label: 'CV Created' },
     { value: 'cv_ready_for_edit', label: 'Ready for Edit' },
@@ -80,7 +94,7 @@ function filtersToParams(f: typeof EMPTY_FILTERS, page: number, limit: number): 
     if (f.type) params.set('type', f.type)
     if (f.job_category) params.set('job_category', f.job_category)
     if (f.company_id) params.set('company_id', f.company_id)
-    if (f.has_cv) params.set('has_cv', 'true')
+    if (f.has_cv) params.set('has_cv', f.has_cv)
     if (f.cv_submitted) params.set('cv_submitted', f.cv_submitted)
     if (f.application_status) params.set('application_status', f.application_status)
     if (f.job_id) params.set('job_id', f.job_id)
@@ -209,6 +223,12 @@ export default function ListedJobsPage() {
 
     const [visibleCols, setVisibleCols] = useState<Set<string>>(() => new Set(DEFAULT_TABLE_COLS))
     const [showColDd, setShowColDd] = useState(false)
+    const [visibleFilters, setVisibleFilters] = useState<Set<string>>(() => {
+        try { const s = localStorage.getItem('listed_jobs_visible_filters'); if (s) return new Set(JSON.parse(s)) } catch {}
+        return new Set(JOBS_DEFAULT_VISIBLE_FILTERS)
+    })
+    const [showFilterDd, setShowFilterDd] = useState(false)
+    const filterDdRef = useRef<HTMLDivElement>(null)
     const colDdRef = useRef<HTMLDivElement>(null)
     const { widths: colW, startResize } = useColResize(JOBS_COL_WIDTHS, 'jobs_col_widths')
 
@@ -241,11 +261,15 @@ export default function ListedJobsPage() {
             if (af.job_id) q.job_ids = af.job_id
             if (af.assigned) q.assigned = af.assigned
             if (af.assigned_to) q.assigned_to = af.assigned_to
-            if (af.has_cv) {
+            if (af.has_cv === 'true') {
                 const map = latestCvMap ?? cvMap
                 const ids = Object.keys(map).join(',')
                 if (!ids) { setData([]); setTotal(0); setTotalPages(1); return }
                 q.job_ids = ids
+            } else if (af.has_cv === 'false') {
+                const map = latestCvMap ?? cvMap
+                const excludeIds = Object.keys(map).join(',')
+                if (excludeIds) q.exclude_job_ids = excludeIds
             }
             if (af.cv_status) {
                 const matchingIds = [...new Set(
@@ -285,7 +309,7 @@ export default function ListedJobsPage() {
             type: searchParams.get('type') || '',
             job_category: searchParams.get('job_category') || '',
             company_id: hydratedCompanyId,
-            has_cv: searchParams.get('has_cv') === 'true',
+            has_cv: searchParams.get('has_cv') || '',
             cv_submitted: searchParams.get('cv_submitted') || '',
             application_status: searchParams.get('application_status') || '',
             job_id: searchParams.get('job_id') || '',
@@ -357,6 +381,7 @@ export default function ListedJobsPage() {
         const handler = (e: MouseEvent) => {
             if (companyDdRef.current && !companyDdRef.current.contains(e.target as Node)) setShowCompanyDd(false)
             if (colDdRef.current && !colDdRef.current.contains(e.target as Node)) setShowColDd(false)
+            if (filterDdRef.current && !filterDdRef.current.contains(e.target as Node)) setShowFilterDd(false)
         }
         document.addEventListener('mousedown', handler)
         return () => document.removeEventListener('mousedown', handler)
@@ -434,6 +459,14 @@ export default function ListedJobsPage() {
         setFilters(f => ({ ...f, application_status: next.join(',') }))
     }
 
+    const toggleFilter = (key: string) =>
+        setVisibleFilters(prev => {
+            const s = new Set(prev)
+            if (s.has(key)) s.delete(key); else s.add(key)
+            localStorage.setItem('listed_jobs_visible_filters', JSON.stringify(Array.from(s)))
+            return s
+        })
+
     const ddCls = 'absolute z-20 top-full mt-1 left-0 bg-white border border-gray-200 rounded shadow-lg p-2 space-y-1 min-w-[180px] max-h-60 overflow-y-auto'
     const knownTypes = ['hybrid', 'remote', 'onsite']
     const allTypes = [...knownTypes, ...jobTypes.filter(t => !knownTypes.includes(t))]
@@ -463,7 +496,31 @@ export default function ListedJobsPage() {
             {/* Filter bar */}
             <div className="border border-gray-200 rounded p-2 mb-2 bg-gray-50">
                 <div className="flex items-end gap-1.5 flex-wrap">
-                    <div className="flex flex-col gap-0.5">
+                    {/* Filter visibility toggle */}
+                    <div className="relative self-end" ref={filterDdRef}>
+                        <button onClick={() => setShowFilterDd(p => !p)}
+                            title="Show/hide filters"
+                            className={`p-1 border rounded transition-colors relative ${showFilterDd ? 'border-indigo-400 bg-indigo-50 text-indigo-600' : 'border-gray-300 text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}>
+                            <SlidersHorizontal size={13} />
+                            {JOBS_FILTER_ITEMS.some(f => !visibleFilters.has(f.key)) && (
+                                <span className="absolute -top-1 -right-1 bg-indigo-500 text-white text-[7px] rounded-full w-2.5 h-2.5 flex items-center justify-center font-bold leading-none">·</span>
+                            )}
+                        </button>
+                        {showFilterDd && (
+                            <div className="absolute left-0 top-full mt-1 z-40 bg-white border border-gray-200 rounded shadow-lg p-2 min-w-44">
+                                <p className="text-[9px] text-gray-400 uppercase font-semibold px-1 mb-1">Filters</p>
+                                {JOBS_FILTER_ITEMS.map(({ key, label }) => (
+                                    <label key={key} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded">
+                                        <input type="checkbox" className="w-3 h-3"
+                                            checked={visibleFilters.has(key)}
+                                            onChange={() => toggleFilter(key)} />
+                                        <span className="text-xs text-gray-700">{label}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('keyword') ? '' : ' hidden'}`}>
                         <label className="text-[10px] text-gray-400 uppercase">Search</label>
                         <div className="relative">
                             <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -477,8 +534,8 @@ export default function ListedJobsPage() {
                         </div>
                     </div>
 
-                    <div className="flex flex-col gap-0.5">
-                        <label className="text-[10px] text-gray-400 uppercase">Sponsorship</label>
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('sponsorship_status') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">By Sponsorship</label>
                         <select value={filters.sponsorship_status}
                             onChange={e => setFilters(f => ({ ...f, sponsorship_status: e.target.value }))}
                             className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.sponsorship_status ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
@@ -489,8 +546,8 @@ export default function ListedJobsPage() {
                         </select>
                     </div>
 
-                    <div className="flex flex-col gap-0.5 relative">
-                        <label className="text-[10px] text-gray-400 uppercase">Type</label>
+                    <div className={`flex flex-col gap-0.5 relative${visibleFilters.has('type') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">By Type</label>
                         <button onClick={() => { setShowTypeDd(p => !p); setShowCatDd(false); setShowAppStatusDd(false) }}
                             className={`flex items-center gap-1 border rounded px-2 py-1 text-xs text-gray-700 min-w-[120px] transition-colors ${filters.type ? 'border-blue-500 bg-blue-100 hover:bg-blue-100' : 'border-gray-300 bg-white hover:bg-gray-50'}`}>
                             Type{filters.type ? ` (${filters.type.split(',').filter(Boolean).length})` : ''}
@@ -514,8 +571,8 @@ export default function ListedJobsPage() {
                         )}
                     </div>
 
-                    <div className="flex flex-col gap-0.5 relative">
-                        <label className="text-[10px] text-gray-400 uppercase">Category</label>
+                    <div className={`flex flex-col gap-0.5 relative${visibleFilters.has('job_category') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">By Category</label>
                         <button onClick={() => { setShowCatDd(p => !p); setShowTypeDd(false); setShowAppStatusDd(false) }}
                             className={`flex items-center gap-1 border rounded px-2 py-1 text-xs text-gray-700 min-w-[140px] transition-colors ${filters.job_category ? 'border-blue-500 bg-blue-100 hover:bg-blue-100' : 'border-gray-300 bg-white hover:bg-gray-50'}`}>
                             Category{filters.job_category ? ` (${filters.job_category.split(',').filter(Boolean).length})` : ''}
@@ -540,8 +597,8 @@ export default function ListedJobsPage() {
                         )}
                     </div>
 
-                    <div className="flex flex-col gap-0.5 relative" ref={companyDdRef}>
-                        <label className="text-[10px] text-gray-400 uppercase">Company</label>
+                    <div className={`flex flex-col gap-0.5 relative${visibleFilters.has('company_id') ? '' : ' hidden'}`} ref={companyDdRef}>
+                        <label className="text-[10px] text-gray-400 uppercase">By Company</label>
                         <div className="relative">
                             <input
                                 className={`border rounded pl-2 pr-6 py-1 text-xs focus:outline-none w-44 transition-colors ${filters.company_id ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}
@@ -576,17 +633,20 @@ export default function ListedJobsPage() {
                         )}
                     </div>
 
-                    <div className={`flex flex-col gap-0.5 mt-auto px-2 py-1 rounded transition-colors ${filters.has_cv ? 'bg-blue-100' : ''}`}>
-                        <label className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-700">
-                            <input type="checkbox" className="w-3.5 h-3.5"
-                                checked={filters.has_cv}
-                                onChange={e => setFilters(f => ({ ...f, has_cv: e.target.checked }))} />
-                            Has CV
-                        </label>
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('has_cv') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">By CV</label>
+                        <select
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.has_cv ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}
+                            value={filters.has_cv}
+                            onChange={e => setFilters(f => ({ ...f, has_cv: e.target.value }))}>
+                            <option value="">All</option>
+                            <option value="true">CV Created</option>
+                            <option value="false">CV Not Created</option>
+                        </select>
                     </div>
 
-                    <div className="flex flex-col gap-0.5">
-                        <label className="text-[10px] text-gray-400 uppercase">CV Submission</label>
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('cv_submitted') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">By CV Submission</label>
                         <select value={filters.cv_submitted}
                             onChange={e => setFilters(f => ({ ...f, cv_submitted: e.target.value }))}
                             className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.cv_submitted ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
@@ -596,8 +656,8 @@ export default function ListedJobsPage() {
                         </select>
                     </div>
 
-                    <div className="flex flex-col gap-0.5 relative">
-                        <label className="text-[10px] text-gray-400 uppercase">App. Status</label>
+                    <div className={`flex flex-col gap-0.5 relative${visibleFilters.has('application_status') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">By App. Status</label>
                         <button onClick={() => { setShowAppStatusDd(p => !p); setShowTypeDd(false); setShowCatDd(false) }}
                             className={`flex items-center gap-1 border rounded px-2 py-1 text-xs text-gray-700 min-w-[140px] transition-colors ${filters.application_status ? 'border-blue-500 bg-blue-100 hover:bg-blue-100' : 'border-gray-300 bg-white hover:bg-gray-50'}`}>
                             App. Status{filters.application_status ? ` (${filters.application_status.split(',').filter(Boolean).length})` : ''}
@@ -621,8 +681,8 @@ export default function ListedJobsPage() {
                         )}
                     </div>
 
-                    <div className="flex flex-col gap-0.5">
-                        <label className="text-[10px] text-gray-400 uppercase">Assigned</label>
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('assigned') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">By Assigned</label>
                         <select value={filters.assigned}
                             onChange={e => setFilters(f => ({ ...f, assigned: e.target.value }))}
                             className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.assigned ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
@@ -632,8 +692,8 @@ export default function ListedJobsPage() {
                         </select>
                     </div>
 
-                    <div className="flex flex-col gap-0.5">
-                        <label className="text-[10px] text-gray-400 uppercase">Assigned To</label>
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('assigned_to') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">By Assigned To</label>
                         <select value={filters.assigned_to}
                             onChange={e => setFilters(f => ({ ...f, assigned_to: e.target.value }))}
                             className={`border rounded px-2 py-1 text-xs focus:outline-none min-w-[110px] transition-colors ${filters.assigned_to ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
@@ -644,8 +704,8 @@ export default function ListedJobsPage() {
                         </select>
                     </div>
 
-                    <div className="flex flex-col gap-0.5">
-                        <label className="text-[10px] text-gray-400 uppercase">CV Status</label>
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('cv_status') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">By CV Status</label>
                         <select value={filters.cv_status}
                             onChange={e => setFilters(f => ({ ...f, cv_status: e.target.value }))}
                             className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.cv_status ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>

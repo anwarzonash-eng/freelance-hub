@@ -80,6 +80,31 @@ const TABLE_COLS = [
 ]
 const DEFAULT_TABLE_COLS = new Set(TABLE_COLS.filter(c => c.default).map(c => c.key))
 
+const COMPANIES_FILTER_ITEMS = [
+    { key: 'keyword',          label: 'Search' },
+    { key: 'sponsor_type',     label: 'By Sponsor Type' },
+    { key: 'sponsor_route',    label: 'By Sponsor Route' },
+    { key: 'is_sponsored',     label: 'By Sponsored' },
+    { key: 'is_deleted',       label: 'By Is Deleted' },
+    { key: 'visa_mentioned',   label: 'By Visa Mentioned' },
+    { key: 'has_website',      label: 'By Domain Found' },
+    { key: 'has_career_page',  label: 'By Career Page Found' },
+    { key: 'ranked',           label: 'By Ranked' },
+    { key: 'rank',             label: 'By Rank' },
+    { key: 'manual_check_done', label: 'By Manual Checked' },
+    { key: 'has_it_jobs',      label: 'By Has IT Jobs' },
+    { key: 'offers_freelance', label: 'By Offers Freelance' },
+    { key: 'should_apply',     label: 'By Should Apply' },
+    { key: 'date_from',        label: 'By Check Date From' },
+    { key: 'date_to',          label: 'By Check Date To' },
+    { key: 'checked_by',       label: 'Checked By' },
+    { key: 'category_id',      label: 'By Category' },
+    { key: 'assigned',         label: 'By Assigned' },
+    { key: 'assigned_to',      label: 'By Assigned To' },
+    { key: 'cv_submitted',     label: 'By CV Submitted' },
+]
+const COMPANIES_DEFAULT_VISIBLE_FILTERS = new Set(['keyword', 'sponsor_type', 'sponsor_route', 'is_sponsored', 'is_deleted', 'visa_mentioned', 'has_website', 'has_career_page', 'ranked', 'rank', 'manual_check_done', 'has_it_jobs', 'offers_freelance', 'should_apply', 'date_from', 'date_to', 'checked_by', 'category_id', 'assigned', 'assigned_to', 'cv_submitted'])
+
 const COMPANIES_COL_WIDTHS: Record<string, number> = {
     actions: 80,
     num: 36, id: 120, rank: 50, organisation: 220, city: 110,
@@ -162,6 +187,12 @@ export default function CompaniesPage() {
     const [visibleCols, setVisibleCols] = useState<Set<string>>(() => new Set(DEFAULT_TABLE_COLS))
     const [showColDd, setShowColDd] = useState(false)
     const colDdRef = useRef<HTMLDivElement>(null)
+    const [visibleFilters, setVisibleFilters] = useState<Set<string>>(() => {
+        try { const s = localStorage.getItem('companies_visible_filters'); if (s) return new Set(JSON.parse(s)) } catch {}
+        return new Set(COMPANIES_DEFAULT_VISIBLE_FILTERS)
+    })
+    const [showFilterDd, setShowFilterDd] = useState(false)
+    const filterDdRef = useRef<HTMLDivElement>(null)
     const { widths: colW, startResize } = useColResize(COMPANIES_COL_WIDTHS, 'companies_col_widths')
 
     useEffect(() => {
@@ -199,12 +230,21 @@ export default function CompaniesPage() {
             return s
         })
 
+    const toggleFilter = (key: string) =>
+        setVisibleFilters(prev => {
+            const s = new Set(prev)
+            if (s.has(key)) s.delete(key); else s.add(key)
+            localStorage.setItem('companies_visible_filters', JSON.stringify(Array.from(s)))
+            return s
+        })
+
     const showSqlPanel = visiblePanels.has('sql')
 
     useEffect(() => {
         const handler = (e: MouseEvent) => {
             if (viewDdRef.current && !viewDdRef.current.contains(e.target as Node)) setShowViewDd(false)
             if (colDdRef.current && !colDdRef.current.contains(e.target as Node)) setShowColDd(false)
+            if (filterDdRef.current && !filterDdRef.current.contains(e.target as Node)) setShowFilterDd(false)
         }
         document.addEventListener('mousedown', handler)
         return () => document.removeEventListener('mousedown', handler)
@@ -490,7 +530,31 @@ export default function CompaniesPage() {
             {/* Filter bar */}
             <div className={`${visiblePanels.has('filters') ? '' : 'hidden'} border border-gray-200 rounded p-2 mb-2 bg-gray-50 ${sqlMode ? 'opacity-40 pointer-events-none select-none' : ''}`}>
                 <div className="flex items-end gap-1.5 flex-wrap">
-                    <div className="flex flex-col gap-0.5">
+                    {/* Filter visibility toggle */}
+                    <div className="relative self-end" ref={filterDdRef}>
+                        <button onClick={() => setShowFilterDd(p => !p)}
+                            title="Show/hide filters"
+                            className={`p-1 border rounded transition-colors relative ${showFilterDd ? 'border-indigo-400 bg-indigo-50 text-indigo-600' : 'border-gray-300 text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}>
+                            <SlidersHorizontal size={13} />
+                            {COMPANIES_FILTER_ITEMS.some(f => !visibleFilters.has(f.key)) && (
+                                <span className="absolute -top-1 -right-1 bg-indigo-500 text-white text-[7px] rounded-full w-2.5 h-2.5 flex items-center justify-center font-bold leading-none">·</span>
+                            )}
+                        </button>
+                        {showFilterDd && (
+                            <div className="absolute left-0 top-full mt-1 z-40 bg-white border border-gray-200 rounded shadow-lg p-2 min-w-48 max-h-72 overflow-y-auto">
+                                <p className="text-[9px] text-gray-400 uppercase font-semibold px-1 mb-1">Filters</p>
+                                {COMPANIES_FILTER_ITEMS.map(({ key, label }) => (
+                                    <label key={key} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded">
+                                        <input type="checkbox" className="w-3 h-3"
+                                            checked={visibleFilters.has(key)}
+                                            onChange={() => toggleFilter(key)} />
+                                        <span className="text-xs text-gray-700">{label}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('keyword') ? '' : ' hidden'}`}>
                         <label className="text-[10px] text-gray-400 uppercase">Search</label>
                         <div className="relative">
                             <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -505,8 +569,8 @@ export default function CompaniesPage() {
                     </div>
 
                     {/* Sponsor Type */}
-                    <div className="flex flex-col gap-0.5 relative">
-                        <label className="text-[10px] text-gray-400 uppercase">Sponsor Type</label>
+                    <div className={`flex flex-col gap-0.5 relative${visibleFilters.has('sponsor_type') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">By Sponsor Type</label>
                         <button onClick={() => { setShowTypeDd(p => !p); setShowRouteDd(false) }}
                             className={`flex items-center gap-1 border rounded px-2 py-1 text-xs text-gray-700 min-w-[140px] transition-colors ${filters.sponsor_type ? 'border-blue-500 bg-blue-100 hover:bg-blue-100' : 'border-gray-300 bg-white hover:bg-gray-50'}`}>
                             Type{filters.sponsor_type ? ` (${filters.sponsor_type.split(',').length})` : ''}
@@ -531,8 +595,8 @@ export default function CompaniesPage() {
                     </div>
 
                     {/* Sponsor Route */}
-                    <div className="flex flex-col gap-0.5 relative">
-                        <label className="text-[10px] text-gray-400 uppercase">Sponsor Route</label>
+                    <div className={`flex flex-col gap-0.5 relative${visibleFilters.has('sponsor_route') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">By Sponsor Route</label>
                         <button onClick={() => { setShowRouteDd(p => !p); setShowTypeDd(false) }}
                             className={`flex items-center gap-1 border rounded px-2 py-1 text-xs text-gray-700 min-w-[140px] transition-colors ${filters.sponsor_route ? 'border-blue-500 bg-blue-100 hover:bg-blue-100' : 'border-gray-300 bg-white hover:bg-gray-50'}`}>
                             Route{filters.sponsor_route ? ` (${filters.sponsor_route.split(',').length})` : ''}
@@ -556,8 +620,8 @@ export default function CompaniesPage() {
                         )}
                     </div>
 
-                    <div className="flex flex-col gap-0.5">
-                        <label className="text-[10px] text-gray-400 uppercase">Sponsored</label>
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('is_sponsored') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">By Sponsored</label>
                         <select value={filters.is_sponsored} onChange={e => setFilters(f => ({ ...f, is_sponsored: e.target.value }))}
                             className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.is_sponsored !== EMPTY_FILTERS.is_sponsored ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
                             <option value="">All</option>
@@ -566,8 +630,8 @@ export default function CompaniesPage() {
                         </select>
                     </div>
 
-                    <div className="flex flex-col gap-0.5">
-                        <label className="text-[10px] text-gray-400 uppercase">Is Deleted</label>
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('is_deleted') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">By Is Deleted</label>
                         <select value={filters.is_deleted} onChange={e => setFilters(f => ({ ...f, is_deleted: e.target.value }))}
                             className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.is_deleted !== EMPTY_FILTERS.is_deleted ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
                             <option value="">All</option>
@@ -576,8 +640,8 @@ export default function CompaniesPage() {
                         </select>
                     </div>
 
-                    <div className="flex flex-col gap-0.5">
-                        <label className="text-[10px] text-gray-400 uppercase">Visa Mentioned</label>
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('visa_mentioned') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">By Visa Mentioned</label>
                         <select value={filters.visa_mentioned} onChange={e => setFilters(f => ({ ...f, visa_mentioned: e.target.value }))}
                             className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.visa_mentioned ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
                             <option value="">All</option>
@@ -586,8 +650,8 @@ export default function CompaniesPage() {
                         </select>
                     </div>
 
-                    <div className="flex flex-col gap-0.5">
-                        <label className="text-[10px] text-gray-400 uppercase">Domain Found</label>
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('has_website') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">By Domain Found</label>
                         <select value={filters.has_website} onChange={e => setFilters(f => ({ ...f, has_website: e.target.value }))}
                             className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.has_website ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
                             <option value="">All</option>
@@ -596,8 +660,8 @@ export default function CompaniesPage() {
                         </select>
                     </div>
 
-                    <div className="flex flex-col gap-0.5">
-                        <label className="text-[10px] text-gray-400 uppercase">Career Page Found</label>
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('has_career_page') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">By Career Page Found</label>
                         <select value={filters.has_career_page} onChange={e => setFilters(f => ({ ...f, has_career_page: e.target.value }))}
                             className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.has_career_page ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
                             <option value="">All</option>
@@ -606,8 +670,8 @@ export default function CompaniesPage() {
                         </select>
                     </div>
 
-                    <div className="flex flex-col gap-0.5">
-                        <label className="text-[10px] text-gray-400 uppercase">Ranked</label>
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('ranked') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">By Ranked</label>
                         <select value={filters.ranked} onChange={e => setFilters(f => ({ ...f, ranked: e.target.value }))}
                             className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.ranked ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
                             <option value="">All</option>
@@ -616,8 +680,8 @@ export default function CompaniesPage() {
                         </select>
                     </div>
 
-                    <div className="flex flex-col gap-0.5">
-                        <label className="text-[10px] text-gray-400 uppercase">Rank</label>
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('rank') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">By Rank</label>
                         <div className="flex items-center gap-1">
                             <select value={filters.rank_op} onChange={e => setFilters(f => ({ ...f, rank_op: e.target.value }))}
                                 className={`border rounded px-1.5 py-1 text-xs focus:outline-none w-14 transition-colors ${filters.rank_op ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
@@ -639,8 +703,8 @@ export default function CompaniesPage() {
                         </div>
                     </div>
 
-                    <div className="flex flex-col gap-0.5">
-                        <label className="text-[10px] text-gray-400 uppercase">Manual Checked</label>
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('manual_check_done') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">By Manual Checked</label>
                         <select value={filters.manual_check_done} onChange={e => setFilters(f => ({ ...f, manual_check_done: e.target.value }))}
                             className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.manual_check_done ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
                             <option value="">All</option>
@@ -649,8 +713,8 @@ export default function CompaniesPage() {
                         </select>
                     </div>
 
-                    <div className="flex flex-col gap-0.5">
-                        <label className="text-[10px] text-gray-400 uppercase">Has IT Jobs</label>
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('has_it_jobs') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">By Has IT Jobs</label>
                         <select value={filters.has_it_jobs} onChange={e => setFilters(f => ({ ...f, has_it_jobs: e.target.value }))}
                             className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.has_it_jobs ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
                             <option value="">All</option>
@@ -660,8 +724,8 @@ export default function CompaniesPage() {
                         </select>
                     </div>
 
-                    <div className="flex flex-col gap-0.5">
-                        <label className="text-[10px] text-gray-400 uppercase">Offers Freelance</label>
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('offers_freelance') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">By Offers Freelance</label>
                         <select value={filters.offers_freelance} onChange={e => setFilters(f => ({ ...f, offers_freelance: e.target.value }))}
                             className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.offers_freelance ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
                             <option value="">All</option>
@@ -671,8 +735,8 @@ export default function CompaniesPage() {
                         </select>
                     </div>
 
-                    <div className="flex flex-col gap-0.5">
-                        <label className="text-[10px] text-gray-400 uppercase">Should Apply</label>
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('should_apply') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">By Should Apply</label>
                         <select value={filters.should_apply} onChange={e => setFilters(f => ({ ...f, should_apply: e.target.value }))}
                             className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.should_apply ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
                             <option value="">All</option>
@@ -681,19 +745,19 @@ export default function CompaniesPage() {
                         </select>
                     </div>
 
-                    <div className="flex flex-col gap-0.5">
-                        <label className="text-[10px] text-gray-400 uppercase">Check Date From</label>
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('date_from') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">By Check Date From</label>
                         <input type="date" value={filters.date_from} onChange={e => setFilters(f => ({ ...f, date_from: e.target.value }))}
                             className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.date_from ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`} />
                     </div>
 
-                    <div className="flex flex-col gap-0.5">
-                        <label className="text-[10px] text-gray-400 uppercase">Check Date To</label>
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('date_to') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">By Check Date To</label>
                         <input type="date" value={filters.date_to} onChange={e => setFilters(f => ({ ...f, date_to: e.target.value }))}
                             className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.date_to ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`} />
                     </div>
 
-                    <div className="flex flex-col gap-0.5">
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('checked_by') ? '' : ' hidden'}`}>
                         <label className="text-[10px] text-gray-400 uppercase">Checked By</label>
                         <select value={filters.checked_by} onChange={e => setFilters(f => ({ ...f, checked_by: e.target.value }))}
                             className={`border rounded px-2 py-1 text-xs focus:outline-none min-w-[100px] transition-colors ${filters.checked_by ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
@@ -704,8 +768,8 @@ export default function CompaniesPage() {
                         </select>
                     </div>
 
-                    <div className="flex flex-col gap-0.5">
-                        <label className="text-[10px] text-gray-400 uppercase">Category</label>
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('category_id') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">By Category</label>
                         <select value={filters.category_id} onChange={e => setFilters(f => ({ ...f, category_id: e.target.value }))}
                             className={`border rounded px-2 py-1 text-xs focus:outline-none min-w-[110px] transition-colors ${filters.category_id ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
                             <option value="">All</option>
@@ -713,8 +777,8 @@ export default function CompaniesPage() {
                         </select>
                     </div>
 
-                    <div className="flex flex-col gap-0.5">
-                        <label className="text-[10px] text-gray-400 uppercase">Assigned</label>
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('assigned') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">By Assigned</label>
                         <select value={filters.assigned} onChange={e => setFilters(f => ({ ...f, assigned: e.target.value }))}
                             className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.assigned ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
                             <option value="">All</option>
@@ -723,8 +787,8 @@ export default function CompaniesPage() {
                         </select>
                     </div>
 
-                    <div className="flex flex-col gap-0.5">
-                        <label className="text-[10px] text-gray-400 uppercase">Assigned To</label>
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('assigned_to') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">By Assigned To</label>
                         <select value={filters.assigned_to} onChange={e => setFilters(f => ({ ...f, assigned_to: e.target.value }))}
                             className={`border rounded px-2 py-1 text-xs focus:outline-none min-w-[100px] transition-colors ${filters.assigned_to ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
                             <option value="">All</option>
@@ -734,8 +798,8 @@ export default function CompaniesPage() {
                         </select>
                     </div>
 
-                    <div className="flex flex-col gap-0.5">
-                        <label className="text-[10px] text-gray-400 uppercase">CV Submitted</label>
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('cv_submitted') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">By CV Submitted</label>
                         <select value={filters.cv_submitted} onChange={e => setFilters(f => ({ ...f, cv_submitted: e.target.value }))}
                             className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.cv_submitted ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
                             <option value="">All</option>
@@ -852,7 +916,7 @@ export default function CompaniesPage() {
                 <table className="text-xs border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
                     <thead>
                         <tr className="bg-gray-100 border-b border-gray-300">
-                            <th className="px-1 py-1 font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.actions ?? 80 }}>
+                            <th className="px-1 py-1 font-medium text-gray-600 border-r border-gray-200 relative" style={{ width: colW.actions ?? 80 }}>
                                 <div className="flex items-center justify-end gap-1.5 pr-1">
                                     {/* Refresh */}
                                     <button onClick={refresh} disabled={loading} title="Refresh"
