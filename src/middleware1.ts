@@ -9,6 +9,7 @@ export const config = {
     matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
 };
 
+
 export async function middleware(request: NextRequest) {
     const path = request.nextUrl.pathname;
     const query = request.nextUrl.search;
