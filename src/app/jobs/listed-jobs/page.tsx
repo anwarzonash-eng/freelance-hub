@@ -219,7 +219,6 @@ export default function ListedJobsPage() {
     const [jobTypes, setJobTypes] = useState<string[]>([])
     const [showCatDd, setShowCatDd] = useState(false)
     const [showTypeDd, setShowTypeDd] = useState(false)
-    const [showAppStatusDd, setShowAppStatusDd] = useState(false)
 
     const [visibleCols, setVisibleCols] = useState<Set<string>>(() => new Set(DEFAULT_TABLE_COLS))
     const [showColDd, setShowColDd] = useState(false)
@@ -453,12 +452,6 @@ export default function ListedJobsPage() {
         const next = cur.includes(value) ? cur.filter(v => v !== value) : [...cur, value]
         setFilters(f => ({ ...f, job_category: next.join(',') }))
     }
-    const toggleAppStatus = (value: string) => {
-        const cur = filters.application_status.split(',').filter(Boolean)
-        const next = cur.includes(value) ? cur.filter(v => v !== value) : [...cur, value]
-        setFilters(f => ({ ...f, application_status: next.join(',') }))
-    }
-
     const toggleFilter = (key: string) =>
         setVisibleFilters(prev => {
             const s = new Set(prev)
@@ -548,7 +541,7 @@ export default function ListedJobsPage() {
 
                     <div className={`flex flex-col gap-0.5 relative${visibleFilters.has('type') ? '' : ' hidden'}`}>
                         <label className="text-[10px] text-gray-400 uppercase">By Type</label>
-                        <button onClick={() => { setShowTypeDd(p => !p); setShowCatDd(false); setShowAppStatusDd(false) }}
+                        <button onClick={() => { setShowTypeDd(p => !p); setShowCatDd(false) }}
                             className={`flex items-center gap-1 border rounded px-2 py-1 text-xs text-gray-700 min-w-[120px] transition-colors ${filters.type ? 'border-blue-500 bg-blue-100 hover:bg-blue-100' : 'border-gray-300 bg-white hover:bg-gray-50'}`}>
                             Type{filters.type ? ` (${filters.type.split(',').filter(Boolean).length})` : ''}
                             <ChevronDown size={11} className="ml-auto text-gray-400" />
@@ -573,7 +566,7 @@ export default function ListedJobsPage() {
 
                     <div className={`flex flex-col gap-0.5 relative${visibleFilters.has('job_category') ? '' : ' hidden'}`}>
                         <label className="text-[10px] text-gray-400 uppercase">By Category</label>
-                        <button onClick={() => { setShowCatDd(p => !p); setShowTypeDd(false); setShowAppStatusDd(false) }}
+                        <button onClick={() => { setShowCatDd(p => !p); setShowTypeDd(false) }}
                             className={`flex items-center gap-1 border rounded px-2 py-1 text-xs text-gray-700 min-w-[140px] transition-colors ${filters.job_category ? 'border-blue-500 bg-blue-100 hover:bg-blue-100' : 'border-gray-300 bg-white hover:bg-gray-50'}`}>
                             Category{filters.job_category ? ` (${filters.job_category.split(',').filter(Boolean).length})` : ''}
                             <ChevronDown size={11} className="ml-auto text-gray-400" />
@@ -656,29 +649,17 @@ export default function ListedJobsPage() {
                         </select>
                     </div>
 
-                    <div className={`flex flex-col gap-0.5 relative${visibleFilters.has('application_status') ? '' : ' hidden'}`}>
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('application_status') ? '' : ' hidden'}`}>
                         <label className="text-[10px] text-gray-400 uppercase">By App. Status</label>
-                        <button onClick={() => { setShowAppStatusDd(p => !p); setShowTypeDd(false); setShowCatDd(false) }}
-                            className={`flex items-center gap-1 border rounded px-2 py-1 text-xs text-gray-700 min-w-[140px] transition-colors ${filters.application_status ? 'border-blue-500 bg-blue-100 hover:bg-blue-100' : 'border-gray-300 bg-white hover:bg-gray-50'}`}>
-                            App. Status{filters.application_status ? ` (${filters.application_status.split(',').filter(Boolean).length})` : ''}
-                            <ChevronDown size={11} className="ml-auto text-gray-400" />
-                        </button>
-                        {showAppStatusDd && (
-                            <div className={ddCls}>
-                                {APP_STATUS_FILTER_OPTIONS.map(o => (
-                                    <label key={o.value} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded">
-                                        <input type="checkbox" className="w-3 h-3"
-                                            checked={filters.application_status.split(',').filter(Boolean).includes(o.value)}
-                                            onChange={() => toggleAppStatus(o.value)} />
-                                        <span className="text-xs text-gray-700">{o.label}</span>
-                                    </label>
-                                ))}
-                                <div className="border-t border-gray-100 pt-1">
-                                    <button onClick={() => { setFilters(f => ({ ...f, application_status: '' })); setShowAppStatusDd(false) }}
-                                        className="text-[10px] text-gray-400 hover:text-gray-700 w-full text-left">Clear</button>
-                                </div>
-                            </div>
-                        )}
+                        <select
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none min-w-[140px] transition-colors ${filters.application_status ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}
+                            value={filters.application_status}
+                            onChange={e => setFilters(f => ({ ...f, application_status: e.target.value }))}>
+                            <option value="">All</option>
+                            {APP_STATUS_FILTER_OPTIONS.map(o => (
+                                <option key={o.value} value={o.value}>{o.label}</option>
+                            ))}
+                        </select>
                     </div>
 
                     <div className={`flex flex-col gap-0.5${visibleFilters.has('assigned') ? '' : ' hidden'}`}>

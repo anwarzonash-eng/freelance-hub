@@ -69,6 +69,7 @@ const EMPTY_FILTERS = {
     created_by: '',
     status: '',
     job_application_status: '',
+    sponsorship_status: '',
 }
 type CvFilters = typeof EMPTY_FILTERS
 
@@ -132,8 +133,9 @@ const CV_FILTER_ITEMS = [
     { key: 'email',                 label: 'By Email' },
     { key: 'exp_yrs',               label: 'By Exp (yrs)' },
     { key: 'created_by',            label: 'Created By' },
-    { key: 'status',                label: 'By Status' },
+    { key: 'status',                label: 'By CV Status' },
     { key: 'job_application_status', label: 'By App Status' },
+    { key: 'sponsorship_status',     label: 'By Sponsorship' },
 ]
 const CV_DEFAULT_VISIBLE_FILTERS = new Set(CV_FILTER_ITEMS.map(f => f.key))
 
@@ -284,6 +286,7 @@ export default function CvsPage() {
                 created_by: searchParams.get('created_by') || '',
                 status: searchParams.get('status') || '',
                 job_application_status: searchParams.get('job_application_status') || '',
+                sponsorship_status: searchParams.get('sponsorship_status') || '',
             }
             hydratedFromUrl.current = true
             setFilters(fromUrl)
@@ -366,16 +369,19 @@ export default function CvsPage() {
         return () => clearTimeout(t)
     }, [companyQuery, showCompanyDd])
 
-    // Reload from backend when job_application_status filter changes (backend-side filter).
-    const prevJobAppStatus = useRef('')
+    // Reload from backend when any job-level filter changes (backend-side filters).
+    const prevJobFilters = useRef({ job_application_status: '', sponsorship_status: '' })
     useEffect(() => {
         if (!hydratedFromUrl.current) return
-        if (filters.job_application_status === prevJobAppStatus.current) return
-        prevJobAppStatus.current = filters.job_application_status
+        const cur = { job_application_status: filters.job_application_status, sponsorship_status: filters.sponsorship_status }
+        if (cur.job_application_status === prevJobFilters.current.job_application_status &&
+            cur.sponsorship_status === prevJobFilters.current.sponsorship_status) return
+        prevJobFilters.current = cur
         const params: Record<string, string> = {}
-        if (filters.job_application_status) params.job_application_status = filters.job_application_status
+        if (cur.job_application_status) params.job_application_status = cur.job_application_status
+        if (cur.sponsorship_status) params.sponsorship_status = cur.sponsorship_status
         load(params)
-    }, [filters.job_application_status, load])
+    }, [filters.job_application_status, filters.sponsorship_status, load])
 
     // Recompute the visible rows + keep the URL in sync whenever a filter changes.
     useEffect(() => {
@@ -553,7 +559,7 @@ export default function CvsPage() {
                     </div>
 
                     <div className={`flex flex-col gap-0.5${visibleFilters.has('status') ? '' : ' hidden'}`}>
-                        <label className="text-[10px] text-gray-400 uppercase">By Status</label>
+                        <label className="text-[10px] text-gray-400 uppercase">By CV Status</label>
                         <select
                             className={`border rounded px-2 py-1 text-xs focus:outline-none min-w-[110px] transition-colors ${filters.status ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}
                             value={filters.status}
@@ -574,9 +580,24 @@ export default function CvsPage() {
                             onChange={e => setFilters(f => ({ ...f, job_application_status: e.target.value }))}
                         >
                             <option value="">All</option>
+                            <option value="none">Not tracked</option>
                             {APPLICATION_STATUS_OPTIONS.filter(o => o.value).map(o => (
                                 <option key={o.value} value={o.value}>{o.label}</option>
                             ))}
+                        </select>
+                    </div>
+
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('sponsorship_status') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">By Sponsorship</label>
+                        <select
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none min-w-[160px] transition-colors ${filters.sponsorship_status ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}
+                            value={filters.sponsorship_status}
+                            onChange={e => setFilters(f => ({ ...f, sponsorship_status: e.target.value }))}
+                        >
+                            <option value="">All</option>
+                            <option value="Visa Sponsorship Available">Visa Sponsorship Available</option>
+                            <option value="Working Right Required">Working Right Required</option>
+                            <option value="Nothing Mentioned">Nothing Mentioned</option>
                         </select>
                     </div>
 
