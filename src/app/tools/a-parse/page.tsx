@@ -1,7 +1,11 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { ListTree, ChevronRight, ChevronDown, Download, Trash2, Wand2, Bot, User, TerminalSquare, Copy, Check, MessageSquareText, Sparkles, X, Eye, EyeOff, PanelRight, Search } from 'lucide-react'
+import { ListTree, ChevronRight, ChevronDown, Download, Trash2, Wand2, Bot, User, TerminalSquare, Copy, Check, MessageSquareText, Sparkles, X, Eye, EyeOff, PanelRight, Search, Plus, RefreshCw, Briefcase, FileText, Pencil, FileDiff } from 'lucide-react'
+import {
+    getAParseJobs, createAParseJob, deleteAParseJob, updateAParseJob,
+    getAParseTurns, createAParseTurn, deleteAParseTurn, updateAParseTurn,
+} from '@/app/api_handlers/api/aparse.api'
 
 /* ------------------------------------------------------------------ *
  * Parsing
@@ -26,15 +30,16 @@ import { ListTree, ChevronRight, ChevronDown, Download, Trash2, Wand2, Bot, User
  *     header lines stripped.
  * ------------------------------------------------------------------ */
 
-type Kind = 'bash' | 'result' | 'text'
+type Kind = 'bash' | 'result' | 'text' | 'code_diff'
 
 export interface ParsedItem {
     num: number
     label: 'Function Assist' | 'Function Result'
     kind: Kind
     content: string      // cleaned content (used for copy/download/preview)
-    prose?: string       // leading prose before a bash block
+    prose?: string       // leading prose before a bash / code_diff block
     command?: string     // extracted bash command
+    diff?: string        // extracted code_diff body
 }
 
 function stripTokenLines(text: string): string {
@@ -55,6 +60,14 @@ function extractBash(content: string): { prose: string; command: string } | null
     return { prose, command: rest.join('\n').trim() }
 }
 
+function extractCodeDiff(content: string): { prose: string; diff: string } | null {
+    const lines = content.split('\n')
+    const idx = lines.findIndex(l => l.trim().toLowerCase() === 'code_diff')
+    if (idx === -1) return null
+    const prose = lines.slice(0, idx).join('\n').trim()
+    return { prose, diff: lines.slice(idx + 1).join('\n').trim() }
+}
+
 function stripResultHeader(content: string): string {
     const lines = content.split('\n')
     let i = 0
@@ -69,6 +82,10 @@ function stripResultHeader(content: string): string {
 
 function parseTranscript(text: string): ParsedItem[] {
     if (!text || !text.trim()) return []
+
+    // Strip the exact "{{}}" artifact that sometimes appears on paste
+    // (only the full 4-char sequence — never lone/partial braces).
+    text = text.replace(/\{\{\}\}/g, '')
 
     const lines = text.split(/\r?\n/)
     const markerRe = /^\s*\((\d+)\)\s*$/
@@ -99,9 +116,12 @@ function parseTranscript(text: string): ParsedItem[] {
             continue
         }
 
-        // Function Assist — bash if it holds a standalone `bash` block.
+        // Function Assist — code_diff / bash if it holds a standalone marker line.
+        const codeDiff = extractCodeDiff(content)
         const bash = extractBash(content)
-        if (bash) {
+        if (codeDiff) {
+            items.push({ num: cur.num, label, kind: 'code_diff', content, prose: codeDiff.prose, diff: codeDiff.diff })
+        } else if (bash) {
             items.push({ num: cur.num, label, kind: 'bash', content, prose: bash.prose, command: bash.command })
         } else {
             items.push({ num: cur.num, label, kind: 'text', content })
@@ -120,10 +140,14 @@ function parseTranscript(text: string): ParsedItem[] {
 function buildEvalPrompt(items: ParsedItem[], originalPrompt: string): string {
     const header = `You are reviewing the transcript of an AI coding agent that executed a long, multi-step task. The run is split into numbered turns like (2), (3), (4)… Turns alternate between the agent taking an action ("Function Assist") and the resulting tool/function output ("Function Result").
 
+Some turns are one of these special sections:
+- A "bash" section: a shell command the agent ran.
+- A "code_diff" section: a code change the agent made, in a git-style diff. Lines starting with "--" are REMOVED code, lines starting with "++" are ADDED code, and all other lines are unchanged context. When explaining a code_diff turn, summarise what the edit does (what was added/removed and why).
+
 For EACH numbered turn below, write a concise explanation (NO MORE than 1-2 lines) of what that turn is doing or showing.
 
 Return ONLY a raw JSON object — no markdown code fences, no commentary before or after. Keys are the turn numbers as strings; values are your explanations. Example:
-{"2": "Runs version checks for node/npm/tsc and pings the npm registry.", "3": "Shows the returned tool versions and a successful registry ping."}`
+{"2": "Runs version checks for node/npm/tsc and pings the npm registry.", "3": "Shows the returned tool versions and a successful registry ping.", "4": "Edits config.ts to add a retry option and remove the old timeout constant."}`
 
     const promptCtx = originalPrompt.trim()
         ? `\n\nOriginal task prompt given to the agent:\n"""\n${originalPrompt.trim()}\n"""`
@@ -132,8 +156,11 @@ Return ONLY a raw JSON object — no markdown code fences, no commentary before 
     const body = items.map(it => {
         const c = it.kind === 'bash'
             ? [it.prose, it.command].filter(Boolean).join('\n')
-            : it.content
-        return `(${it.num}) [${it.label}]\n${c || '(empty)'}`
+            : it.kind === 'code_diff'
+                ? [it.prose, it.diff].filter(Boolean).join('\n')
+                : it.content
+        const tag = it.kind === 'bash' ? ' bash' : it.kind === 'code_diff' ? ' code_diff' : ''
+        return `(${it.num}) [${it.label}${tag}]\n${c || '(empty)'}`
     }).join('\n\n')
 
     return `${header}${promptCtx}\n\nTranscript:\n${body}`
@@ -179,7 +206,7 @@ function highlightHtml(text: string, term: string): string {
 
 /** All searchable text of a turn, lowercased. */
 function itemHaystack(it: ParsedItem): string {
-    return [`(${it.num})`, it.label, it.prose, it.command, it.content].filter(Boolean).join('\n').toLowerCase()
+    return [`(${it.num})`, it.label, it.prose, it.command, it.diff, it.content].filter(Boolean).join('\n').toLowerCase()
 }
 
 /** Highlight matches in already-rendered HTML without touching tag internals. */
@@ -207,7 +234,7 @@ function renderMarkdown(md: string): string {
     const src = md.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, _lang, code) => {
         const idx = blocks.length
         blocks.push(`<pre class="apmd-code bg-gray-900 text-gray-100 rounded px-2.5 py-2 overflow-x-auto text-[10px] font-mono my-1.5"><code>${escHtml(code.replace(/\n$/, ''))}</code></pre>`)
-        return ` CB${idx} `
+        return `@@CB${idx}@@`
     })
 
     const inline = (t: string) => {
@@ -225,7 +252,7 @@ function renderMarkdown(md: string): string {
     const closeList = () => { if (listType) { out.push(`</${listType}>`); listType = null } }
 
     for (const line of src.split('\n')) {
-        const cb = line.match(/^ CB(\d+) $/)
+        const cb = line.match(/^@@CB(\d+)@@$/)
         if (cb) { closeList(); out.push(blocks[Number(cb[1])]); continue }
         if (/^\s*$/.test(line)) { closeList(); continue }
 
@@ -282,11 +309,54 @@ function CopyBtn({ text, className = '' }: { text: string; className?: string })
     )
 }
 
+/* GitHub-style code diff: `--` lines red (removed), `++` lines green (added). */
+function CodeDiffBody({ diff, term }: { diff: string; term: string }) {
+    const lines = diff ? diff.split('\n') : []
+    return (
+        <div className="border border-gray-800 rounded overflow-hidden">
+            <div className="flex items-center gap-1 px-2 py-1 bg-gray-800 text-[10px] font-mono text-gray-200">
+                <FileDiff size={11} /> code_diff
+            </div>
+            <pre className="text-[10px] leading-relaxed bg-[#0d1117] overflow-x-auto font-mono py-1">
+                {lines.length ? lines.map((l, i) => {
+                    const added = l.startsWith('++')
+                    const removed = l.startsWith('--')
+                    const cls = added
+                        ? 'bg-green-500/15 text-green-300'
+                        : removed
+                            ? 'bg-red-500/15 text-red-300'
+                            : 'text-gray-300'
+                    return (
+                        <div key={i} className={`flex px-2 ${cls}`}>
+                            <span className="select-none w-4 shrink-0 text-center opacity-60">
+                                {added ? '+' : removed ? '-' : ' '}
+                            </span>
+                            <span className="whitespace-pre-wrap break-all"
+                                dangerouslySetInnerHTML={{ __html: highlightHtml(l || ' ', term) }} />
+                        </div>
+                    )
+                }) : <div className="px-3 text-gray-500 italic">empty</div>}
+            </pre>
+        </div>
+    )
+}
+
 /* ------------------------------------------------------------------ *
  * Turn body renderer (used both inline when expanded and in the side
  * panel). `term` highlights matches across bash/command/result/text.
  * ------------------------------------------------------------------ */
 function DetailBody({ item, term }: { item: ParsedItem; term: string }) {
+    if (item.kind === 'code_diff') {
+        return (
+            <div className="space-y-2">
+                {item.prose && (
+                    <div className="apmd text-[11px] text-gray-700"
+                        dangerouslySetInnerHTML={{ __html: highlightInHtml(renderMarkdown(item.prose), term) }} />
+                )}
+                <CodeDiffBody diff={item.diff || ''} term={term} />
+            </div>
+        )
+    }
     if (item.kind === 'bash') {
         return (
             <div className="space-y-2">
@@ -356,8 +426,9 @@ function TranscriptRow({
     // Preview: prefer whichever field actually contains the search term so the
     // collapsed row shows (and highlights) the match — remark, command, or content.
     const hl = highlight.trim().toLowerCase()
-    const fields = [remark, item.kind === 'bash' ? item.command : item.content, item.prose, item.content].filter(Boolean) as string[]
-    let base = remark || (item.kind === 'bash' ? item.command : item.content) || ''
+    const primary = item.kind === 'bash' ? item.command : item.kind === 'code_diff' ? item.diff : item.content
+    const fields = [remark, primary, item.prose, item.content].filter(Boolean) as string[]
+    let base = remark || primary || ''
     if (hl) {
         const match = fields.find(f => f.toLowerCase().includes(hl))
         if (match) base = match
@@ -395,6 +466,9 @@ function TranscriptRow({
                 {item.kind === 'bash' && (
                     <span className="text-[9px] px-1 py-0.5 rounded bg-gray-800 text-gray-100 font-mono shrink-0">bash</span>
                 )}
+                {item.kind === 'code_diff' && (
+                    <span className="text-[9px] px-1 py-0.5 rounded bg-purple-700 text-white font-mono shrink-0 flex items-center gap-0.5"><FileDiff size={9} /> diff</span>
+                )}
                 {remark && (
                     <span title="Has ChatGPT remark" className="shrink-0"><Sparkles size={10} className="text-amber-500" /></span>
                 )}
@@ -427,20 +501,29 @@ function TranscriptRow({
 /* ------------------------------------------------------------------ *
  * One model panel (reused for Model A and Model B)
  * ------------------------------------------------------------------ */
-function ModelPanel({ modelKey, title, singleMode }: { modelKey: 'a' | 'b'; title: string; singleMode: boolean }) {
-    const INPUT_LS_KEY = `aparse_model_${modelKey}_input`
-    const OPEN_LS_KEY = `aparse_model_${modelKey}_open`
-    const REMARKS_LS_KEY = `aparse_model_${modelKey}_remarks`
+function ModelPanel({
+    modelKey, title, singleMode, input, remarks, onInputChange, onRemarksChange, sharedPrompt,
+}: {
+    modelKey: 'a' | 'b'
+    title: string
+    singleMode: boolean
+    input: string
+    remarks: Record<string, string>
+    onInputChange: (v: string) => void
+    onRemarksChange: (r: Record<string, string>) => void
+    sharedPrompt: string
+}) {
+    // UI-only preferences persist globally; turn DATA (input/remarks) comes from props.
     const SHOWINPUT_LS_KEY = `aparse_model_${modelKey}_showinput`
     const SIDEW_LS_KEY = `aparse_model_${modelKey}_sidewidth`
     const downloadName = `Transcript ${title}`
 
-    const [input, setInput] = useState('')
+    const setInput = onInputChange
+    const setRemarks = onRemarksChange
+
     const [openSet, setOpenSet] = useState<Set<number>>(new Set())
-    const [remarks, setRemarks] = useState<Record<string, string>>({})
     const [showInput, setShowInput] = useState(true)
     const [search, setSearch] = useState('')
-    const [hydrated, setHydrated] = useState(false)
 
     // Evaluate modal
     const [showEval, setShowEval] = useState(false)
@@ -455,52 +538,25 @@ function ModelPanel({ modelKey, title, singleMode }: { modelKey: 'a' | 'b'; titl
     const listRef = useRef<HTMLDivElement>(null)
     const resizing = useRef(false)
 
-    // Load persisted state on mount.
+    // Load UI prefs on mount.
     useEffect(() => {
         try {
-            const savedInput = localStorage.getItem(INPUT_LS_KEY)
-            if (savedInput != null) setInput(savedInput)
-            const savedOpen = localStorage.getItem(OPEN_LS_KEY)
-            if (savedOpen) setOpenSet(new Set(JSON.parse(savedOpen)))
-            const savedRemarks = localStorage.getItem(REMARKS_LS_KEY)
-            if (savedRemarks) setRemarks(JSON.parse(savedRemarks))
             const savedShowInput = localStorage.getItem(SHOWINPUT_LS_KEY)
             if (savedShowInput != null) setShowInput(savedShowInput === '1')
             const savedSideW = Number(localStorage.getItem(SIDEW_LS_KEY))
             if (savedSideW) setSideWidth(savedSideW)
         } catch { /* ignore */ }
-        setHydrated(true)
     }, [])
-
-    // Persist input.
-    useEffect(() => {
-        if (!hydrated) return
-        try { localStorage.setItem(INPUT_LS_KEY, input) } catch { /* ignore */ }
-    }, [input, hydrated])
-
-    // Persist open state.
-    useEffect(() => {
-        if (!hydrated) return
-        try { localStorage.setItem(OPEN_LS_KEY, JSON.stringify(Array.from(openSet))) } catch { /* ignore */ }
-    }, [openSet, hydrated])
-
-    // Persist remarks.
-    useEffect(() => {
-        if (!hydrated) return
-        try { localStorage.setItem(REMARKS_LS_KEY, JSON.stringify(remarks)) } catch { /* ignore */ }
-    }, [remarks, hydrated])
 
     // Persist input visibility.
     useEffect(() => {
-        if (!hydrated) return
         try { localStorage.setItem(SHOWINPUT_LS_KEY, showInput ? '1' : '0') } catch { /* ignore */ }
-    }, [showInput, hydrated])
+    }, [showInput])
 
     // Persist side-panel width.
     useEffect(() => {
-        if (!hydrated) return
         try { localStorage.setItem(SIDEW_LS_KEY, String(sideWidth)) } catch { /* ignore */ }
-    }, [sideWidth, hydrated])
+    }, [sideWidth])
 
     const items = useMemo(() => parseTranscript(input), [input])
 
@@ -575,8 +631,8 @@ function ModelPanel({ modelKey, title, singleMode }: { modelKey: 'a' | 'b'; titl
     }
 
     const evalPrompt = useMemo(
-        () => buildEvalPrompt(items, (() => { try { return localStorage.getItem('aparse_prompt') || '' } catch { return '' } })()),
-        [items, showEval],
+        () => buildEvalPrompt(items, sharedPrompt),
+        [items, sharedPrompt, showEval],
     )
     const remarkCount = Object.keys(remarks).length
 
@@ -637,6 +693,8 @@ function ModelPanel({ modelKey, title, singleMode }: { modelKey: 'a' | 'b'; titl
             '                      "Function Result" (the tool/function output it got back).',
             '                      Turns alternate: Assist, Result, Assist, Result, …',
             '  • [bash]          = present when the Assist turn ran a shell command.',
+            '  • [code_diff]     = present when the Assist turn made a code change. Lines',
+            '                      starting with "--" are removed, "++" are added.',
             '  • <raw content>   = the turn text exactly as captured (commands, terminal',
             '                      output, or the agent\'s prose), with the per-turn',
             '                      "Tokens Remaining" lines removed.',
@@ -648,7 +706,7 @@ function ModelPanel({ modelKey, title, singleMode }: { modelKey: 'a' | 'b'; titl
         ].join('\n')
 
         const body = items.length
-            ? header + items.map(it => `(${it.num}) ${it.label}${it.kind === 'bash' ? ' [bash]' : ''}\n${'-'.repeat(40)}\n${it.content}\n`).join('\n')
+            ? header + items.map(it => `(${it.num}) ${it.label}${it.kind === 'bash' ? ' [bash]' : it.kind === 'code_diff' ? ' [code_diff]' : ''}\n${'-'.repeat(40)}\n${it.content}\n`).join('\n')
             : input
         const blob = new Blob([body], { type: 'text/plain;charset=utf-8' })
         const url = URL.createObjectURL(blob)
@@ -771,7 +829,7 @@ function ModelPanel({ modelKey, title, singleMode }: { modelKey: 'a' | 'b'; titl
                 const it = items[detailIdx]
                 const rmk = remarks[String(it.num)]
                 const matchCount = detailSearch.trim()
-                    ? (`${it.prose ?? ''}\n${it.command ?? ''}\n${it.content}\n${rmk ?? ''}`
+                    ? (`${it.prose ?? ''}\n${it.command ?? ''}\n${it.diff ?? ''}\n${it.content}\n${rmk ?? ''}`
                         .match(new RegExp(detailSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')) || []).length
                     : 0
                 return (
@@ -784,7 +842,7 @@ function ModelPanel({ modelKey, title, singleMode }: { modelKey: 'a' | 'b'; titl
                                 <PanelRight size={12} className="text-indigo-500 shrink-0" />
                                 <div className="min-w-0 flex-1">
                                     <p className="text-[11px] font-semibold text-gray-700 truncate">
-                                        Turn ({it.num}) · {it.label}{it.kind === 'bash' ? ' · bash' : ''}
+                                        Turn ({it.num}) · {it.label}{it.kind === 'bash' ? ' · bash' : it.kind === 'code_diff' ? ' · code_diff' : ''}
                                     </p>
                                     <p className="text-[9px] text-gray-400">Detail view</p>
                                 </div>
@@ -889,33 +947,21 @@ function ModelPanel({ modelKey, title, singleMode }: { modelKey: 'a' | 'b'; titl
 /* ------------------------------------------------------------------ *
  * Shared prompt block — the original prompt both models were run on.
  * ------------------------------------------------------------------ */
-function PromptSection() {
-    const PROMPT_LS_KEY = 'aparse_prompt'
+function PromptSection({ prompt, onPromptChange }: { prompt: string; onPromptChange: (v: string) => void }) {
     const PROMPT_OPEN_LS_KEY = 'aparse_prompt_open'
-
-    const [prompt, setPrompt] = useState('')
+    const setPrompt = onPromptChange
     const [open, setOpen] = useState(true)
-    const [hydrated, setHydrated] = useState(false)
 
     useEffect(() => {
         try {
-            const savedPrompt = localStorage.getItem(PROMPT_LS_KEY)
-            if (savedPrompt != null) setPrompt(savedPrompt)
             const savedOpen = localStorage.getItem(PROMPT_OPEN_LS_KEY)
             if (savedOpen != null) setOpen(savedOpen === '1')
         } catch { /* ignore */ }
-        setHydrated(true)
     }, [])
 
     useEffect(() => {
-        if (!hydrated) return
-        try { localStorage.setItem(PROMPT_LS_KEY, prompt) } catch { /* ignore */ }
-    }, [prompt, hydrated])
-
-    useEffect(() => {
-        if (!hydrated) return
         try { localStorage.setItem(PROMPT_OPEN_LS_KEY, open ? '1' : '0') } catch { /* ignore */ }
-    }, [open, hydrated])
+    }, [open])
 
     const preview = prompt.trim().replace(/\s+/g, ' ').slice(0, 140)
 
@@ -951,34 +997,49 @@ function PromptSection() {
 }
 
 /* ------------------------------------------------------------------ *
- * Page
+ * Turn editor — the full A Parse screen for ONE turn, shown in a
+ * full-screen popup. Autosaves changes to the DB (debounced).
  * ------------------------------------------------------------------ */
 type ModelView = 'a' | 'b' | 'both'
 
-export default function AParsePage() {
+function AParseEditor({ turn, jobName, onClose }: { turn: any; jobName: string; onClose: () => void }) {
     const [showPrompt, setShowPrompt] = useState(true)
     const [view, setView] = useState<ModelView>('both')
-    const [hydrated, setHydrated] = useState(false)
 
+    const [prompt, setPrompt] = useState<string>(turn.prompt || '')
+    const [aInput, setAInput] = useState<string>(turn.model_a_input || '')
+    const [bInput, setBInput] = useState<string>(turn.model_b_input || '')
+    const [aRemarks, setARemarks] = useState<Record<string, string>>(turn.model_a_remarks || {})
+    const [bRemarks, setBRemarks] = useState<Record<string, string>>(turn.model_b_remarks || {})
+    const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
+
+    // UI prefs (global)
     useEffect(() => {
         try {
-            const sp = localStorage.getItem('aparse_show_prompt')
-            if (sp != null) setShowPrompt(sp === '1')
-            const v = localStorage.getItem('aparse_view')
-            if (v === 'a' || v === 'b' || v === 'both') setView(v)
+            const sp = localStorage.getItem('aparse_show_prompt'); if (sp != null) setShowPrompt(sp === '1')
+            const v = localStorage.getItem('aparse_view'); if (v === 'a' || v === 'b' || v === 'both') setView(v)
         } catch { /* ignore */ }
-        setHydrated(true)
     }, [])
+    useEffect(() => { try { localStorage.setItem('aparse_show_prompt', showPrompt ? '1' : '0') } catch { /* ignore */ } }, [showPrompt])
+    useEffect(() => { try { localStorage.setItem('aparse_view', view) } catch { /* ignore */ } }, [view])
 
+    // Debounced autosave whenever any turn data changes.
+    const first = useRef(true)
     useEffect(() => {
-        if (!hydrated) return
-        try { localStorage.setItem('aparse_show_prompt', showPrompt ? '1' : '0') } catch { /* ignore */ }
-    }, [showPrompt, hydrated])
-
-    useEffect(() => {
-        if (!hydrated) return
-        try { localStorage.setItem('aparse_view', view) } catch { /* ignore */ }
-    }, [view, hydrated])
+        if (first.current) { first.current = false; return }
+        setSaveStatus('saving')
+        const t = setTimeout(async () => {
+            try {
+                await updateAParseTurn(turn.id, {
+                    prompt,
+                    model_a_input: aInput, model_b_input: bInput,
+                    model_a_remarks: aRemarks, model_b_remarks: bRemarks,
+                })
+                setSaveStatus('saved')
+            } catch { setSaveStatus('idle') }
+        }, 700)
+        return () => clearTimeout(t)
+    }, [prompt, aInput, bInput, aRemarks, bRemarks, turn.id])
 
     const VIEW_OPTS: { key: ModelView; label: string }[] = [
         { key: 'a', label: 'Model A' },
@@ -987,38 +1048,264 @@ export default function AParsePage() {
     ]
 
     return (
+        <div className="fixed inset-0 z-[9970] bg-white flex flex-col">
+            <div className="bg-white flex flex-col flex-1 min-h-0 overflow-hidden">
+                {/* Editor header */}
+                <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-gray-50 shrink-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                        <ListTree size={14} className="text-gray-500 shrink-0" />
+                        <h1 className="text-sm font-semibold text-gray-800 truncate">{jobName} · {turn.title}</h1>
+                        <span className="text-[10px] text-gray-400 shrink-0">
+                            {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? 'Saved ✓' : ''}
+                        </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button onClick={() => setShowPrompt(v => !v)}
+                            title={showPrompt ? 'Hide prompt section' : 'Show prompt section'}
+                            className={`flex items-center gap-1 text-[10px] border rounded px-1.5 py-1 transition-colors ${showPrompt ? 'border-indigo-300 text-indigo-700 bg-indigo-50' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
+                            <MessageSquareText size={11} /> {showPrompt ? 'Hide prompt' : 'Show prompt'}
+                        </button>
+                        <div className="flex items-center border border-gray-300 rounded overflow-hidden">
+                            {VIEW_OPTS.map(o => (
+                                <button key={o.key} onClick={() => setView(o.key)}
+                                    className={`text-[10px] px-2 py-1 transition-colors ${view === o.key ? 'bg-gray-800 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>
+                                    {o.label}
+                                </button>
+                            ))}
+                        </div>
+                        <button onClick={onClose}
+                            className="flex items-center gap-1 text-[11px] border border-gray-300 rounded px-2 py-1 hover:bg-white text-gray-700">
+                            <X size={13} /> Close
+                        </button>
+                    </div>
+                </div>
+
+                {/* Editor body */}
+                <div className="flex flex-col flex-1 min-h-0 p-3 overflow-hidden">
+                    {showPrompt && <div className="shrink-0"><PromptSection prompt={prompt} onPromptChange={setPrompt} /></div>}
+                    <div className="flex gap-3 flex-1 min-h-0 flex-col xl:flex-row">
+                        {view !== 'b' && (
+                            <ModelPanel modelKey="a" title="Model A" singleMode={view === 'a'}
+                                input={aInput} remarks={aRemarks} onInputChange={setAInput} onRemarksChange={setARemarks} sharedPrompt={prompt} />
+                        )}
+                        {view !== 'a' && (
+                            <ModelPanel modelKey="b" title="Model B" singleMode={view === 'b'}
+                                input={bInput} remarks={bRemarks} onInputChange={setBInput} onRemarksChange={setBRemarks} sharedPrompt={prompt} />
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+/* ------------------------------------------------------------------ *
+ * Page — Jobs list. Each job holds many turns; a turn opens the
+ * full-screen A Parse editor above.
+ * ------------------------------------------------------------------ */
+interface AParseJob { id: string; name: string; turn_count: number; createdAt?: string }
+
+export default function AParsePage() {
+    const [jobs, setJobs] = useState<AParseJob[]>([])
+    const [loading, setLoading] = useState(false)
+    const [expanded, setExpanded] = useState<Set<string>>(new Set())
+    const [turnsByJob, setTurnsByJob] = useState<Record<string, any[]>>({})
+    const [loadingTurns, setLoadingTurns] = useState<Set<string>>(new Set())
+    const [creating, setCreating] = useState(false)
+    const [newName, setNewName] = useState('')
+    const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null)
+    const [openTurn, setOpenTurn] = useState<{ turn: any; jobName: string; jobId: string } | null>(null)
+
+    const load = useCallback(async () => {
+        setLoading(true)
+        try {
+            const res: any = await getAParseJobs()
+            const list = res?.data ?? res
+            setJobs(Array.isArray(list) ? list : [])
+        } finally { setLoading(false) }
+    }, [])
+
+    useEffect(() => { load() }, [load])
+
+    const loadTurns = useCallback(async (jobId: string) => {
+        setLoadingTurns(s => new Set(s).add(jobId))
+        try {
+            const res: any = await getAParseTurns(jobId)
+            const list = res?.data ?? res
+            setTurnsByJob(m => ({ ...m, [jobId]: Array.isArray(list) ? list : [] }))
+        } finally {
+            setLoadingTurns(s => { const n = new Set(s); n.delete(jobId); return n })
+        }
+    }, [])
+
+    const toggleExpand = (jobId: string) => {
+        setExpanded(prev => {
+            const s = new Set(prev)
+            if (s.has(jobId)) s.delete(jobId)
+            else { s.add(jobId); loadTurns(jobId) }
+            return s
+        })
+    }
+
+    const createJob = async () => {
+        const name = newName.trim()
+        if (!name) return
+        await createAParseJob(name)
+        setNewName(''); setCreating(false)
+        load()
+    }
+
+    const renameJob = async () => {
+        if (!renaming || !renaming.name.trim()) { setRenaming(null); return }
+        await updateAParseJob(renaming.id, { name: renaming.name.trim() })
+        setRenaming(null)
+        load()
+    }
+
+    const removeJob = async (id: string) => {
+        if (!confirm('Delete this job and all its turns?')) return
+        await deleteAParseJob(id)
+        load()
+    }
+
+    const addTurn = async (job: AParseJob) => {
+        const res: any = await createAParseTurn(job.id)
+        const turn = res?.data ?? res
+        await loadTurns(job.id)
+        load()
+        if (turn?.id) setOpenTurn({ turn, jobName: job.name, jobId: job.id })
+    }
+
+    const removeTurn = async (turnId: string, jobId: string) => {
+        if (!confirm('Delete this turn?')) return
+        await deleteAParseTurn(turnId)
+        await loadTurns(jobId)
+        load()
+    }
+
+    const closeEditor = () => {
+        if (openTurn) { loadTurns(openTurn.jobId); load() }
+        setOpenTurn(null)
+    }
+
+    return (
         <div className="p-3 bg-white h-full flex flex-col overflow-hidden">
             <div className="flex items-center justify-between mb-3 border-b border-gray-200 pb-2 shrink-0">
                 <div className="flex items-center gap-2">
                     <ListTree size={14} className="text-gray-500" />
-                    <h1 className="text-sm font-semibold text-gray-800">A Parse</h1>
-                    <span className="text-[10px] text-gray-400">Compare two model runs — Model A vs Model B</span>
+                    <h1 className="text-sm font-semibold text-gray-800">A Parse — Jobs</h1>
+                    <span className="text-[10px] text-gray-400">{jobs.length} job{jobs.length !== 1 ? 's' : ''}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                    {/* Show/hide prompt */}
-                    <button onClick={() => setShowPrompt(v => !v)}
-                        title={showPrompt ? 'Hide prompt section' : 'Show prompt section'}
-                        className={`flex items-center gap-1 text-[10px] border rounded px-1.5 py-1 transition-colors ${showPrompt ? 'border-indigo-300 text-indigo-700 bg-indigo-50' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
-                        <MessageSquareText size={11} /> {showPrompt ? 'Hide prompt' : 'Show prompt'}
+                    <button onClick={() => load()} disabled={loading}
+                        className="flex items-center gap-1 text-xs border border-gray-300 rounded px-2 py-1 hover:bg-gray-50 disabled:opacity-50 text-gray-600">
+                        <RefreshCw size={11} className={loading ? 'animate-spin' : ''} /> Refresh
                     </button>
-                    {/* Model selector */}
-                    <div className="flex items-center border border-gray-300 rounded overflow-hidden">
-                        {VIEW_OPTS.map(o => (
-                            <button key={o.key} onClick={() => setView(o.key)}
-                                className={`text-[10px] px-2 py-1 transition-colors ${view === o.key ? 'bg-gray-800 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>
-                                {o.label}
-                            </button>
-                        ))}
-                    </div>
+                    <button onClick={() => { setCreating(true); setNewName('') }}
+                        className="flex items-center gap-1 text-xs bg-teal-600 text-white rounded px-2.5 py-1 hover:bg-teal-700">
+                        <Plus size={13} /> Create Job
+                    </button>
                 </div>
             </div>
 
-            {showPrompt && <div className="shrink-0"><PromptSection /></div>}
+            {/* New job inline row */}
+            {creating && (
+                <div className="flex items-center gap-2 mb-2 border border-teal-200 bg-teal-50 rounded p-2 shrink-0">
+                    <Briefcase size={13} className="text-teal-600 shrink-0" />
+                    <input autoFocus value={newName}
+                        onChange={e => setNewName(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') createJob(); if (e.key === 'Escape') setCreating(false) }}
+                        placeholder="Job name…"
+                        className="flex-1 text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-teal-400" />
+                    <button onClick={createJob} disabled={!newName.trim()}
+                        className="text-[11px] bg-teal-600 text-white rounded px-2.5 py-1 hover:bg-teal-700 disabled:opacity-40">Create</button>
+                    <button onClick={() => setCreating(false)} className="text-[11px] border border-gray-300 rounded px-2 py-1 hover:bg-white text-gray-600">Cancel</button>
+                </div>
+            )}
 
-            <div className="flex gap-3 flex-1 min-h-0 flex-col xl:flex-row">
-                {view !== 'b' && <ModelPanel modelKey="a" title="Model A" singleMode={view === 'a'} />}
-                {view !== 'a' && <ModelPanel modelKey="b" title="Model B" singleMode={view === 'b'} />}
+            {/* Jobs list */}
+            <div className="flex-1 overflow-y-auto min-h-0 border border-gray-200 rounded">
+                {loading && jobs.length === 0 ? (
+                    <div className="flex items-center justify-center gap-2 py-12 text-gray-400 text-xs">
+                        <RefreshCw size={14} className="animate-spin" /> Loading jobs…
+                    </div>
+                ) : jobs.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center gap-2 py-12 text-gray-400 text-xs">
+                        <Briefcase size={20} className="text-gray-300" />
+                        No jobs yet. Click <span className="font-medium text-teal-600">Create Job</span> to start.
+                    </div>
+                ) : jobs.map(job => {
+                    const isOpen = expanded.has(job.id)
+                    const turns = turnsByJob[job.id] ?? []
+                    const busy = loadingTurns.has(job.id)
+                    return (
+                        <div key={job.id} className="border-b border-gray-100 last:border-0">
+                            {/* Job row */}
+                            <div className="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50">
+                                <button onClick={() => toggleExpand(job.id)} className="shrink-0 text-gray-400 hover:text-gray-700">
+                                    {isOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                                </button>
+                                <Briefcase size={13} className="text-teal-600 shrink-0" />
+                                {renaming?.id === job.id ? (
+                                    <input autoFocus value={renaming.name}
+                                        onChange={e => setRenaming({ id: job.id, name: e.target.value })}
+                                        onKeyDown={e => { if (e.key === 'Enter') renameJob(); if (e.key === 'Escape') setRenaming(null) }}
+                                        onBlur={renameJob}
+                                        className="flex-1 text-xs border border-gray-300 rounded px-2 py-0.5 focus:outline-none focus:border-teal-400" />
+                                ) : (
+                                    <button onClick={() => toggleExpand(job.id)} className="flex-1 text-left text-xs font-medium text-gray-800 truncate">
+                                        {job.name}
+                                    </button>
+                                )}
+                                <span className="text-[10px] text-gray-400 shrink-0">{job.turn_count} turn{job.turn_count !== 1 ? 's' : ''}</span>
+                                <button onClick={() => addTurn(job)} title="Add turn"
+                                    className="p-1 text-gray-400 hover:text-teal-700 hover:bg-teal-50 rounded shrink-0"><Plus size={12} /></button>
+                                <button onClick={() => setRenaming({ id: job.id, name: job.name })} title="Rename"
+                                    className="p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded shrink-0"><Pencil size={12} /></button>
+                                <button onClick={() => removeJob(job.id)} title="Delete job"
+                                    className="p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded shrink-0"><Trash2 size={12} /></button>
+                            </div>
+
+                            {/* Turns */}
+                            {isOpen && (
+                                <div className="pl-8 pr-2 pb-2 bg-gray-50/50">
+                                    {busy ? (
+                                        <div className="flex items-center gap-2 py-3 text-gray-400 text-[11px]"><RefreshCw size={12} className="animate-spin" /> Loading turns…</div>
+                                    ) : turns.length === 0 ? (
+                                        <button onClick={() => addTurn(job)}
+                                            className="flex items-center gap-1.5 text-[11px] text-teal-700 border border-dashed border-teal-300 rounded px-2.5 py-1.5 my-1 hover:bg-teal-50">
+                                            <Plus size={12} /> Create first turn
+                                        </button>
+                                    ) : (
+                                        <div className="flex flex-col">
+                                            {turns.map(t => (
+                                                <div key={t.id} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-white border border-transparent hover:border-gray-200">
+                                                    <FileText size={12} className="text-gray-400 shrink-0" />
+                                                    <button onClick={() => setOpenTurn({ turn: t, jobName: job.name, jobId: job.id })}
+                                                        className="flex-1 text-left text-[11px] text-gray-700 truncate hover:text-teal-700">
+                                                        {t.title}
+                                                    </button>
+                                                    {t.prompt?.trim() && <span title="Has prompt" className="text-[9px] text-indigo-400 shrink-0">prompt</span>}
+                                                    <button onClick={() => removeTurn(t.id, job.id)} title="Delete turn"
+                                                        className="p-0.5 text-red-300 hover:text-red-600 hover:bg-red-50 rounded shrink-0"><Trash2 size={11} /></button>
+                                                </div>
+                                            ))}
+                                            <button onClick={() => addTurn(job)}
+                                                className="flex items-center gap-1.5 text-[11px] text-teal-700 rounded px-2 py-1 mt-1 hover:bg-teal-50 self-start">
+                                                <Plus size={12} /> Add turn
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )
+                })}
             </div>
+
+            {openTurn && (
+                <AParseEditor turn={openTurn.turn} jobName={openTurn.jobName} onClose={closeEditor} />
+            )}
         </div>
     )
 }

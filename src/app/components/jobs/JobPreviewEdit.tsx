@@ -62,8 +62,21 @@ export function CvSubmissionBadge({ job, userMap }: { job: any; userMap?: Record
 }
 
 export function JobPreview({ job, userMap }: { job: any; userMap?: Record<string, string> }) {
+    const [activeTab, setActiveTab] = useState<'overview' | 'qa'>('overview')
     const [expandedDescription, setExpandedDescription] = useState(true)
     const [expandedRawDescription, setExpandedRawDescription] = useState(false)
+    const [rawDescFontSize, setRawDescFontSize] = useState<number>(() => {
+        try { return Number(localStorage.getItem('raw_desc_font_size')) || 12 } catch { return 12 }
+    })
+    const changeRawDescFontSize = (delta: number) => {
+        setRawDescFontSize(prev => {
+            const next = Math.min(24, Math.max(8, prev + delta))
+            try { localStorage.setItem('raw_desc_font_size', String(next)) } catch {}
+            return next
+        })
+    }
+
+    const qaList: { question: string; answer: string }[] = job.additional_fields?.qa_list ?? []
 
     return (
         <>
@@ -86,6 +99,58 @@ export function JobPreview({ job, userMap }: { job: any; userMap?: Record<string
                 </div>
             </div>
 
+            {/* Tabs */}
+            <div className="flex gap-0 border-b border-gray-200 mt-3">
+                {([
+                    { key: 'overview', label: 'Overview' },
+                    { key: 'qa',       label: `Q&A${qaList.length ? ` (${qaList.length})` : ''}` },
+                ] as const).map(tab => (
+                    <button key={tab.key} type="button"
+                        onClick={() => setActiveTab(tab.key)}
+                        className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${activeTab === tab.key ? 'border-gray-800 text-gray-800' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
+                        {tab.label}
+                    </button>
+                ))}
+            </div>
+
+            {/* Q&A Tab */}
+            {activeTab === 'qa' && (
+                <div className="py-4">
+                    {qaList.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-16 text-center">
+                            <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center mb-3">
+                                <span className="text-gray-400 text-lg">?</span>
+                            </div>
+                            <p className="text-sm font-medium text-gray-500">No Q&amp;A added yet</p>
+                            <p className="text-xs text-gray-400 mt-1">Switch to Edit mode to add application questions and answers.</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            {qaList.map((item, idx) => (
+                                <div key={idx} className="rounded-lg border border-gray-200 overflow-hidden">
+                                    <div className="flex items-start gap-3 px-4 py-3 bg-gray-50 border-b border-gray-200">
+                                        <span className="shrink-0 w-5 h-5 rounded-full bg-gray-800 text-white text-[10px] font-bold flex items-center justify-center mt-0.5">
+                                            {idx + 1}
+                                        </span>
+                                        <p className="text-sm font-medium text-gray-800 leading-snug">{item.question || <span className="text-gray-400 italic">No question text</span>}</p>
+                                    </div>
+                                    <div className="px-4 py-3 bg-white">
+                                        {item.answer ? (
+                                            <p className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">{item.answer}</p>
+                                        ) : (
+                                            <p className="text-xs text-gray-400 italic">No answer yet</p>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Overview Tab */}
+            {activeTab === 'overview' && <>
+
             {/* Main Fields Grid */}
             <div className="grid grid-cols-2 gap-3 py-3 border-t border-b">
                 {[
@@ -94,6 +159,7 @@ export function JobPreview({ job, userMap }: { job: any; userMap?: Record<string
                     { label: 'Experience Required', value: job.experience_required },
                     { label: 'Visa Sponsorship', value: job.visa_sponsorship_text, highlight: true },
                     { label: 'Sponsorship Status', value: job.sponsorship_status, highlight: true },
+                    { label: 'Freelance Status', value: job.freelance_status },
                     { label: 'Application Start', value: job.application_start_date },
                     { label: 'Application Closing', value: job.application_closing_date },
                     { label: 'Qualification Required', value: job.qualification_required },
@@ -111,6 +177,14 @@ export function JobPreview({ job, userMap }: { job: any; userMap?: Record<string
                     )
                 })}
             </div>
+
+            {/* Freelance Description */}
+            {job.freelance_description && (
+                <div className="py-3 border-b">
+                    <p className="text-[10px] text-gray-400 uppercase font-semibold mb-1">Freelance Notes</p>
+                    <p className="text-xs text-gray-700 whitespace-pre-wrap">{job.freelance_description}</p>
+                </div>
+            )}
 
             {/* Description (HTML) */}
             {job.job_complete_description && (
@@ -134,16 +208,27 @@ export function JobPreview({ job, userMap }: { job: any; userMap?: Record<string
             {/* Raw Description */}
             {job.raw_description && (
                 <div className="py-3 border-b">
-                    <button
-                        onClick={() => setExpandedRawDescription(!expandedRawDescription)}
-                        className="flex items-center gap-2 w-full text-left"
-                    >
-                        {expandedRawDescription ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                        <p className="text-[10px] text-gray-400 uppercase font-semibold bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">Raw Description (for CV)</p>
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setExpandedRawDescription(!expandedRawDescription)}
+                            className="flex items-center gap-2 flex-1 text-left"
+                        >
+                            {expandedRawDescription ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                            <p className="text-[10px] text-gray-400 uppercase font-semibold bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">Raw Description (for CV)</p>
+                        </button>
+                        {expandedRawDescription && (
+                            <div className="flex items-center gap-1 shrink-0">
+                                <button onClick={() => changeRawDescFontSize(-1)}
+                                    className="w-5 h-5 flex items-center justify-center text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded border border-gray-200 text-xs leading-none">−</button>
+                                <span className="text-[10px] text-gray-400 w-7 text-center">{rawDescFontSize}px</span>
+                                <button onClick={() => changeRawDescFontSize(1)}
+                                    className="w-5 h-5 flex items-center justify-center text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded border border-gray-200 text-xs leading-none">+</button>
+                            </div>
+                        )}
+                    </div>
                     {expandedRawDescription && (
                         <div className="mt-2 bg-blue-50 border border-blue-200 rounded p-3">
-                            <p className="text-xs text-gray-700 whitespace-pre-wrap">{job.raw_description}</p>
+                            <p className="text-gray-700 whitespace-pre-wrap" style={{ fontSize: rawDescFontSize }}>{job.raw_description}</p>
                             {job.tech_skills && job.tech_skills.length > 0 && (
                                 <SkillsFoundInDescription
                                     skills={job.tech_skills}
@@ -192,11 +277,11 @@ export function JobPreview({ job, userMap }: { job: any; userMap?: Record<string
             )}
 
             {/* Additional Fields */}
-            {job.additional_fields && Object.keys(job.additional_fields).length > 0 && (
+            {job.additional_fields && Object.keys(job.additional_fields).filter(k => k !== 'qa_list').length > 0 && (
                 <div className="py-3">
                     <p className="text-[10px] text-gray-400 uppercase font-semibold mb-2">Additional Information</p>
                     <div className="space-y-2">
-                        {Object.entries(job.additional_fields).map(([key, value]: [string, any], idx) => (
+                        {Object.entries(job.additional_fields).filter(([k]) => k !== 'qa_list').map(([key, value]: [string, any], idx) => (
                             <div key={idx} className="bg-gray-50 p-2 rounded">
                                 <p className="text-[10px] text-gray-500 uppercase font-semibold">{key.replace(/_/g, ' ')}</p>
                                 {Array.isArray(value) ? (
@@ -217,6 +302,7 @@ export function JobPreview({ job, userMap }: { job: any; userMap?: Record<string
                     </div>
                 </div>
             )}
+            </>}
         </>
     )
 }
@@ -413,6 +499,24 @@ export function JobEditForm({ job, setJob, userMap }: { job: any; setJob: (job: 
                         <div>
                             <label className={labelCls}>Visa Sponsorship Text</label>
                             <textarea value={job.visa_sponsorship_text || ''} onChange={e => handleFieldChange('visa_sponsorship_text', e.target.value)} className={`${textareaCls} h-16 bg-white`} />
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <p className="text-[10px] text-gray-400 uppercase font-semibold mb-2 bg-teal-50 border-2 border-teal-300 p-2 rounded">💼 Freelance</p>
+                    <div className="bg-teal-50 border-2 border-teal-300 rounded p-3 space-y-2">
+                        <div>
+                            <label className={labelCls}>Freelance Status</label>
+                            <select value={job.freelance_status || 'Nothing Mentioned'} onChange={e => handleFieldChange('freelance_status', e.target.value)} className={`${inputCls} bg-white`}>
+                                <option value="It's Freelance">It's Freelance</option>
+                                <option value="Could be Freelance">Could be Freelance</option>
+                                <option value="Nothing Mentioned">Nothing Mentioned</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className={labelCls}>Freelance Description</label>
+                            <textarea value={job.freelance_description || ''} onChange={e => handleFieldChange('freelance_description', e.target.value)} className={`${textareaCls} h-16 bg-white`} placeholder="Any freelance-related mentions in the job description" />
                         </div>
                     </div>
                 </div>

@@ -50,6 +50,8 @@ const SAMPLE_SINGLE_JOB = `{
       "is_job_sponsored": true,
       "visa_sponsorship_text": "Yes, visa sponsorship available",
       "sponsorship_status": "Visa Sponsorship Available",
+      "freelance_status": "Nothing Mentioned",
+      "freelance_description": "",
       "is_security_cleared_required": false,
       "is_certifications_required": true
     }
@@ -76,6 +78,8 @@ const SAMPLE_MULTIPLE_JOBS = `{
       "is_job_sponsored": true,
       "visa_sponsorship_text": "Yes, visa sponsorship available",
       "sponsorship_status": "Visa Sponsorship Available",
+      "freelance_status": "Nothing Mentioned",
+      "freelance_description": "",
       "is_security_cleared_required": false,
       "is_certifications_required": true
     },
@@ -96,6 +100,8 @@ const SAMPLE_MULTIPLE_JOBS = `{
       "is_job_sponsored": false,
       "visa_sponsorship_text": "Visa sponsorship not available",
       "sponsorship_status": "Working Right Required",
+      "freelance_status": "Nothing Mentioned",
+      "freelance_description": "",
       "is_security_cleared_required": true,
       "is_certifications_required": false
     }

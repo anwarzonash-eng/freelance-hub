@@ -160,6 +160,18 @@ export enum AiJobsAPIRoutes {
     SYNC_MERCOR = 'ai-jobs/sync-mercor-referrals',
 }
 
+export enum AParseAPIRoutes {
+    GET_JOBS = 'aparse/jobs',
+    CREATE_JOB = 'aparse/jobs',
+    UPDATE_JOB = 'aparse/jobs/:id',
+    DELETE_JOB = 'aparse/jobs/:id',
+    GET_TURNS = 'aparse/jobs/:jobId/turns',
+    CREATE_TURN = 'aparse/jobs/:jobId/turns',
+    GET_TURN = 'aparse/turns/:id',
+    UPDATE_TURN = 'aparse/turns/:id',
+    DELETE_TURN = 'aparse/turns/:id',
+}
+
 export enum ProfessionalsAPIRoutes {
     GET_ALL = 'professionals',
     GET_BY_ID = 'professionals/:id',

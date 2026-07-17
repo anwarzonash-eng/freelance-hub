@@ -24,6 +24,7 @@ const TABLE_COLS = [
     { key: 'type',        label: 'Type',        default: false },
     { key: 'category',    label: 'Category',    default: false },
     { key: 'sponsored',   label: 'Sponsored',   default: true  },
+    { key: 'freelance',   label: 'Freelance',   default: false },
     { key: 'tech_skills', label: 'Tech Skills', default: false },
     { key: 'closes',      label: 'Closes',      default: false },
     { key: 'submission',  label: 'Submission',  default: true  },
@@ -36,7 +37,7 @@ const DEFAULT_TABLE_COLS = new Set(TABLE_COLS.filter(c => c.default).map(c => c.
 const JOBS_COL_WIDTHS: Record<string, number> = {
     actions: 120,
     num: 36, job_title: 200, company: 140, location: 130,
-    type: 80, category: 130, sponsored: 84, tech_skills: 180,
+    type: 80, category: 130, sponsored: 84, freelance: 110, tech_skills: 180,
     closes: 100, submission: 160, assigned_to: 110, status: 60, cv_status: 90,
 }
 
@@ -60,11 +61,12 @@ const CV_STATUS_LABEL: Record<string, string> = {
     cv_qa_review_required: 'Q/A Review',
     cv_qa_review_done: 'Q/A Done',
 }
-const EMPTY_FILTERS = { keyword: '', sponsorship_status: '', type: '', job_category: '', company_id: '', has_cv: '', cv_submitted: '', application_status: '', job_id: '', cv_status: '', assigned: '', assigned_to: '' }
+const EMPTY_FILTERS = { keyword: '', sponsorship_status: '', freelance_status: '', type: '', job_category: '', company_id: '', has_cv: '', cv_submitted: '', application_status: '', job_id: '', cv_status: '', assigned: '', assigned_to: '' }
 const APP_STATUS_FILTER_OPTIONS = [{ value: 'none', label: 'Not tracked' }, ...APPLICATION_STATUS_OPTIONS.filter(o => o.value)]
 const JOBS_FILTER_ITEMS = [
     { key: 'keyword',            label: 'Search' },
     { key: 'sponsorship_status', label: 'By Sponsorship' },
+    { key: 'freelance_status',   label: 'By Freelance Status' },
     { key: 'type',               label: 'By Type' },
     { key: 'job_category',       label: 'By Category' },
     { key: 'company_id',         label: 'By Company' },
@@ -91,6 +93,7 @@ function filtersToParams(f: typeof EMPTY_FILTERS, page: number, limit: number): 
     const params = new URLSearchParams()
     if (f.keyword) params.set('keyword', f.keyword)
     if (f.sponsorship_status) params.set('sponsorship_status', f.sponsorship_status)
+    if (f.freelance_status) params.set('freelance_status', f.freelance_status)
     if (f.type) params.set('type', f.type)
     if (f.job_category) params.set('job_category', f.job_category)
     if (f.company_id) params.set('company_id', f.company_id)
@@ -138,6 +141,23 @@ function SponsorshipStatusBadge({ value, tooltip }: { value: string; tooltip?: s
         <span
             title={tooltip || undefined}
             className={`text-[9px] px-1.5 py-0.5 rounded font-medium cursor-default ${SPONSORSHIP_STATUS_COLORS[v] ?? 'bg-gray-100 text-gray-500'} ${tooltip ? 'underline decoration-dotted' : ''}`}
+        >
+            {v}
+        </span>
+    )
+}
+
+const FREELANCE_STATUS_COLORS: Record<string, string> = {
+    "It's Freelance":    'bg-teal-100 text-teal-700',
+    'Could be Freelance': 'bg-yellow-100 text-yellow-700',
+    'Nothing Mentioned':  'bg-gray-100 text-gray-500',
+}
+function FreelanceBadge({ value, tooltip }: { value: string; tooltip?: string }) {
+    const v = value || 'Nothing Mentioned'
+    return (
+        <span
+            title={tooltip || undefined}
+            className={`text-[9px] px-1.5 py-0.5 rounded font-medium cursor-default ${FREELANCE_STATUS_COLORS[v] ?? 'bg-gray-100 text-gray-500'} ${tooltip ? 'underline decoration-dotted' : ''}`}
         >
             {v}
         </span>
@@ -252,6 +272,7 @@ export default function ListedJobsPage() {
             const q: any = { page: pg, limit: lim }
             if (af.keyword) q.keyword = af.keyword
             if (af.sponsorship_status) q.sponsorship_status = af.sponsorship_status
+            if (af.freelance_status) q.freelance_status = af.freelance_status
             if (af.type) q.type = af.type
             if (af.job_category) q.job_category = af.job_category
             if (af.company_id) q.company_id = af.company_id
@@ -305,6 +326,7 @@ export default function ListedJobsPage() {
         const hydrated = {
             keyword: searchParams.get('keyword') || searchParams.get('id') || '',
             sponsorship_status: searchParams.get('sponsorship_status') || '',
+            freelance_status: searchParams.get('freelance_status') || '',
             type: searchParams.get('type') || '',
             job_category: searchParams.get('job_category') || '',
             company_id: hydratedCompanyId,
@@ -539,6 +561,18 @@ export default function ListedJobsPage() {
                         </select>
                     </div>
 
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('freelance_status') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">By Freelance Status</label>
+                        <select value={filters.freelance_status}
+                            onChange={e => setFilters(f => ({ ...f, freelance_status: e.target.value }))}
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.freelance_status ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
+                            <option value="">All</option>
+                            <option value="It's Freelance">It's Freelance</option>
+                            <option value="Could be Freelance">Could be Freelance</option>
+                            <option value="Nothing Mentioned">Nothing Mentioned</option>
+                        </select>
+                    </div>
+
                     <div className={`flex flex-col gap-0.5 relative${visibleFilters.has('type') ? '' : ' hidden'}`}>
                         <label className="text-[10px] text-gray-400 uppercase">By Type</label>
                         <button onClick={() => { setShowTypeDd(p => !p); setShowCatDd(false) }}
@@ -770,6 +804,7 @@ export default function ListedJobsPage() {
                             {col('type') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.type }}>Type{rh('type')}</th>}
                             {col('category') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.category }}>Category{rh('category')}</th>}
                             {col('sponsored') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.sponsored }}>Sponsored{rh('sponsored')}</th>}
+                            {col('freelance') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.freelance }}>Freelance{rh('freelance')}</th>}
                             {col('tech_skills') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.tech_skills }}>Tech Skills{rh('tech_skills')}</th>}
                             {col('closes') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.closes }}>Closes{rh('closes')}</th>}
                             {col('submission') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.submission }}>Submission{rh('submission')}</th>}
@@ -886,6 +921,11 @@ export default function ListedJobsPage() {
                                     {col('sponsored') && (
                                         <td className="px-2 py-1.5 border-r border-gray-100 whitespace-nowrap">
                                             <SponsorshipStatusBadge value={row.sponsorship_status} tooltip={row.visa_sponsorship_text || undefined} />
+                                        </td>
+                                    )}
+                                    {col('freelance') && (
+                                        <td className="px-2 py-1.5 border-r border-gray-100 whitespace-nowrap">
+                                            <FreelanceBadge value={row.freelance_status} tooltip={row.freelance_description || undefined} />
                                         </td>
                                     )}
                                     {col('tech_skills') && (

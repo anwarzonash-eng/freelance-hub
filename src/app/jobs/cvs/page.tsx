@@ -13,6 +13,23 @@ function SponsorBadge({ value }: { value: string }) {
         : 'bg-gray-100 text-gray-500'
     return <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${cls}`}>{value}</span>
 }
+
+const FREELANCE_STATUS_COLORS: Record<string, string> = {
+    "It's Freelance":    'bg-teal-100 text-teal-700',
+    'Could be Freelance': 'bg-yellow-100 text-yellow-700',
+    'Nothing Mentioned':  'bg-gray-100 text-gray-500',
+}
+function FreelanceBadge({ value, tooltip }: { value: string; tooltip?: string }) {
+    const v = value || 'Nothing Mentioned'
+    return (
+        <span
+            title={tooltip || undefined}
+            className={`text-[9px] px-1.5 py-0.5 rounded font-medium cursor-default ${FREELANCE_STATUS_COLORS[v] ?? 'bg-gray-100 text-gray-500'} ${tooltip ? 'underline decoration-dotted' : ''}`}
+        >
+            {v}
+        </span>
+    )
+}
 import { getAllCVs, deleteCV, getCVHistory } from '@/app/api_handlers/api/job-cvs.api'
 import { getAllApplicants } from '@/app/api_handlers/api/job-applicants.api'
 import { getAllCompanies } from '@/app/api_handlers/api/sponsored-companies.api'
@@ -44,6 +61,7 @@ const CVS_TABLE_COLS = [
     { key: 'applicant',     label: 'Applicant',     default: true  },
     { key: 'organisation',  label: 'Organisation',  default: true  },
     { key: 'sponsorship',   label: 'Sponsorship',   default: false },
+    { key: 'freelance',     label: 'Freelance',     default: false },
     { key: 'job_link',      label: 'Job Link',      default: false },
     { key: 'email',         label: 'Email',         default: false },
     { key: 'exp_yrs',       label: 'Exp (yrs)',     default: true  },
@@ -56,7 +74,7 @@ const CVS_DEFAULT_COLS = new Set(CVS_TABLE_COLS.filter(c => c.default).map(c => 
 const CVS_COL_WIDTHS: Record<string, number> = {
     actions: 160,
     cv_title: 200, applicant: 120, organisation: 140,
-    sponsorship: 90, job_link: 70, email: 180, exp_yrs: 70,
+    sponsorship: 90, freelance: 110, job_link: 70, email: 180, exp_yrs: 70,
     status: 100, created: 90, created_by: 90,
 }
 
@@ -70,6 +88,7 @@ const EMPTY_FILTERS = {
     status: '',
     job_application_status: '',
     sponsorship_status: '',
+    freelance_status: '',
 }
 type CvFilters = typeof EMPTY_FILTERS
 
@@ -136,6 +155,7 @@ const CV_FILTER_ITEMS = [
     { key: 'status',                label: 'By CV Status' },
     { key: 'job_application_status', label: 'By App Status' },
     { key: 'sponsorship_status',     label: 'By Sponsorship' },
+    { key: 'freelance_status',       label: 'By Freelance Status' },
 ]
 const CV_DEFAULT_VISIBLE_FILTERS = new Set(CV_FILTER_ITEMS.map(f => f.key))
 
@@ -287,6 +307,7 @@ export default function CvsPage() {
                 status: searchParams.get('status') || '',
                 job_application_status: searchParams.get('job_application_status') || '',
                 sponsorship_status: searchParams.get('sponsorship_status') || '',
+                freelance_status: searchParams.get('freelance_status') || '',
             }
             hydratedFromUrl.current = true
             setFilters(fromUrl)
@@ -370,18 +391,20 @@ export default function CvsPage() {
     }, [companyQuery, showCompanyDd])
 
     // Reload from backend when any job-level filter changes (backend-side filters).
-    const prevJobFilters = useRef({ job_application_status: '', sponsorship_status: '' })
+    const prevJobFilters = useRef({ job_application_status: '', sponsorship_status: '', freelance_status: '' })
     useEffect(() => {
         if (!hydratedFromUrl.current) return
-        const cur = { job_application_status: filters.job_application_status, sponsorship_status: filters.sponsorship_status }
+        const cur = { job_application_status: filters.job_application_status, sponsorship_status: filters.sponsorship_status, freelance_status: filters.freelance_status }
         if (cur.job_application_status === prevJobFilters.current.job_application_status &&
-            cur.sponsorship_status === prevJobFilters.current.sponsorship_status) return
+            cur.sponsorship_status === prevJobFilters.current.sponsorship_status &&
+            cur.freelance_status === prevJobFilters.current.freelance_status) return
         prevJobFilters.current = cur
         const params: Record<string, string> = {}
         if (cur.job_application_status) params.job_application_status = cur.job_application_status
         if (cur.sponsorship_status) params.sponsorship_status = cur.sponsorship_status
+        if (cur.freelance_status) params.freelance_status = cur.freelance_status
         load(params)
-    }, [filters.job_application_status, filters.sponsorship_status, load])
+    }, [filters.job_application_status, filters.sponsorship_status, filters.freelance_status, load])
 
     // Recompute the visible rows + keep the URL in sync whenever a filter changes.
     useEffect(() => {
@@ -601,6 +624,20 @@ export default function CvsPage() {
                         </select>
                     </div>
 
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('freelance_status') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">By Freelance Status</label>
+                        <select
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none min-w-[150px] transition-colors ${filters.freelance_status ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}
+                            value={filters.freelance_status}
+                            onChange={e => setFilters(f => ({ ...f, freelance_status: e.target.value }))}
+                        >
+                            <option value="">All</option>
+                            <option value="It's Freelance">It's Freelance</option>
+                            <option value="Could be Freelance">Could be Freelance</option>
+                            <option value="Nothing Mentioned">Nothing Mentioned</option>
+                        </select>
+                    </div>
+
                     {activeFilterCount > 0 && (
                         <button onClick={clearAllFilters} className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-white mt-auto">
                             Clear ({activeFilterCount})
@@ -708,6 +745,7 @@ export default function CvsPage() {
                             {col('applicant') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.applicant }}>Applicant{rh('applicant')}</th>}
                             {col('organisation') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.organisation }}>Organisation{rh('organisation')}</th>}
                             {col('sponsorship') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.sponsorship }}>Sponsorship{rh('sponsorship')}</th>}
+                            {col('freelance') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.freelance }}>Freelance{rh('freelance')}</th>}
                             {col('job_link') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.job_link }}>Job Link{rh('job_link')}</th>}
                             {col('email') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.email }}>Email{rh('email')}</th>}
                             {col('exp_yrs') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.exp_yrs }}>Exp (yrs){rh('exp_yrs')}</th>}
@@ -783,6 +821,11 @@ export default function CvsPage() {
                                 </td>}
                                 {col('sponsorship') && <td className="px-2 py-1.5 border-r border-gray-100 whitespace-nowrap">
                                     {row.sponsorship ? <SponsorBadge value={row.sponsorship} /> : <span className="text-gray-300">—</span>}
+                                </td>}
+                                {col('freelance') && <td className="px-2 py-1.5 border-r border-gray-100 whitespace-nowrap">
+                                    {row.job_freelance_status
+                                        ? <FreelanceBadge value={row.job_freelance_status} tooltip={row.job_freelance_description || undefined} />
+                                        : <span className="text-gray-300">—</span>}
                                 </td>}
                                 {col('job_link') && <td className="px-2 py-1.5 border-r border-gray-100">
                                     {row.job_link ? (
