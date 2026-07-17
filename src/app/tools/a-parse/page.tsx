@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { ListTree, ChevronRight, ChevronDown, Download, Trash2, Wand2, Bot, User, TerminalSquare, Copy, Check, MessageSquareText, Sparkles, X, Eye, EyeOff, PanelRight, Search, Plus, RefreshCw, Briefcase, FileText, Pencil, FileDiff } from 'lucide-react'
+import { ListTree, ChevronRight, ChevronDown, Download, Trash2, Wand2, Bot, User, TerminalSquare, Copy, Check, MessageSquareText, Sparkles, X, Eye, EyeOff, PanelRight, Search, Plus, RefreshCw, Briefcase, FileText, Pencil, FileDiff, ScrollText, GitCompare, UnfoldVertical, FoldVertical } from 'lucide-react'
 import {
     getAParseJobs, createAParseJob, deleteAParseJob, updateAParseJob,
     getAParseTurns, createAParseTurn, deleteAParseTurn, updateAParseTurn,
@@ -164,6 +164,72 @@ Return ONLY a raw JSON object — no markdown code fences, no commentary before 
     }).join('\n\n')
 
     return `${header}${promptCtx}\n\nTranscript:\n${body}`
+}
+
+/** Plain-text rendering of the parsed turns — used for copy + as the transcript inside prompts. */
+function formatTranscript(items: ParsedItem[]): string {
+    if (!items.length) return '(empty)'
+    return items.map(it => {
+        const tag = it.kind === 'bash' ? ' [bash]' : it.kind === 'code_diff' ? ' [code_diff]' : ''
+        return `(${it.num}) ${it.label}${tag}\n${'-'.repeat(40)}\n${it.content || '(empty)'}\n`
+    }).join('\n')
+}
+
+function promptContext(originalPrompt: string): string {
+    return originalPrompt.trim()
+        ? `\n\nOriginal task prompt given to the agent(s):\n"""\n${originalPrompt.trim()}\n"""`
+        : ''
+}
+
+/** Copy-only: condense one model's run into high-level summary steps. */
+function buildSummaryPrompt(items: ParsedItem[], originalPrompt: string): string {
+    const lines = [
+        'You are reviewing the transcript of an AI coding agent that executed a long, multi-step task. The run is a sequence of numbered turns like (2), (3), (4)… Turns alternate between the agent taking an action ("Function Assist") and the tool/function output it got back ("Function Result"). Some turns are `bash` sections (a shell command) or `code_diff` sections (a git-style diff where lines starting with "--" are removed and "++" are added).',
+        '',
+        'I do NOT want a turn-by-turn retelling. Summarize the run into a short, ordered list of high-level steps — what the model actually set out to do and did, not every command. Rules:',
+        '',
+        '- Merge consecutive turns that serve one goal into a single step (e.g. several setup commands → "Scaffolded the project and installed dependencies").',
+        '- Explicitly flag retries (it tried the same thing again), failures (something errored), and recoveries (how/whether it fixed a failure).',
+        '- Keep each step to one line: a short imperative title, then what happened.',
+        '- Preserve the order the work actually occurred in.',
+        '',
+        'Output format (plain markdown, no preamble):',
+        '',
+        '## Summary — <N> steps (from <total> turns)',
+        '1. **<Step title>** — <what it did>. [retry / failed / recovered — if applicable]',
+        '2. …',
+        '',
+        '**Failures & recoveries:** <one or two lines, or "none">',
+        '**Overall:** <2-3 lines on how the run went end to end>',
+    ]
+    return `${lines.join('\n')}${promptContext(originalPrompt)}\n\nTranscript:\n${formatTranscript(items)}`
+}
+
+/** Copy-only: compare the two models' runs (similarities, differences, verdict). */
+function buildComparePrompt(itemsA: ParsedItem[], itemsB: ParsedItem[], originalPrompt: string): string {
+    const lines = [
+        'You are comparing two AI coding agents (Model A and Model B) that were given the SAME task and each produced its own run. Each run is a sequence of numbered turns like (2), (3), (4)… alternating between the agent\'s action ("Function Assist") and the tool output ("Function Result"). Some turns are `bash` sections (shell commands) or `code_diff` sections (git-style diffs where "--" = removed, "++" = added).',
+        '',
+        'Compare the two runs at the level of WHAT each model was trying to accomplish, not individual commands. I want to see where they behaved similarly and where they diverged.',
+        '',
+        'Output format (plain markdown, no preamble):',
+        '',
+        '## Comparison — Model A vs Model B',
+        '',
+        '### Where they did the same thing',
+        '- <shared approach / step both took>',
+        '',
+        '### Where they differed',
+        '- **<topic>** — Model A: <what A did>. Model B: <what B did>.',
+        '',
+        '### Retries & failures',
+        '- Model A: <retries / failures / recoveries, or "none">',
+        '- Model B: <retries / failures / recoveries, or "none">',
+        '',
+        '### Verdict',
+        '<2-4 lines: which model handled the task better and why; note anything one did that the other missed.>',
+    ]
+    return `${lines.join('\n')}${promptContext(originalPrompt)}\n\n--- MODEL A TRANSCRIPT ---\n${formatTranscript(itemsA)}\n\n--- MODEL B TRANSCRIPT ---\n${formatTranscript(itemsB)}`
 }
 
 /** Accepts ChatGPT's reply (raw JSON, or JSON wrapped in prose/fences) → { "2": "…" }. */
@@ -342,6 +408,42 @@ function CodeDiffBody({ diff, term }: { diff: string; term: string }) {
 }
 
 /* ------------------------------------------------------------------ *
+ * Copy-only prompt modal (Summarize / Compare). No JSON paste-back.
+ * ------------------------------------------------------------------ */
+function CopyPromptModal({ title, prompt, onClose }: { title: string; prompt: string; onClose: () => void }) {
+    const [copied, setCopied] = useState(false)
+    const copy = () => {
+        navigator.clipboard.writeText(prompt).then(() => {
+            setCopied(true)
+            setTimeout(() => setCopied(false), 1500)
+        })
+    }
+    return (
+        <div className="fixed inset-0 z-[9995] flex items-center justify-center bg-black/40"
+            onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+            <div className="bg-white border border-gray-200 rounded-xl shadow-2xl flex flex-col overflow-hidden"
+                style={{ width: 780, maxWidth: '95vw', maxHeight: '90vh' }}>
+                <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-100 shrink-0 bg-gray-50">
+                    <Sparkles size={13} className="text-amber-500 shrink-0" />
+                    <span className="text-[11px] font-semibold text-gray-700 flex-1 truncate">{title}</span>
+                    <button onClick={copy}
+                        className="flex items-center gap-1 text-[11px] bg-amber-500 text-white rounded px-2.5 py-1 hover:bg-amber-600">
+                        {copied ? <Check size={12} /> : <Copy size={12} />} {copied ? 'Copied' : 'Copy prompt'}
+                    </button>
+                    <button onClick={onClose} className="text-gray-300 hover:text-gray-600 shrink-0 ml-1"><X size={14} /></button>
+                </div>
+                <div className="p-3 overflow-y-auto">
+                    <p className="text-[10px] text-gray-400 mb-1.5">Paste this into ChatGPT — it already includes the transcript. (Copy-only; no need to paste anything back here.)</p>
+                    <pre className="text-[10px] text-gray-700 whitespace-pre-wrap leading-relaxed bg-gray-50 border border-gray-200 rounded px-2.5 py-2 max-h-[72vh] overflow-y-auto font-mono">
+                        {prompt}
+                    </pre>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+/* ------------------------------------------------------------------ *
  * Turn body renderer (used both inline when expanded and in the side
  * panel). `term` highlights matches across bash/command/result/text.
  * ------------------------------------------------------------------ */
@@ -502,7 +604,7 @@ function TranscriptRow({
  * One model panel (reused for Model A and Model B)
  * ------------------------------------------------------------------ */
 function ModelPanel({
-    modelKey, title, singleMode, input, remarks, onInputChange, onRemarksChange, sharedPrompt,
+    modelKey, title, singleMode, input, remarks, onInputChange, onRemarksChange, sharedPrompt, turnTitle,
 }: {
     modelKey: 'a' | 'b'
     title: string
@@ -512,11 +614,12 @@ function ModelPanel({
     onInputChange: (v: string) => void
     onRemarksChange: (r: Record<string, string>) => void
     sharedPrompt: string
+    turnTitle?: string
 }) {
     // UI-only preferences persist globally; turn DATA (input/remarks) comes from props.
     const SHOWINPUT_LS_KEY = `aparse_model_${modelKey}_showinput`
     const SIDEW_LS_KEY = `aparse_model_${modelKey}_sidewidth`
-    const downloadName = `Transcript ${title}`
+    const downloadName = turnTitle ? `${turnTitle} ${title}` : `Transcript ${title}`
 
     const setInput = onInputChange
     const setRemarks = onRemarksChange
@@ -529,6 +632,12 @@ function ModelPanel({
     const [showEval, setShowEval] = useState(false)
     const [pasteJson, setPasteJson] = useState('')
     const [pasteErr, setPasteErr] = useState('')
+
+    // Summarize modal + download/copy menu
+    const [showSummary, setShowSummary] = useState(false)
+    const [copiedTx, setCopiedTx] = useState(false)
+    const [showDownloadMenu, setShowDownloadMenu] = useState(false)
+    const downloadMenuRef = useRef<HTMLDivElement>(null)
 
     // Detail side panel (single-model view only)
     const [detailIdx, setDetailIdx] = useState<number | null>(null)
@@ -557,6 +666,16 @@ function ModelPanel({
     useEffect(() => {
         try { localStorage.setItem(SIDEW_LS_KEY, String(sideWidth)) } catch { /* ignore */ }
     }, [sideWidth])
+
+    // Close the download menu on outside click.
+    useEffect(() => {
+        if (!showDownloadMenu) return
+        const handler = (e: MouseEvent) => {
+            if (downloadMenuRef.current && !downloadMenuRef.current.contains(e.target as Node)) setShowDownloadMenu(false)
+        }
+        document.addEventListener('mousedown', handler)
+        return () => document.removeEventListener('mousedown', handler)
+    }, [showDownloadMenu])
 
     const items = useMemo(() => parseTranscript(input), [input])
 
@@ -634,6 +753,11 @@ function ModelPanel({
         () => buildEvalPrompt(items, sharedPrompt),
         [items, sharedPrompt, showEval],
     )
+    const summaryPrompt = useMemo(
+        () => buildSummaryPrompt(items, sharedPrompt),
+        [items, sharedPrompt, showSummary],
+    )
+
     const remarkCount = Object.keys(remarks).length
 
     const applyRemarks = () => {
@@ -669,15 +793,20 @@ function ModelPanel({
         setRemarks({})
     }
 
-    const download = () => {
+    // Full file content (header + turns) shared by Download and Copy.
+    const buildFileContent = () => {
         const sep = '='.repeat(64)
         const header = [
             sep,
             `${downloadName.toUpperCase()}`,
             sep,
             '',
-            `This is the transcript of "${title}" — one of two AI coding-agent runs`,
-            'captured for side-by-side comparison in the A Parse tool.',
+            `This is the ${turnTitle ? `"${turnTitle}" ` : ''}transcript of "${title}" — one of two`,
+            'AI coding-agent runs captured for side-by-side comparison in the A Parse tool.',
+            '',
+            'PROMPT',
+            '------',
+            sharedPrompt.trim() ? sharedPrompt.trim() : '(no prompt recorded for this turn)',
             '',
             'FORMAT',
             '------',
@@ -705,10 +834,14 @@ function ModelPanel({
             '',
         ].join('\n')
 
-        const body = items.length
+        return items.length
             ? header + items.map(it => `(${it.num}) ${it.label}${it.kind === 'bash' ? ' [bash]' : it.kind === 'code_diff' ? ' [code_diff]' : ''}\n${'-'.repeat(40)}\n${it.content}\n`).join('\n')
             : input
-        const blob = new Blob([body], { type: 'text/plain;charset=utf-8' })
+    }
+
+    const download = () => {
+        setShowDownloadMenu(false)
+        const blob = new Blob([buildFileContent()], { type: 'text/plain;charset=utf-8' })
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
@@ -717,6 +850,14 @@ function ModelPanel({
         a.click()
         document.body.removeChild(a)
         URL.revokeObjectURL(url)
+    }
+
+    const copyFileContent = () => {
+        navigator.clipboard.writeText(buildFileContent()).then(() => {
+            setCopiedTx(true)
+            setTimeout(() => setCopiedTx(false), 1500)
+        })
+        setShowDownloadMenu(false)
     }
 
     const assistCount = items.filter(i => i.label === 'Function Assist').length
@@ -736,28 +877,49 @@ function ModelPanel({
                 </div>
                 <div className="flex items-center gap-1">
                     <button onClick={() => { setShowEval(true); setPasteErr('') }} disabled={!items.length}
-                        title="Generate a ChatGPT prompt and paste back explanations"
-                        className="flex items-center gap-1 text-[10px] border border-amber-300 text-amber-700 rounded px-1.5 py-0.5 hover:bg-amber-50 disabled:opacity-40">
-                        <Sparkles size={11} /> Evaluate
+                        title="Evaluate — generate a ChatGPT prompt and paste back explanations"
+                        className="p-1 border border-amber-300 text-amber-700 rounded hover:bg-amber-50 disabled:opacity-40">
+                        <Sparkles size={12} />
+                    </button>
+                    <button onClick={() => setShowSummary(true)} disabled={!items.length}
+                        title="Summarize — copy a prompt that summarizes this model's steps"
+                        className="p-1 border border-purple-300 text-purple-700 rounded hover:bg-purple-50 disabled:opacity-40">
+                        <ScrollText size={12} />
                     </button>
                     <button onClick={() => setShowInput(v => !v)}
                         title={showInput ? 'Hide input textarea' : 'Show input textarea'}
-                        className="flex items-center gap-1 text-[10px] border border-gray-300 rounded px-1.5 py-0.5 hover:bg-white text-gray-600">
-                        {showInput ? <EyeOff size={11} /> : <Eye size={11} />} {showInput ? 'Hide input' : 'Show input'}
+                        className="p-1 border border-gray-300 rounded hover:bg-white text-gray-600">
+                        {showInput ? <EyeOff size={12} /> : <Eye size={12} />}
                     </button>
                     <button onClick={expandAll} disabled={!items.length}
-                        className="text-[10px] border border-gray-300 rounded px-1.5 py-0.5 hover:bg-white text-gray-600 disabled:opacity-40">
-                        Expand all
+                        title="Expand all turns"
+                        className="p-1 border border-gray-300 rounded hover:bg-white text-gray-600 disabled:opacity-40">
+                        <UnfoldVertical size={12} />
                     </button>
                     <button onClick={collapseAll} disabled={!items.length}
-                        className="text-[10px] border border-gray-300 rounded px-1.5 py-0.5 hover:bg-white text-gray-600 disabled:opacity-40">
-                        Collapse all
+                        title="Collapse all turns"
+                        className="p-1 border border-gray-300 rounded hover:bg-white text-gray-600 disabled:opacity-40">
+                        <FoldVertical size={12} />
                     </button>
-                    <button onClick={download} disabled={!input.trim()}
-                        title={`Download ${downloadName}.txt`}
-                        className="flex items-center gap-1 text-[10px] border border-teal-300 text-teal-700 rounded px-1.5 py-0.5 hover:bg-teal-50 disabled:opacity-40">
-                        <Download size={11} /> Download
-                    </button>
+                    <div className="relative" ref={downloadMenuRef}>
+                        <button onClick={() => setShowDownloadMenu(v => !v)} disabled={!input.trim()}
+                            title="Download or copy the transcript file"
+                            className={`p-1 border rounded disabled:opacity-40 ${showDownloadMenu ? 'border-teal-400 bg-teal-50 text-teal-700' : 'border-teal-300 text-teal-700 hover:bg-teal-50'}`}>
+                            {copiedTx ? <Check size={12} className="text-green-500" /> : <Download size={12} />}
+                        </button>
+                        {showDownloadMenu && (
+                            <div className="absolute right-0 top-full mt-1 z-40 bg-white border border-gray-200 rounded shadow-lg py-1 min-w-36">
+                                <button onClick={download}
+                                    className="flex items-center gap-2 w-full text-left px-2.5 py-1 text-[11px] text-gray-700 hover:bg-gray-50">
+                                    <Download size={12} className="text-teal-600" /> Download .txt
+                                </button>
+                                <button onClick={copyFileContent}
+                                    className="flex items-center gap-2 w-full text-left px-2.5 py-1 text-[11px] text-gray-700 hover:bg-gray-50">
+                                    <Copy size={12} className="text-gray-500" /> Copy to clipboard
+                                </button>
+                            </div>
+                        )}
+                    </div>
                     <button onClick={clear} disabled={!input}
                         title="Clear input"
                         className="p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded disabled:opacity-40">
@@ -879,6 +1041,15 @@ function ModelPanel({
                     </div>
                 )
             })()}
+
+            {/* Summarize modal (copy-only) */}
+            {showSummary && (
+                <CopyPromptModal
+                    title={`Summarize ${title} — copy this prompt into ChatGPT`}
+                    prompt={summaryPrompt}
+                    onClose={() => setShowSummary(false)}
+                />
+            )}
 
             {/* Evaluate modal */}
             {showEval && (
@@ -1012,6 +1183,13 @@ function AParseEditor({ turn, jobName, onClose }: { turn: any; jobName: string; 
     const [aRemarks, setARemarks] = useState<Record<string, string>>(turn.model_a_remarks || {})
     const [bRemarks, setBRemarks] = useState<Record<string, string>>(turn.model_b_remarks || {})
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
+    const [showCompare, setShowCompare] = useState(false)
+
+    const comparePrompt = useMemo(
+        () => buildComparePrompt(parseTranscript(aInput), parseTranscript(bInput), prompt),
+        [aInput, bInput, prompt, showCompare],
+    )
+    const canCompare = aInput.trim().length > 0 && bInput.trim().length > 0
 
     // UI prefs (global)
     useEffect(() => {
@@ -1062,8 +1240,8 @@ function AParseEditor({ turn, jobName, onClose }: { turn: any; jobName: string; 
                     <div className="flex items-center gap-2">
                         <button onClick={() => setShowPrompt(v => !v)}
                             title={showPrompt ? 'Hide prompt section' : 'Show prompt section'}
-                            className={`flex items-center gap-1 text-[10px] border rounded px-1.5 py-1 transition-colors ${showPrompt ? 'border-indigo-300 text-indigo-700 bg-indigo-50' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
-                            <MessageSquareText size={11} /> {showPrompt ? 'Hide prompt' : 'Show prompt'}
+                            className={`p-1 border rounded transition-colors ${showPrompt ? 'border-indigo-300 text-indigo-700 bg-indigo-50' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
+                            <MessageSquareText size={13} />
                         </button>
                         <div className="flex items-center border border-gray-300 rounded overflow-hidden">
                             {VIEW_OPTS.map(o => (
@@ -1073,9 +1251,14 @@ function AParseEditor({ turn, jobName, onClose }: { turn: any; jobName: string; 
                                 </button>
                             ))}
                         </div>
-                        <button onClick={onClose}
-                            className="flex items-center gap-1 text-[11px] border border-gray-300 rounded px-2 py-1 hover:bg-white text-gray-700">
-                            <X size={13} /> Close
+                        <button onClick={() => setShowCompare(true)} disabled={!canCompare}
+                            title={canCompare ? 'Compare Model A vs Model B — copy prompt' : 'Paste both transcripts first'}
+                            className="p-1 border border-purple-300 text-purple-700 rounded hover:bg-purple-50 disabled:opacity-40">
+                            <GitCompare size={13} />
+                        </button>
+                        <button onClick={onClose} title="Close"
+                            className="p-1 border border-gray-300 rounded hover:bg-white text-gray-700">
+                            <X size={14} />
                         </button>
                     </div>
                 </div>
@@ -1085,16 +1268,24 @@ function AParseEditor({ turn, jobName, onClose }: { turn: any; jobName: string; 
                     {showPrompt && <div className="shrink-0"><PromptSection prompt={prompt} onPromptChange={setPrompt} /></div>}
                     <div className="flex gap-3 flex-1 min-h-0 flex-col xl:flex-row">
                         {view !== 'b' && (
-                            <ModelPanel modelKey="a" title="Model A" singleMode={view === 'a'}
+                            <ModelPanel modelKey="a" title="Model A" singleMode={view === 'a'} turnTitle={turn.title}
                                 input={aInput} remarks={aRemarks} onInputChange={setAInput} onRemarksChange={setARemarks} sharedPrompt={prompt} />
                         )}
                         {view !== 'a' && (
-                            <ModelPanel modelKey="b" title="Model B" singleMode={view === 'b'}
+                            <ModelPanel modelKey="b" title="Model B" singleMode={view === 'b'} turnTitle={turn.title}
                                 input={bInput} remarks={bRemarks} onInputChange={setBInput} onRemarksChange={setBRemarks} sharedPrompt={prompt} />
                         )}
                     </div>
                 </div>
             </div>
+
+            {showCompare && (
+                <CopyPromptModal
+                    title={`Compare Model A vs Model B — ${jobName} · ${turn.title}`}
+                    prompt={comparePrompt}
+                    onClose={() => setShowCompare(false)}
+                />
+            )}
         </div>
     )
 }
