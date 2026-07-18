@@ -1622,11 +1622,11 @@ function AnswersPanel({ value, onChange, onClose, readOnly, onRefHover, refMatch
  * Turn editor — the full A Parse screen for ONE turn, shown in a
  * full-screen popup. Autosaves changes to the DB (debounced).
  * ------------------------------------------------------------------ */
-type ModelView = 'a' | 'b' | 'both'
-
 function AParseEditor({ turn, jobName, onClose }: { turn: any; jobName: string; onClose: () => void }) {
-    const [showPrompt, setShowPrompt] = useState(true)
-    const [view, setView] = useState<ModelView>('both')
+    // Independent show/hide toggles, initialised from localStorage so they persist across reloads.
+    const [showPrompt, setShowPrompt] = useState<boolean>(() => { try { return localStorage.getItem('aparse_show_prompt') !== '0' } catch { return true } })
+    const [showA, setShowA] = useState<boolean>(() => { try { return localStorage.getItem('aparse_show_a') !== '0' } catch { return true } })
+    const [showB, setShowB] = useState<boolean>(() => { try { return localStorage.getItem('aparse_show_b') !== '0' } catch { return true } })
 
     const [prompt, setPrompt] = useState<string>(turn.prompt || '')
     const [aInput, setAInput] = useState<string>(turn.model_a_input || '')
@@ -1648,7 +1648,7 @@ function AParseEditor({ turn, jobName, onClose }: { turn: any; jobName: string; 
     // Hovering an inline reference {A:38 [text]} reveals + highlights that turn in the model.
     const [reveal, setReveal] = useState<{ model: 'a' | 'b'; turnNum: number; text: string; nonce: number } | null>(null)
     const handleRefHover = (model: 'a' | 'b', turnNum: number, text: string) => {
-        setView(v => (v === 'both' || v === model ? v : 'both')) // ensure the target model is visible
+        if (model === 'a') setShowA(true); else setShowB(true) // ensure the target model is visible
         setReveal({ model, turnNum, text, nonce: Date.now() })
     }
 
@@ -1757,15 +1757,10 @@ function AParseEditor({ turn, jobName, onClose }: { turn: any; jobName: string; 
     )
     const canCompare = aInput.trim().length > 0 && bInput.trim().length > 0
 
-    // UI prefs (global)
-    useEffect(() => {
-        try {
-            const sp = localStorage.getItem('aparse_show_prompt'); if (sp != null) setShowPrompt(sp === '1')
-            const v = localStorage.getItem('aparse_view'); if (v === 'a' || v === 'b' || v === 'both') setView(v)
-        } catch { /* ignore */ }
-    }, [])
+    // Persist the show/hide toggles (initialised lazily above).
     useEffect(() => { try { localStorage.setItem('aparse_show_prompt', showPrompt ? '1' : '0') } catch { /* ignore */ } }, [showPrompt])
-    useEffect(() => { try { localStorage.setItem('aparse_view', view) } catch { /* ignore */ } }, [view])
+    useEffect(() => { try { localStorage.setItem('aparse_show_a', showA ? '1' : '0') } catch { /* ignore */ } }, [showA])
+    useEffect(() => { try { localStorage.setItem('aparse_show_b', showB ? '1' : '0') } catch { /* ignore */ } }, [showB])
 
     // Debounced autosave whenever any turn data changes.
     const first = useRef(true)
@@ -1785,12 +1780,6 @@ function AParseEditor({ turn, jobName, onClose }: { turn: any; jobName: string; 
         }, 700)
         return () => clearTimeout(t)
     }, [prompt, aInput, bInput, aRemarks, bRemarks, answers, turn.id])
-
-    const VIEW_OPTS: { key: ModelView; label: string }[] = [
-        { key: 'a', label: 'Model A' },
-        { key: 'b', label: 'Model B' },
-        { key: 'both', label: 'Both' },
-    ]
 
     return (
         <div className="fixed inset-0 z-[9970] bg-white flex flex-col">
@@ -1816,12 +1805,14 @@ function AParseEditor({ turn, jobName, onClose }: { turn: any; jobName: string; 
                             <MessageSquareText size={13} />
                         </button>
                         <div className="flex items-center border border-gray-300 rounded overflow-hidden">
-                            {VIEW_OPTS.map(o => (
-                                <button key={o.key} onClick={() => setView(o.key)}
-                                    className={`text-[10px] px-2 py-1 transition-colors ${view === o.key ? 'bg-gray-800 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>
-                                    {o.label}
-                                </button>
-                            ))}
+                            <button onClick={() => setShowA(v => !v)} title="Toggle Model A"
+                                className={`text-[10px] px-2 py-1 border-r border-gray-300 transition-colors ${showA ? 'bg-gray-800 text-white' : 'text-gray-500 hover:bg-gray-50'}`}>
+                                Model A
+                            </button>
+                            <button onClick={() => setShowB(v => !v)} title="Toggle Model B"
+                                className={`text-[10px] px-2 py-1 transition-colors ${showB ? 'bg-gray-800 text-white' : 'text-gray-500 hover:bg-gray-50'}`}>
+                                Model B
+                            </button>
                         </div>
                         <button onClick={() => setShowCompare(true)} disabled={!canCompare}
                             title={canCompare ? 'Compare Model A vs Model B — copy prompt' : 'Paste both transcripts first'}
@@ -1845,14 +1836,14 @@ function AParseEditor({ turn, jobName, onClose }: { turn: any; jobName: string; 
                     {(() => {
                         // Visible resizable columns in order.
                         const cols: { key: string; node: React.ReactNode }[] = []
-                        if (view !== 'b') cols.push({
+                        if (showA) cols.push({
                             key: 'a', node: (
                                 <ModelPanel modelKey="a" title="Model A" turnTitle={turn.title} readOnly={readOnly}
                                     input={aInput} remarks={aRemarks} onInputChange={setAInput} onRemarksChange={setARemarks} sharedPrompt={prompt}
                                     reveal={reveal?.model === 'a' ? reveal : null} />
                             )
                         })
-                        if (view !== 'a') cols.push({
+                        if (showB) cols.push({
                             key: 'b', node: (
                                 <ModelPanel modelKey="b" title="Model B" turnTitle={turn.title} readOnly={readOnly}
                                     input={bInput} remarks={bRemarks} onInputChange={setBInput} onRemarksChange={setBRemarks} sharedPrompt={prompt}
@@ -1864,6 +1855,11 @@ function AParseEditor({ turn, jobName, onClose }: { turn: any; jobName: string; 
                                 <AnswersPanel value={answers} onChange={patchAnswers} onClose={() => setShowAnswers(false)} readOnly={readOnly} onRefHover={handleRefHover} refMatches={refMatches} />
                             )
                         })
+                        if (cols.length === 0) return (
+                            <div className="flex-1 flex items-center justify-center text-gray-300 text-xs">
+                                Everything is hidden — use the Model A / Model B toggles or the Answers icon above.
+                            </div>
+                        )
                         return (
                             <div ref={colRowRef} className="flex flex-1 min-h-0 min-w-0">
                                 {cols.map((c, i) => (
