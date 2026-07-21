@@ -85,6 +85,7 @@ const EMPTY_FILTERS = {
     email: '',
     exp_yrs: '',
     created_by: '',
+    notes_by: '',
     status: '',
     job_application_status: '',
     sponsorship_status: '',
@@ -130,6 +131,12 @@ function filterCvs(list: any[], f: CvFilters) {
         out = out.filter(cv => cv.created_by === f.created_by)
     }
 
+    if (f.notes_by) {
+        out = f.notes_by === '__any__'
+            ? out.filter(cv => cv.has_notes)
+            : out.filter(cv => Array.isArray(cv.note_authors) && cv.note_authors.includes(f.notes_by))
+    }
+
     if (f.status) {
         out = out.filter(cv => (cv.status ?? 'cv_created') === f.status)
     }
@@ -152,6 +159,7 @@ const CV_FILTER_ITEMS = [
     { key: 'email',                 label: 'By Email' },
     { key: 'exp_yrs',               label: 'By Exp (yrs)' },
     { key: 'created_by',            label: 'Created By' },
+    { key: 'notes_by',              label: 'Notes Added by' },
     { key: 'status',                label: 'By CV Status' },
     { key: 'job_application_status', label: 'By App Status' },
     { key: 'sponsorship_status',     label: 'By Sponsorship' },
@@ -304,6 +312,7 @@ export default function CvsPage() {
                 email: searchParams.get('email') || '',
                 exp_yrs: searchParams.get('exp_yrs') || '',
                 created_by: searchParams.get('created_by') || '',
+                notes_by: searchParams.get('notes_by') || '',
                 status: searchParams.get('status') || '',
                 job_application_status: searchParams.get('job_application_status') || '',
                 sponsorship_status: searchParams.get('sponsorship_status') || '',
@@ -581,6 +590,21 @@ export default function CvsPage() {
                         </select>
                     </div>
 
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('notes_by') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">Notes Added by</label>
+                        <select
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none min-w-[120px] transition-colors ${filters.notes_by ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}
+                            value={filters.notes_by}
+                            onChange={e => setFilters(f => ({ ...f, notes_by: e.target.value }))}
+                        >
+                            <option value="">All</option>
+                            <option value="__any__">Any notes</option>
+                            {Array.from(new Set(allData.flatMap((cv: any) => cv.note_authors || []))).sort().map((author: any) => (
+                                <option key={author} value={author}>By {userMap[author] || author}</option>
+                            ))}
+                        </select>
+                    </div>
+
                     <div className={`flex flex-col gap-0.5${visibleFilters.has('status') ? '' : ' hidden'}`}>
                         <label className="text-[10px] text-gray-400 uppercase">By CV Status</label>
                         <select
@@ -800,9 +824,11 @@ export default function CvsPage() {
                                             className={`p-1 rounded ${rawSidebarRow?.id === row.id ? 'text-amber-600 bg-amber-50' : 'text-gray-400 hover:text-amber-600 hover:bg-amber-50'}`}>
                                             <AlignLeft size={12} />
                                         </button>
-                                        <button onClick={() => openHistory(row)} title="View history &amp; notes"
-                                            className={`p-1 rounded ${historyRow?.id === row.id ? 'text-purple-600 bg-purple-50' : 'text-gray-400 hover:text-purple-600 hover:bg-purple-50'}`}>
+                                        <button onClick={() => openHistory(row)}
+                                            title={row.has_notes ? `View history — has notes${row.note_authors?.length ? ` by ${row.note_authors.map((u: string) => userMap[u] || u).join(', ')}` : ''}` : 'View history & notes'}
+                                            className={`p-1 rounded relative ${historyRow?.id === row.id ? 'text-purple-600 bg-purple-50' : row.has_notes ? 'text-amber-600 bg-amber-50 hover:bg-amber-100' : 'text-gray-400 hover:text-purple-600 hover:bg-purple-50'}`}>
                                             <Clock size={12} />
+                                            {row.has_notes && <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-amber-500" />}
                                         </button>
                                         <button onClick={() => handleDelete(row.id)} title="Delete CV"
                                             className="p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded">

@@ -2484,18 +2484,26 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
             </a>
           )}
           {/* History toggle */}
-          <button
-            onClick={toggleHistoryPanel}
-            title="Show status history &amp; notes"
-            className={`flex items-center gap-1 px-2 py-1.5 text-xs rounded border transition-colors ${
-              showHistoryPanel
-                ? "border-purple-400 bg-purple-50 text-purple-700"
-                : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
-            }`}
-          >
-            <Clock size={12} />
-            History
-          </button>
+          {(() => {
+            const hasNotes = historyEntries.some((e: any) => (e.note && String(e.note).trim()) || e.audio_url) || (cv as any)?.has_notes
+            return (
+              <button
+                onClick={toggleHistoryPanel}
+                title={hasNotes ? "Show history — has notes" : "Show status history & notes"}
+                className={`relative flex items-center gap-1 px-2 py-1.5 text-xs rounded border transition-colors ${
+                  showHistoryPanel
+                    ? "border-purple-400 bg-purple-50 text-purple-700"
+                    : hasNotes
+                      ? "border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                      : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                <Clock size={12} />
+                History
+                {hasNotes && <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-500 border border-white" />}
+              </button>
+            )
+          })()}
 
           <button
             onClick={() => setShowFontPanel((p) => !p)}

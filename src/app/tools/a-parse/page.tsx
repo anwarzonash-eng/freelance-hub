@@ -1237,6 +1237,21 @@ const QUALITY_OPTS = [
     { value: 'complicated', label: "It's complicated" },
 ] as const
 
+const PROMPT_TYPES = [
+    'Debugging',
+    'Root Cause Analysis *',
+    'System-Level Investigation *',
+    'Code writing (Feature Implementation, Refactor)',
+    'Code review',
+    'Exploration & learning',
+    'Maintenance & ops tooling *',
+    'Planning & requirements',
+    'Design',
+    'Testing',
+    'Deployment & infra',
+    'Communication',
+]
+
 // Every text answer is kept in 4 parallel versions (sub-levels).
 const ANSWER_VERSIONS = [
     { key: 'ai', label: 'AI Version' },
@@ -1255,6 +1270,17 @@ const VERSION_ACCENT: Record<VersionKey, { bar: string; border: string }> = {
     final: { bar: 'bg-emerald-50 text-emerald-700', border: 'border-emerald-200' },
 }
 type VersionedText = Record<VersionKey, string>
+
+/** Format a tokens-left value with thousands separators when it's numeric (956000 → 956,000). */
+function formatTokens(v: string): string {
+    const t = (v || '').trim()
+    if (!t) return ''
+    if (/^[\d,\s]+$/.test(t)) {
+        const digits = t.replace(/[^\d]/g, '')
+        return digits ? Number(digits).toLocaleString('en-US') : t
+    }
+    return t
+}
 
 function emptyVersioned(): VersionedText { return { ai: '', humanIt: '', humanWriter: '', final: '' } }
 /** Accept a versioned object, a legacy plain string (→ AI version), or nothing. */
@@ -1275,6 +1301,7 @@ interface RubricAnswers {
     overallReasoning: VersionedText
     additionalNotes: VersionedText
     promptForNextTurn: VersionedText
+    promptType: string
     selectedAxes: string[]
     quality: string
     overall: number | null
@@ -1286,7 +1313,7 @@ function emptyAnswers(): RubricAnswers {
     RUBRIC_DIMS.forEach(d => { dims[d.key] = { reasoning: emptyVersioned(), score: null } })
     return {
         seniorExpectation: emptyVersioned(), dims, otherIssues: emptyVersioned(), overallReasoning: emptyVersioned(),
-        additionalNotes: emptyVersioned(), promptForNextTurn: emptyVersioned(),
+        additionalNotes: emptyVersioned(), promptForNextTurn: emptyVersioned(), promptType: '',
         selectedAxes: [], quality: '', overall: null, comments: emptyVersioned(),
     }
 }
@@ -1306,6 +1333,7 @@ function normalizeAnswers(raw: any): RubricAnswers {
         overallReasoning: toVersioned(raw.overallReasoning),
         additionalNotes: toVersioned(raw.additionalNotes),
         promptForNextTurn: toVersioned(raw.promptForNextTurn),
+        promptType: raw.promptType ?? '',
         selectedAxes: Array.isArray(raw.selectedAxes) ? raw.selectedAxes : [],
         quality: raw.quality ?? '',
         overall: typeof raw.overall === 'number' ? raw.overall : null,
@@ -1357,6 +1385,7 @@ function buildAnswersFillPrompt(): string {
         '  "overallReasoning": "why this verdict, with citations",',
         '  "additionalNotes": "anything else",',
         '  "promptForNextTurn": "a prompt the user could send next to push the better model further, or fix what went wrong",',
+        `  "promptType": "one of: ${PROMPT_TYPES.map(t => t.replace(/\\s*\\*$/, '')).join(', ')}",`,
         '  "selectedAxes": ["honesty", "scoping"],',
         '  "quality": "great",',
         '  "overall": 2,',
@@ -1392,6 +1421,10 @@ function parseAnswersJson(raw: string): RubricAnswers {
         overallReasoning: toVersioned(String(src.overallReasoning ?? src.overall_reasoning ?? '')),
         additionalNotes: toVersioned(String(src.additionalNotes ?? src.additional_notes ?? '')),
         promptForNextTurn: toVersioned(String(src.promptForNextTurn ?? src.prompt_for_next_turn ?? '')),
+        promptType: (() => {
+            const raw = String(src.promptType ?? src.prompt_type ?? '').replace(/\s*\*$/, '').trim().toLowerCase()
+            return PROMPT_TYPES.find(t => t.replace(/\s*\*$/, '').trim().toLowerCase() === raw) || ''
+        })(),
         selectedAxes: Array.isArray(src.selectedAxes) ? src.selectedAxes.filter((k: string) => DIM_KEYS.includes(k)) : [],
         quality: ['poor', 'great', 'complicated'].includes(src.quality) ? src.quality : '',
         overall: typeof src.overall === 'number' ? src.overall : null,
@@ -1416,6 +1449,7 @@ function mergeAiVersion(cur: RubricAnswers, parsed: RubricAnswers): RubricAnswer
         overallReasoning: setAi(cur.overallReasoning, parsed.overallReasoning),
         additionalNotes: setAi(cur.additionalNotes, parsed.additionalNotes),
         promptForNextTurn: setAi(cur.promptForNextTurn, parsed.promptForNextTurn),
+        promptType: parsed.promptType || cur.promptType,
         selectedAxes: parsed.selectedAxes,
         quality: parsed.quality,
         overall: parsed.overall,
@@ -1747,6 +1781,14 @@ function AnswersPanel({ value, onChange, onClose, readOnly, onRefHover, refMatch
                     </Field>
 
                     <Field label="Prompt For Next Turn" {...sec('promptForNextTurn')}>
+                        <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-semibold text-gray-500 shrink-0 uppercase tracking-wide">Type</span>
+                            <select value={value.promptType} onChange={e => onChange({ promptType: e.target.value })} disabled={readOnly}
+                                className="flex-1 min-w-0 text-[11px] border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:border-indigo-400 disabled:bg-gray-50 disabled:text-gray-500">
+                                <option value="">— select prompt type —</option>
+                                {PROMPT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                            </select>
+                        </div>
                         <VersionedAnswer value={value.promptForNextTurn} onChangeVersion={(vk, t) => setFieldVersion('promptForNextTurn', vk, t)} {...va} minHeight={56}
                             placeholder="A prompt to send next to push the better model further" />
                     </Field>
@@ -1808,6 +1850,7 @@ function AParseEditor({ turn, jobName, turns, onSwitchTurn, onClose }: { turn: a
     const [showB, setShowB] = useState<boolean>(() => { try { return localStorage.getItem('aparse_show_b') !== '0' } catch { return true } })
 
     const [prompt, setPrompt] = useState<string>(turn.prompt || '')
+    const [tokensLeft, setTokensLeft] = useState<string>(turn.tokens_left || '')
     const [aInput, setAInput] = useState<string>(turn.model_a_input || '')
     const [bInput, setBInput] = useState<string>(turn.model_b_input || '')
     const [aRemarks, setARemarks] = useState<Record<string, string>>(turn.model_a_remarks || {})
@@ -1946,7 +1989,7 @@ function AParseEditor({ turn, jobName, turns, onSwitchTurn, onClose }: { turn: a
     const first = useRef(true)
     const dirtyRef = useRef(false)
     const latestRef = useRef<any>(null)
-    latestRef.current = { prompt, model_a_input: aInput, model_b_input: bInput, model_a_remarks: aRemarks, model_b_remarks: bRemarks, answers }
+    latestRef.current = { prompt, tokens_left: tokensLeft, model_a_input: aInput, model_b_input: bInput, model_a_remarks: aRemarks, model_b_remarks: bRemarks, answers }
     useEffect(() => {
         if (first.current) { first.current = false; return }
         dirtyRef.current = true
@@ -1958,12 +2001,18 @@ function AParseEditor({ turn, jobName, turns, onSwitchTurn, onClose }: { turn: a
             } catch { setSaveStatus('idle') }
         }, 700)
         return () => clearTimeout(t)
-    }, [prompt, aInput, bInput, aRemarks, bRemarks, answers, turn.id])
+    }, [prompt, tokensLeft, aInput, bInput, aRemarks, bRemarks, answers, turn.id])
 
     // Flush any pending edits when the editor unmounts or the turn is switched.
     useEffect(() => () => {
         if (dirtyRef.current) { updateAParseTurn(turn.id, latestRef.current) }
     }, [turn.id])
+
+    // Previous turn's overall winner (just A or B, not the graded variation).
+    const curIdx = turns.findIndex(t => t.id === turn.id)
+    const prevTurn = curIdx > 0 ? turns[curIdx - 1] : null
+    const prevOverall = prevTurn?.answers?.overall
+    const prevLetter = typeof prevOverall === 'number' ? (prevOverall < 0 ? 'A' : prevOverall > 0 ? 'B' : '=') : null
 
     return (
         <div className="fixed inset-0 z-[9970] bg-white flex flex-col">
@@ -1982,6 +2031,25 @@ function AParseEditor({ turn, jobName, turns, onSwitchTurn, onClose }: { turn: a
                             </select>
                         ) : (
                             <h1 className="text-sm font-semibold text-gray-800 truncate">{turn.title}</h1>
+                        )}
+                        {/* Tokens left for this turn */}
+                        <div className="flex items-center gap-1 shrink-0" title="Tokens left for this turn">
+                            <span className="text-[10px] text-gray-400">tokens left</span>
+                            {readOnly ? (
+                                <span className="w-24 text-[11px] font-medium text-gray-700 border border-gray-200 bg-gray-50 rounded px-1.5 py-0.5">
+                                    {formatTokens(tokensLeft) || '—'}
+                                </span>
+                            ) : (
+                                <input value={tokensLeft} onChange={e => setTokensLeft(e.target.value)}
+                                    placeholder="e.g. 956000" className="w-24 text-[11px] border border-gray-300 rounded px-1.5 py-0.5 focus:outline-none focus:border-indigo-400" />
+                            )}
+                        </div>
+                        {/* Previous turn's overall winner (A / B only) */}
+                        {prevLetter && (
+                            <span title={`Previous turn (${prevTurn?.title}) overall pick`}
+                                className={`text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${prevLetter === 'A' ? 'bg-blue-100 text-blue-700' : prevLetter === 'B' ? 'bg-teal-100 text-teal-700' : 'bg-gray-100 text-gray-600'}`}>
+                                prev: {prevLetter}
+                            </span>
                         )}
                         <span className="text-[10px] text-gray-400 shrink-0">
                             {editing ? (saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? 'Saved ✓' : '') : ''}
@@ -2058,7 +2126,8 @@ function AParseEditor({ turn, jobName, turns, onSwitchTurn, onClose }: { turn: a
                             <div ref={colRowRef} className="flex flex-1 min-h-0 min-w-0 w-full">
                                 {cols.map((c, i) => (
                                     <Fragment key={c.key}>
-                                        <div className="flex min-w-0 min-h-0" style={{ flexGrow: colWeights[c.key] ?? 1, flexBasis: 0 }}>
+                                        <div className="flex flex-1 min-w-0 min-h-0"
+                                            style={cols.length > 1 ? { flexGrow: colWeights[c.key] ?? 1, flexBasis: 0 } : undefined}>
                                             {c.node}
                                         </div>
                                         {i < cols.length - 1 && (
