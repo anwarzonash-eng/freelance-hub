@@ -14,6 +14,7 @@ import { ApplicationStatusIcon, APPLICATION_STATUS_OPTIONS } from '@/app/compone
 import ContextMenu, { ContextMenuItem } from '@/app/components/jobs/ContextMenu'
 import AssignModal from '@/app/components/jobs/AssignModal'
 import { timeAgo } from '@/app/utils/time'
+import { JOB_DATE_OPTIONS } from '@/app/utils/jobDateFilter'
 
 const LIMIT_OPTIONS = [25, 50, 100, 200]
 const TABLE_COLS = [
@@ -61,7 +62,7 @@ const CV_STATUS_LABEL: Record<string, string> = {
     cv_qa_review_required: 'Q/A Review',
     cv_qa_review_done: 'Q/A Done',
 }
-const EMPTY_FILTERS = { keyword: '', sponsorship_status: '', freelance_status: '', type: '', job_category: '', company_id: '', has_cv: '', cv_submitted: '', application_status: '', job_id: '', cv_status: '', assigned: '', assigned_to: '' }
+const EMPTY_FILTERS = { keyword: '', sponsorship_status: '', freelance_status: '', type: '', job_category: '', company_id: '', has_cv: '', cv_submitted: '', application_status: '', job_id: '', cv_status: '', assigned: '', assigned_to: '', job_date: '', job_date_from: '', job_date_to: '' }
 const APP_STATUS_FILTER_OPTIONS = [{ value: 'none', label: 'Not tracked' }, ...APPLICATION_STATUS_OPTIONS.filter(o => o.value)]
 const JOBS_FILTER_ITEMS = [
     { key: 'keyword',            label: 'Search' },
@@ -76,6 +77,7 @@ const JOBS_FILTER_ITEMS = [
     { key: 'assigned',           label: 'By Assigned' },
     { key: 'assigned_to',        label: 'By Assigned To' },
     { key: 'cv_status',          label: 'By CV Status' },
+    { key: 'job_date',           label: 'Job Creation Date' },
 ]
 const JOBS_DEFAULT_VISIBLE_FILTERS = new Set(JOBS_FILTER_ITEMS.map(f => f.key))
 const CV_STATUS_OPTIONS = [
@@ -104,6 +106,9 @@ function filtersToParams(f: typeof EMPTY_FILTERS, page: number, limit: number): 
     if (f.cv_status) params.set('cv_status', f.cv_status)
     if (f.assigned) params.set('assigned', f.assigned)
     if (f.assigned_to) params.set('assigned_to', f.assigned_to)
+    if (f.job_date) params.set('job_date', f.job_date)
+    if (f.job_date_from) params.set('job_date_from', f.job_date_from)
+    if (f.job_date_to) params.set('job_date_to', f.job_date_to)
     if (page !== 1) params.set('page', String(page))
     if (limit !== 50) params.set('limit', String(limit))
     return params
@@ -281,6 +286,9 @@ export default function ListedJobsPage() {
             if (af.job_id) q.job_ids = af.job_id
             if (af.assigned) q.assigned = af.assigned
             if (af.assigned_to) q.assigned_to = af.assigned_to
+            if (af.job_date) q.job_date = af.job_date
+            if (af.job_date_from) q.job_date_from = af.job_date_from
+            if (af.job_date_to) q.job_date_to = af.job_date_to
             if (af.has_cv === 'true') {
                 const map = latestCvMap ?? cvMap
                 const ids = Object.keys(map).join(',')
@@ -337,6 +345,9 @@ export default function ListedJobsPage() {
             cv_status: searchParams.get('cv_status') || '',
             assigned: searchParams.get('assigned') || '',
             assigned_to: searchParams.get('assigned_to') || '',
+            job_date: searchParams.get('job_date') || '',
+            job_date_from: searchParams.get('job_date_from') || '',
+            job_date_to: searchParams.get('job_date_to') || '',
         }
         const hydratedPage = Number(searchParams.get('page')) || 1
         const hydratedLimit = Number(searchParams.get('limit')) || 50
@@ -727,6 +738,29 @@ export default function ListedJobsPage() {
                             <option value="">All</option>
                             {CV_STATUS_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                         </select>
+                    </div>
+
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('job_date') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">Job Creation Date</label>
+                        <div className="flex items-center gap-1">
+                            <select value={filters.job_date}
+                                onChange={e => setFilters(f => ({ ...f, job_date: e.target.value }))}
+                                className={`border rounded px-2 py-1 text-xs focus:outline-none transition-colors ${filters.job_date ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}>
+                                <option value="">All</option>
+                                {JOB_DATE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                            </select>
+                            {filters.job_date === 'custom' && (
+                                <>
+                                    <input type="date" value={filters.job_date_from}
+                                        onChange={e => setFilters(f => ({ ...f, job_date_from: e.target.value }))}
+                                        className="border border-gray-300 rounded px-1.5 py-1 text-xs focus:outline-none" />
+                                    <span className="text-[10px] text-gray-400">→</span>
+                                    <input type="date" value={filters.job_date_to}
+                                        onChange={e => setFilters(f => ({ ...f, job_date_to: e.target.value }))}
+                                        className="border border-gray-300 rounded px-1.5 py-1 text-xs focus:outline-none" />
+                                </>
+                            )}
+                        </div>
                     </div>
 
                     <button onClick={applyFilters} className="px-3 py-1 text-xs bg-gray-800 text-white rounded hover:bg-gray-700 mt-auto">Filter</button>

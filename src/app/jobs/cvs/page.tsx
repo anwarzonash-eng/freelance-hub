@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { RefreshCw, ExternalLink, Pencil, Trash2, FileText, Search, X, Link, Briefcase, Building2, SlidersHorizontal, AlignLeft, User, Layers, Clock, Eye, MessageSquare } from 'lucide-react'
 import { useColResize } from '@/app/hooks/useColResize'
 import { formatHistoryDate } from '@/app/utils/time'
+import { JOB_DATE_OPTIONS, inJobDateRange } from '@/app/utils/jobDateFilter'
 
 function SponsorBadge({ value }: { value: string }) {
     const v = value?.toLowerCase()
@@ -66,7 +67,8 @@ const CVS_TABLE_COLS = [
     { key: 'email',         label: 'Email',         default: false },
     { key: 'exp_yrs',       label: 'Exp (yrs)',     default: true  },
     { key: 'status',        label: 'CV Status',     default: true  },
-    { key: 'created',       label: 'Created',       default: true  },
+    { key: 'created',       label: 'CV Creation',   default: true  },
+    { key: 'job_created',   label: 'Job Creation Date', default: false },
     { key: 'created_by',    label: 'Created By',    default: false },
 ]
 const CVS_DEFAULT_COLS = new Set(CVS_TABLE_COLS.filter(c => c.default).map(c => c.key))
@@ -75,7 +77,7 @@ const CVS_COL_WIDTHS: Record<string, number> = {
     actions: 160,
     cv_title: 200, applicant: 120, organisation: 140,
     sponsorship: 90, freelance: 110, job_link: 70, email: 180, exp_yrs: 70,
-    status: 100, created: 90, created_by: 90,
+    status: 100, created: 90, job_created: 110, created_by: 90,
 }
 
 const EMPTY_FILTERS = {
@@ -90,6 +92,9 @@ const EMPTY_FILTERS = {
     job_application_status: '',
     sponsorship_status: '',
     freelance_status: '',
+    job_date: '',
+    job_date_from: '',
+    job_date_to: '',
 }
 type CvFilters = typeof EMPTY_FILTERS
 
@@ -137,6 +142,10 @@ function filterCvs(list: any[], f: CvFilters) {
             : out.filter(cv => Array.isArray(cv.note_authors) && cv.note_authors.includes(f.notes_by))
     }
 
+    if (f.job_date) {
+        out = out.filter(cv => inJobDateRange(cv.job_created_at, f.job_date, f.job_date_from, f.job_date_to))
+    }
+
     if (f.status) {
         out = out.filter(cv => (cv.status ?? 'cv_created') === f.status)
     }
@@ -160,6 +169,7 @@ const CV_FILTER_ITEMS = [
     { key: 'exp_yrs',               label: 'By Exp (yrs)' },
     { key: 'created_by',            label: 'Created By' },
     { key: 'notes_by',              label: 'Notes Added by' },
+    { key: 'job_date',              label: 'Job Creation Date' },
     { key: 'status',                label: 'By CV Status' },
     { key: 'job_application_status', label: 'By App Status' },
     { key: 'sponsorship_status',     label: 'By Sponsorship' },
@@ -210,6 +220,14 @@ export default function CvsPage() {
     const [rawSidebarWidth, setRawSidebarWidth] = useState<number>(() => {
         try { return Number(localStorage.getItem('cvs_rawsidebar_width')) || 340 } catch { return 340 }
     })
+    const [rawFontSize, setRawFontSize] = useState<number>(() => {
+        try { return Math.min(24, Math.max(8, Number(localStorage.getItem('cvs_rawsidebar_fontsize')) || 10)) } catch { return 10 }
+    })
+    const adjustRawFont = (delta: number) => setRawFontSize(s => {
+        const next = Math.min(24, Math.max(8, s + delta))
+        try { localStorage.setItem('cvs_rawsidebar_fontsize', String(next)) } catch { /* ignore */ }
+        return next
+    })
     const rawSidebarResizing = useRef(false)
     const rawSidebarStartX = useRef(0)
     const rawSidebarStartW = useRef(0)
@@ -220,8 +238,10 @@ export default function CvsPage() {
         rawSidebarStartW.current = rawSidebarWidth
         const onMove = (ev: MouseEvent) => {
             if (!rawSidebarResizing.current) return
-            const delta = rawSidebarStartX.current - ev.clientX
-            const next = Math.max(220, Math.min(700, rawSidebarStartW.current + delta))
+            // Panel is docked on the left; dragging its right edge rightward widens it.
+            const delta = ev.clientX - rawSidebarStartX.current
+            const maxW = Math.max(400, window.innerWidth - 320)
+            const next = Math.max(220, Math.min(maxW, rawSidebarStartW.current + delta))
             setRawSidebarWidth(next)
             try { localStorage.setItem('cvs_rawsidebar_width', String(next)) } catch {}
         }
@@ -317,6 +337,9 @@ export default function CvsPage() {
                 job_application_status: searchParams.get('job_application_status') || '',
                 sponsorship_status: searchParams.get('sponsorship_status') || '',
                 freelance_status: searchParams.get('freelance_status') || '',
+                job_date: searchParams.get('job_date') || '',
+                job_date_from: searchParams.get('job_date_from') || '',
+                job_date_to: searchParams.get('job_date_to') || '',
             }
             hydratedFromUrl.current = true
             setFilters(fromUrl)
@@ -605,6 +628,31 @@ export default function CvsPage() {
                         </select>
                     </div>
 
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('job_date') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">Job Creation Date</label>
+                        <div className="flex items-center gap-1">
+                            <select
+                                className={`border rounded px-2 py-1 text-xs focus:outline-none min-w-[130px] transition-colors ${filters.job_date ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}
+                                value={filters.job_date}
+                                onChange={e => setFilters(f => ({ ...f, job_date: e.target.value }))}
+                            >
+                                <option value="">All</option>
+                                {JOB_DATE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                            </select>
+                            {filters.job_date === 'custom' && (
+                                <>
+                                    <input type="date" value={filters.job_date_from}
+                                        onChange={e => setFilters(f => ({ ...f, job_date_from: e.target.value }))}
+                                        className="border border-gray-300 rounded px-1.5 py-1 text-xs focus:outline-none" />
+                                    <span className="text-[10px] text-gray-400">→</span>
+                                    <input type="date" value={filters.job_date_to}
+                                        onChange={e => setFilters(f => ({ ...f, job_date_to: e.target.value }))}
+                                        className="border border-gray-300 rounded px-1.5 py-1 text-xs focus:outline-none" />
+                                </>
+                            )}
+                        </div>
+                    </div>
+
                     <div className={`flex flex-col gap-0.5${visibleFilters.has('status') ? '' : ' hidden'}`}>
                         <label className="text-[10px] text-gray-400 uppercase">By CV Status</label>
                         <select
@@ -677,11 +725,12 @@ export default function CvsPage() {
             </div>
 
             <div className="flex gap-0 flex-1 min-h-[60vh]">
-            {/* Raw description sidebar */}
+            {/* Raw description sidebar — sticky, fills the viewport height and scrolls internally */}
             {rawSidebarRow && (
-                <div className="relative flex shrink-0 border border-gray-200 rounded-l bg-white" style={{ width: rawSidebarWidth }}>
-                    {/* Drag handle on left edge */}
-                    <div className="absolute left-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-400/40 active:bg-blue-500/60 z-10 select-none"
+                <div className="relative flex shrink-0 self-start sticky top-2 border border-gray-200 rounded-l bg-white overflow-hidden"
+                    style={{ width: rawSidebarWidth, height: 'calc(100vh - 1rem)' }}>
+                    {/* Drag handle on the right edge (panel is docked left) */}
+                    <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-400/40 active:bg-blue-500/60 z-20 select-none"
                         onMouseDown={startRawResize} />
                     <div className="flex flex-col w-full overflow-hidden">
                         <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 shrink-0 bg-gray-50">
@@ -709,10 +758,18 @@ export default function CvsPage() {
                                     <button onClick={() => setRawSidebarSearch('')} className="text-gray-300 hover:text-gray-600 shrink-0"><X size={10} /></button>
                                 </>
                             )}
+                            {/* Font-size control */}
+                            <div className="flex items-center gap-0.5 shrink-0 border-l border-gray-200 pl-1.5 ml-0.5">
+                                <button onClick={() => adjustRawFont(-1)} disabled={rawFontSize <= 8} title="Smaller font"
+                                    className="w-5 h-5 flex items-center justify-center rounded text-gray-500 hover:bg-gray-100 disabled:opacity-30 leading-none">−</button>
+                                <span className="text-[9px] text-gray-400 w-4 text-center tabular-nums">{rawFontSize}</span>
+                                <button onClick={() => adjustRawFont(1)} disabled={rawFontSize >= 24} title="Larger font"
+                                    className="w-5 h-5 flex items-center justify-center rounded text-gray-500 hover:bg-gray-100 disabled:opacity-30 leading-none">+</button>
+                            </div>
                         </div>
                         <div ref={rawSidebarContentRef} className="flex-1 overflow-y-auto p-3">
                             {rawSidebarRow.raw_description
-                                ? <pre className="text-[10px] text-gray-700 whitespace-pre-wrap leading-relaxed"
+                                ? <pre className="text-gray-700 whitespace-pre-wrap" style={{ fontSize: rawFontSize, lineHeight: 1.5 }}
                                     dangerouslySetInnerHTML={{ __html: highlightRaw(rawSidebarRow.raw_description, rawSidebarSearch) }} />
                                 : <p className="text-[10px] text-gray-400 italic">No raw description available.</p>
                             }
@@ -774,7 +831,8 @@ export default function CvsPage() {
                             {col('email') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.email }}>Email{rh('email')}</th>}
                             {col('exp_yrs') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.exp_yrs }}>Exp (yrs){rh('exp_yrs')}</th>}
                             {col('status') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.status }}>CV Status{rh('status')}</th>}
-                            {col('created') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.created }}>Created{rh('created')}</th>}
+                            {col('created') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.created }}>CV Creation{rh('created')}</th>}
+                            {col('job_created') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.job_created }}>Job Creation Date{rh('job_created')}</th>}
                             {col('created_by') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.created_by }}>Created By{rh('created_by')}</th>}
                             <th className="px-2 py-1.5 text-left font-medium text-gray-500 border-r border-gray-200" style={{ width: 110 }}>Short Views</th>
                         </tr>
@@ -872,6 +930,9 @@ export default function CvsPage() {
                                 </td>}
                                 {col('created') && <td className="px-2 py-1.5 border-r border-gray-100 text-gray-400 text-[10px] whitespace-nowrap">
                                     {row.createdAt ? new Date(row.createdAt).toLocaleDateString() : '—'}
+                                </td>}
+                                {col('job_created') && <td className="px-2 py-1.5 border-r border-gray-100 text-gray-400 text-[10px] whitespace-nowrap">
+                                    {row.job_created_at ? new Date(row.job_created_at).toLocaleDateString() : '—'}
                                 </td>}
                                 {col('created_by') && <td className="px-2 py-1.5 border-r border-gray-100 text-gray-600 text-[10px] whitespace-nowrap">
                                     {row.created_by ? (userMap[row.created_by] || row.created_by) : '—'}
