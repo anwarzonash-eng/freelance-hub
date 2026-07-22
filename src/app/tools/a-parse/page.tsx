@@ -1536,9 +1536,8 @@ function renderAnswerWithRefs(
         const badge = ok ? 'bg-indigo-600' : 'bg-red-600'
         nodes.push(
             <span key={key++}
-                onMouseEnter={() => onHover(model, turn, matchText)}
                 onClick={() => onHover(model, turn, matchText)}
-                title={ok ? `Model ${m[1]} · turn ${turn} — click/hover to reveal in the transcript` : `Model ${m[1]} · turn ${turn} — text NOT found in this turn`}
+                title={ok ? `Model ${m[1]} · turn ${turn} — click to reveal in the transcript` : `Model ${m[1]} · turn ${turn} — text NOT found in this turn`}
                 className={`${cls} border rounded px-1 cursor-pointer`}>
                 <span className={`text-[8px] font-bold ${badge} text-white rounded px-1 mr-1`}>{label}{ok ? '' : ' ⚠'}</span>
                 {matchText}
