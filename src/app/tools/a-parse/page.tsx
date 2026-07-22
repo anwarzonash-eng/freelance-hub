@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from 'react'
-import { ListTree, ChevronRight, ChevronDown, Download, Trash2, Wand2, Bot, User, TerminalSquare, Copy, Check, MessageSquareText, Sparkles, X, Eye, EyeOff, PanelRight, Search, Plus, RefreshCw, Briefcase, FileText, Pencil, FileDiff, ScrollText, GitCompare, UnfoldVertical, FoldVertical, ClipboardList, Layers } from 'lucide-react'
+import { ListTree, ChevronRight, ChevronDown, Download, Trash2, Wand2, Bot, User, TerminalSquare, Copy, Check, MessageSquareText, Sparkles, X, Eye, EyeOff, PanelRight, Search, Plus, RefreshCw, Briefcase, FileText, Pencil, FileDiff, ScrollText, GitCompare, UnfoldVertical, FoldVertical, ClipboardList, Layers, Link2 } from 'lucide-react'
 import {
     getAParseJobs, createAParseJob, deleteAParseJob, updateAParseJob,
     getAParseTurns, getAParseTurn, createAParseTurn, deleteAParseTurn, updateAParseTurn,
@@ -194,7 +194,7 @@ function buildSummaryPrompt(items: ParsedItem[], originalPrompt: string): string
         '- Keep each step to one line: a short imperative title, then what happened.',
         '- Preserve the order the work actually occurred in.',
         '',
-        'Output format (plain markdown, no preamble):',
+        'Return the whole answer as a Markdown (.md) document — no preamble, no code fences around it. Output format:',
         '',
         '## Summary — <N> steps (from <total> turns)',
         '1. **<Step title>** — <what it did>. [retry / failed / recovered — if applicable]',
@@ -213,7 +213,7 @@ function buildComparePrompt(itemsA: ParsedItem[], itemsB: ParsedItem[], original
         '',
         'Compare the two runs at the level of WHAT each model was trying to accomplish, not individual commands. I want to see where they behaved similarly and where they diverged.',
         '',
-        'Output format (plain markdown, no preamble):',
+        'Return the whole answer as a Markdown (.md) document — no preamble, no code fences around it. Output format:',
         '',
         '## Comparison — Model A vs Model B',
         '',
@@ -445,19 +445,33 @@ function CodeDiffBody({ diff, terms }: { diff: string; terms: HlTerm[] }) {
 /* ------------------------------------------------------------------ *
  * Copy-only prompt modal (Summarize / Compare). No JSON paste-back.
  * ------------------------------------------------------------------ */
-function CopyPromptModal({ title, prompt, onClose }: { title: string; prompt: string; onClose: () => void }) {
+function CopyPromptModal({ title, prompt, onClose, savedValue, onSaveValue }: {
+    title: string
+    prompt: string
+    onClose: () => void
+    savedValue?: string
+    onSaveValue?: (text: string) => void
+}) {
     const [copied, setCopied] = useState(false)
+    const [output, setOutput] = useState(savedValue ?? '')
+    const [savedFlash, setSavedFlash] = useState(false)
+    const dirty = output !== (savedValue ?? '')
     const copy = () => {
         navigator.clipboard.writeText(prompt).then(() => {
             setCopied(true)
             setTimeout(() => setCopied(false), 1500)
         })
     }
+    const save = () => {
+        onSaveValue?.(output)
+        setSavedFlash(true)
+        setTimeout(() => setSavedFlash(false), 1500)
+    }
     return (
         <div className="fixed inset-0 z-[9995] flex items-center justify-center bg-black/40"
             onClick={e => { if (e.target === e.currentTarget) onClose() }}>
             <div className="bg-white border border-gray-200 rounded-xl shadow-2xl flex flex-col overflow-hidden"
-                style={{ width: 780, maxWidth: '95vw', maxHeight: '90vh' }}>
+                style={{ width: 820, maxWidth: '95vw', maxHeight: '92vh' }}>
                 <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-100 shrink-0 bg-gray-50">
                     <Sparkles size={13} className="text-amber-500 shrink-0" />
                     <span className="text-[11px] font-semibold text-gray-700 flex-1 truncate">{title}</span>
@@ -467,11 +481,28 @@ function CopyPromptModal({ title, prompt, onClose }: { title: string; prompt: st
                     </button>
                     <button onClick={onClose} className="text-gray-300 hover:text-gray-600 shrink-0 ml-1"><X size={14} /></button>
                 </div>
-                <div className="p-3 overflow-y-auto">
-                    <p className="text-[10px] text-gray-400 mb-1.5">Paste this into ChatGPT — it already includes the transcript. (Copy-only; no need to paste anything back here.)</p>
-                    <pre className="text-[10px] text-gray-700 whitespace-pre-wrap leading-relaxed bg-gray-50 border border-gray-200 rounded px-2.5 py-2 max-h-[72vh] overflow-y-auto font-mono">
-                        {prompt}
-                    </pre>
+                <div className="p-3 overflow-y-auto space-y-3">
+                    <div>
+                        <p className="text-[10px] text-gray-400 mb-1.5">1. Copy this prompt into ChatGPT/Claude — it already includes the transcript and asks for Markdown (.md) output.</p>
+                        <pre className="text-[10px] text-gray-700 whitespace-pre-wrap leading-relaxed bg-gray-50 border border-gray-200 rounded px-2.5 py-2 max-h-[38vh] overflow-y-auto font-mono">
+                            {prompt}
+                        </pre>
+                    </div>
+                    {onSaveValue && (
+                        <div>
+                            <div className="flex items-center justify-between mb-1.5">
+                                <p className="text-[10px] text-gray-400">2. Paste the generated Markdown here and save it for review.</p>
+                                <button onClick={save} disabled={!dirty}
+                                    className="flex items-center gap-1 text-[11px] bg-emerald-600 text-white rounded px-2.5 py-1 hover:bg-emerald-700 disabled:opacity-40">
+                                    {savedFlash ? <Check size={12} /> : null} {savedFlash ? 'Saved' : dirty ? 'Save' : 'Saved'}
+                                </button>
+                            </div>
+                            <textarea value={output} onChange={e => setOutput(e.target.value)}
+                                placeholder="Paste the AI's Markdown output here…"
+                                spellCheck={false}
+                                className="w-full h-56 border border-gray-300 rounded px-2.5 py-2 text-[11px] font-mono leading-relaxed resize-y focus:outline-none focus:border-emerald-400" />
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
@@ -642,7 +673,7 @@ function TranscriptRow({
  * One model panel (reused for Model A and Model B)
  * ------------------------------------------------------------------ */
 function ModelPanel({
-    modelKey, title, input, remarks, onInputChange, onRemarksChange, sharedPrompt, turnTitle, readOnly, reveal,
+    modelKey, title, input, remarks, onInputChange, onRemarksChange, sharedPrompt, turnTitle, readOnly, reveal, savedSummary, onSaveSummary,
 }: {
     modelKey: 'a' | 'b'
     title: string
@@ -654,6 +685,8 @@ function ModelPanel({
     turnTitle?: string
     readOnly?: boolean
     reveal?: { turnNum: number; text: string; nonce: number } | null
+    savedSummary?: string
+    onSaveSummary?: (text: string) => void
 }) {
     // UI-only preferences persist globally; turn DATA (input/remarks) comes from props.
     const SHOWINPUT_LS_KEY = `aparse_model_${modelKey}_showinput`
@@ -1094,9 +1127,11 @@ function ModelPanel({
             {/* Summarize modal (copy-only) */}
             {showSummary && (
                 <CopyPromptModal
-                    title={`Summarize ${title} — copy this prompt into ChatGPT`}
+                    title={`Summarize ${title} — prompt & saved output`}
                     prompt={summaryPrompt}
                     onClose={() => setShowSummary(false)}
+                    savedValue={savedSummary}
+                    onSaveValue={onSaveSummary}
                 />
             )}
 
@@ -1306,6 +1341,10 @@ interface RubricAnswers {
     quality: string
     overall: number | null
     comments: VersionedText
+    // Saved AI-generated outputs (Markdown) for the copy-prompt popups
+    summaryA: string
+    summaryB: string
+    comparison: string
 }
 
 function emptyAnswers(): RubricAnswers {
@@ -1315,6 +1354,7 @@ function emptyAnswers(): RubricAnswers {
         seniorExpectation: emptyVersioned(), dims, otherIssues: emptyVersioned(), overallReasoning: emptyVersioned(),
         additionalNotes: emptyVersioned(), promptForNextTurn: emptyVersioned(), promptType: '',
         selectedAxes: [], quality: '', overall: null, comments: emptyVersioned(),
+        summaryA: '', summaryB: '', comparison: '',
     }
 }
 
@@ -1338,6 +1378,9 @@ function normalizeAnswers(raw: any): RubricAnswers {
         quality: raw.quality ?? '',
         overall: typeof raw.overall === 'number' ? raw.overall : null,
         comments: toVersioned(raw.comments),
+        summaryA: typeof raw.summaryA === 'string' ? raw.summaryA : '',
+        summaryB: typeof raw.summaryB === 'string' ? raw.summaryB : '',
+        comparison: typeof raw.comparison === 'string' ? raw.comparison : '',
     }
 }
 
@@ -1429,6 +1472,7 @@ function parseAnswersJson(raw: string): RubricAnswers {
         quality: ['poor', 'great', 'complicated'].includes(src.quality) ? src.quality : '',
         overall: typeof src.overall === 'number' ? src.overall : null,
         comments: toVersioned(String(src.comments ?? '')),
+        summaryA: '', summaryB: '', comparison: '',
     }
 }
 
@@ -1454,6 +1498,7 @@ function mergeAiVersion(cur: RubricAnswers, parsed: RubricAnswers): RubricAnswer
         quality: parsed.quality,
         overall: parsed.overall,
         comments: setAi(cur.comments, parsed.comments),
+        summaryA: cur.summaryA, summaryB: cur.summaryB, comparison: cur.comparison,
     }
 }
 
@@ -2101,14 +2146,16 @@ function AParseEditor({ turn, jobName, turns, onSwitchTurn, onClose }: { turn: a
                             key: 'a', node: (
                                 <ModelPanel modelKey="a" title="Model A" turnTitle={turn.title} readOnly={readOnly}
                                     input={aInput} remarks={aRemarks} onInputChange={setAInput} onRemarksChange={setARemarks} sharedPrompt={prompt}
-                                    reveal={reveal?.model === 'a' ? reveal : null} />
+                                    reveal={reveal?.model === 'a' ? reveal : null}
+                                    savedSummary={answers.summaryA} onSaveSummary={t => patchAnswers({ summaryA: t })} />
                             )
                         })
                         if (showB) cols.push({
                             key: 'b', node: (
                                 <ModelPanel modelKey="b" title="Model B" turnTitle={turn.title} readOnly={readOnly}
                                     input={bInput} remarks={bRemarks} onInputChange={setBInput} onRemarksChange={setBRemarks} sharedPrompt={prompt}
-                                    reveal={reveal?.model === 'b' ? reveal : null} />
+                                    reveal={reveal?.model === 'b' ? reveal : null}
+                                    savedSummary={answers.summaryB} onSaveSummary={t => patchAnswers({ summaryB: t })} />
                             )
                         })
                         if (showAnswers) cols.push({
@@ -2150,6 +2197,8 @@ function AParseEditor({ turn, jobName, turns, onSwitchTurn, onClose }: { turn: a
                     title={`Compare Model A vs Model B — ${jobName} · ${turn.title}`}
                     prompt={comparePrompt}
                     onClose={() => setShowCompare(false)}
+                    savedValue={answers.comparison}
+                    onSaveValue={t => patchAnswers({ comparison: t })}
                 />
             )}
 
@@ -2176,7 +2225,13 @@ function AParseEditor({ turn, jobName, turns, onSwitchTurn, onClose }: { turn: a
 // Delete actions stay wired up but their buttons are hidden for now.
 const SHOW_DELETE_BUTTONS = false
 
-interface AParseJob { id: string; name: string; turn_count: number; createdAt?: string }
+const TURN_STATUSES = [
+    { value: 'ready_review', label: 'Ready For Review', cls: 'bg-sky-100 text-sky-700 border-sky-300' },
+    { value: 'ready_submission', label: 'Ready For Submission', cls: 'bg-amber-100 text-amber-700 border-amber-300' },
+    { value: 'submitted', label: 'Submitted', cls: 'bg-emerald-100 text-emerald-700 border-emerald-300' },
+]
+
+interface AParseJob { id: string; name: string; turn_count: number; createdAt?: string; model_link?: string | null }
 
 export default function AParsePage() {
     const [jobs, setJobs] = useState<AParseJob[]>([])
@@ -2186,7 +2241,10 @@ export default function AParsePage() {
     const [loadingTurns, setLoadingTurns] = useState<Set<string>>(new Set())
     const [creating, setCreating] = useState(false)
     const [newName, setNewName] = useState('')
+    const [newLink, setNewLink] = useState('')
     const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null)
+    const [linkEditing, setLinkEditing] = useState<{ id: string; value: string } | null>(null)
+    const [copiedLink, setCopiedLink] = useState<string | null>(null)
     const [openTurn, setOpenTurn] = useState<{ turn: any; jobName: string; jobId: string } | null>(null)
 
     const load = useCallback(async () => {
@@ -2223,8 +2281,8 @@ export default function AParsePage() {
     const createJob = async () => {
         const name = newName.trim()
         if (!name) return
-        await createAParseJob(name)
-        setNewName(''); setCreating(false)
+        await createAParseJob(name, newLink.trim() || undefined)
+        setNewName(''); setNewLink(''); setCreating(false)
         load()
     }
 
@@ -2233,6 +2291,26 @@ export default function AParsePage() {
         await updateAParseJob(renaming.id, { name: renaming.name.trim() })
         setRenaming(null)
         load()
+    }
+
+    const saveJobLink = async () => {
+        if (!linkEditing) return
+        await updateAParseJob(linkEditing.id, { model_link: linkEditing.value.trim() })
+        setLinkEditing(null)
+        load()
+    }
+
+    const copyJobLink = (job: AParseJob) => {
+        if (!job.model_link) return
+        navigator.clipboard.writeText(job.model_link)
+        setCopiedLink(job.id)
+        setTimeout(() => setCopiedLink(c => (c === job.id ? null : c)), 1500)
+    }
+
+    const setTurnStatus = async (turnId: string, jobId: string, status: string) => {
+        // optimistic update in the loaded turns list
+        setTurnsByJob(m => ({ ...m, [jobId]: (m[jobId] || []).map(t => t.id === turnId ? { ...t, status } : t) }))
+        await updateAParseTurn(turnId, { status })
     }
 
     const removeJob = async (id: string) => {
@@ -2289,7 +2367,13 @@ export default function AParsePage() {
                         onChange={e => setNewName(e.target.value)}
                         onKeyDown={e => { if (e.key === 'Enter') createJob(); if (e.key === 'Escape') setCreating(false) }}
                         placeholder="Job name…"
-                        className="flex-1 text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-teal-400" />
+                        className="w-48 text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-teal-400" />
+                    <Link2 size={13} className="text-indigo-500 shrink-0" />
+                    <input value={newLink}
+                        onChange={e => setNewLink(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') createJob(); if (e.key === 'Escape') setCreating(false) }}
+                        placeholder="Model link (optional)…"
+                        className="flex-1 text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-indigo-400" />
                     <button onClick={createJob} disabled={!newName.trim()}
                         className="text-[11px] bg-teal-600 text-white rounded px-2.5 py-1 hover:bg-teal-700 disabled:opacity-40">Create</button>
                     <button onClick={() => setCreating(false)} className="text-[11px] border border-gray-300 rounded px-2 py-1 hover:bg-white text-gray-600">Cancel</button>
@@ -2330,6 +2414,17 @@ export default function AParsePage() {
                                         {job.name}
                                     </button>
                                 )}
+                                {/* Model link — copy-only + edit */}
+                                <button onClick={() => copyJobLink(job)} disabled={!job.model_link}
+                                    title={job.model_link ? 'Copy model link' : 'No model link set'}
+                                    className={`p-1 rounded shrink-0 disabled:opacity-30 ${copiedLink === job.id ? 'text-green-600 bg-green-50' : job.model_link ? 'text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50' : 'text-gray-300'}`}>
+                                    {copiedLink === job.id ? <Check size={12} /> : <Copy size={12} />}
+                                </button>
+                                <button onClick={() => setLinkEditing({ id: job.id, value: job.model_link || '' })}
+                                    title={job.model_link ? 'Edit model link' : 'Set model link'}
+                                    className={`p-1 rounded shrink-0 ${job.model_link ? 'text-indigo-400 hover:text-indigo-700 hover:bg-indigo-50' : 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50'}`}>
+                                    <Link2 size={12} />
+                                </button>
                                 <span className="text-[10px] text-gray-400 shrink-0">{job.turn_count} turn{job.turn_count !== 1 ? 's' : ''}</span>
                                 <button onClick={() => addTurn(job)} title="Add turn"
                                     className="p-1 text-gray-400 hover:text-teal-700 hover:bg-teal-50 rounded shrink-0"><Plus size={12} /></button>
@@ -2340,6 +2435,20 @@ export default function AParsePage() {
                                         className="p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded shrink-0"><Trash2 size={12} /></button>
                                 )}
                             </div>
+
+                            {/* Model link editor */}
+                            {linkEditing?.id === job.id && (
+                                <div className="flex items-center gap-2 px-2 py-1.5 bg-indigo-50 border-t border-indigo-100">
+                                    <Link2 size={12} className="text-indigo-500 shrink-0" />
+                                    <input autoFocus value={linkEditing.value}
+                                        onChange={e => setLinkEditing({ id: job.id, value: e.target.value })}
+                                        onKeyDown={e => { if (e.key === 'Enter') saveJobLink(); if (e.key === 'Escape') setLinkEditing(null) }}
+                                        placeholder="Paste the model / chat link…"
+                                        className="flex-1 text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-indigo-400" />
+                                    <button onClick={saveJobLink} className="text-[11px] bg-indigo-600 text-white rounded px-2.5 py-1 hover:bg-indigo-700">Save</button>
+                                    <button onClick={() => setLinkEditing(null)} className="text-[11px] border border-gray-300 rounded px-2 py-1 hover:bg-white text-gray-600">Cancel</button>
+                                </div>
+                            )}
 
                             {/* Turns */}
                             {isOpen && (
@@ -2361,6 +2470,14 @@ export default function AParsePage() {
                                                         {t.title}
                                                     </button>
                                                     {t.prompt?.trim() && <span title="Has prompt" className="text-[9px] text-indigo-400 shrink-0">prompt</span>}
+                                                    {/* Turn status */}
+                                                    <select value={t.status || ''} onClick={e => e.stopPropagation()}
+                                                        onChange={e => setTurnStatus(t.id, job.id, e.target.value)}
+                                                        title="Turn status"
+                                                        className={`text-[9px] rounded border px-1 py-0.5 shrink-0 focus:outline-none ${TURN_STATUSES.find(s => s.value === t.status)?.cls || 'bg-gray-50 text-gray-500 border-gray-200'}`}>
+                                                        <option value="">No status</option>
+                                                        {TURN_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                                                    </select>
                                                     {SHOW_DELETE_BUTTONS && (
                                                         <button onClick={() => removeTurn(t.id, job.id)} title="Delete turn"
                                                             className="p-0.5 text-red-300 hover:text-red-600 hover:bg-red-50 rounded shrink-0"><Trash2 size={11} /></button>
