@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef, useLayoutEffect, Fragment } from 'react'
 import { ListTree, ChevronRight, ChevronDown, Download, Trash2, Wand2, Bot, User, TerminalSquare, Copy, Check, MessageSquareText, Sparkles, X, Eye, EyeOff, PanelRight, Search, Plus, RefreshCw, Briefcase, FileText, Pencil, FileDiff, ScrollText, GitCompare, UnfoldVertical, FoldVertical, ClipboardList, Layers, Link2 } from 'lucide-react'
 import {
     getAParseJobs, createAParseJob, deleteAParseJob, updateAParseJob,
@@ -1596,27 +1596,40 @@ function renderAnswerWithRefs(
 
 /** Answer field: a textarea when editing; a highlighted, hoverable rendered view when read-only
  *  or when the per-field "preview" eye is toggled on (so you can view refs while editing too). */
-function AnswerField({ value, onChange, readOnly, onRefHover, refMatches, className, minHeight = 56, placeholder }: {
+function AnswerField({ value, onChange, readOnly, onRefHover, refMatches, className, height = 56, onMeasure, placeholder }: {
     value: string
     onChange: (v: string) => void
     readOnly?: boolean
     onRefHover: (model: 'a' | 'b', turn: number, matchText: string) => void
     refMatches: (model: 'a' | 'b', turn: number, matchText: string) => boolean
     className?: string
-    minHeight?: number
+    height?: number
+    onMeasure?: (h: number) => void
     placeholder?: string
 }) {
     const [preview, setPreview] = useState(false)
     const showView = readOnly || preview
+    const boxRef = useRef<HTMLDivElement & HTMLTextAreaElement | null>(null)
+    // Report the content's natural height; the parent sizes all versions to the tallest.
+    useLayoutEffect(() => {
+        const el = boxRef.current
+        if (!el) return
+        const prev = el.style.height
+        el.style.height = 'auto'
+        const h = el.scrollHeight + 2
+        el.style.height = prev
+        onMeasure?.(h)
+    })
+    // Same fixed (shared) height in both edit and view so toggling never changes the size.
     return (
         <div className="relative">
             {showView ? (
-                <div className={`${className} overflow-y-auto whitespace-pre-wrap break-words`} style={{ minHeight, maxHeight: 280 }}>
+                <div ref={boxRef as any} className={`${className} overflow-y-auto whitespace-pre-wrap break-words`} style={{ height }}>
                     {value.trim() ? renderAnswerWithRefs(value, onRefHover, refMatches) : <span className="text-gray-300">{placeholder || '—'}</span>}
                 </div>
             ) : (
-                <textarea value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-                    spellCheck={false} className={className} style={{ minHeight }} />
+                <textarea ref={boxRef as any} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+                    spellCheck={false} className={className} style={{ height }} />
             )}
             {!readOnly && (
                 <button type="button" onClick={() => setPreview(p => !p)}
@@ -1643,15 +1656,35 @@ function VersionedAnswer({ value, versions, onChangeVersion, readOnly, onRefHove
 }) {
     const shown = VERSION_KEYS.filter(k => versions.includes(k))
     const list = shown.length ? shown : (['ai'] as VersionKey[])
+    // Auto-size: every version shares the tallest version's content height, so boxes grow
+    // with content and always stay equal.
+    const [heights, setHeights] = useState<Record<string, number>>({})
+    const rowH = Math.max(minHeight ?? 56, ...list.map(vk => heights[vk] ?? 0))
     return (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 items-stretch">
             {list.map(vk => {
                 const a = VERSION_ACCENT[vk]
+                const nextKey = VERSION_KEYS[VERSION_KEYS.indexOf(vk) + 1]
+                const canForward = !readOnly && !!nextKey && !!value[vk].trim() && !value[nextKey].trim()
                 return (
                     <div key={vk} className={`flex-1 min-w-[200px] rounded-md border ${a.border} overflow-hidden bg-white`}>
-                        <div className={`text-[9px] font-semibold uppercase tracking-wide px-2 py-0.5 border-b ${a.border} ${a.bar}`}>{VERSION_LABEL[vk]}</div>
+                        <div className={`flex items-center gap-1 px-2 py-0.5 border-b ${a.border} ${a.bar}`}>
+                            <span className="text-[9px] font-semibold uppercase tracking-wide flex-1 min-w-0 truncate">{VERSION_LABEL[vk]}</span>
+                            {nextKey && (
+                                <button type="button"
+                                    onClick={() => { if (canForward) onChangeVersion(nextKey, value[vk]) }}
+                                    disabled={!canForward}
+                                    title={canForward
+                                        ? `Copy this into "${VERSION_LABEL[nextKey]}"`
+                                        : value[nextKey]?.trim() ? `"${VERSION_LABEL[nextKey]}" already has content` : 'Nothing to copy forward'}
+                                    className="shrink-0 rounded hover:bg-black/10 disabled:opacity-30 disabled:hover:bg-transparent">
+                                    <ChevronRight size={13} />
+                                </button>
+                            )}
+                        </div>
                         <AnswerField value={value[vk]} onChange={t => onChangeVersion(vk, t)} readOnly={readOnly}
-                            onRefHover={onRefHover} refMatches={refMatches} className={className} minHeight={minHeight} placeholder={placeholder} />
+                            onRefHover={onRefHover} refMatches={refMatches} className={className} height={rowH}
+                            onMeasure={h => setHeights(p => (p[vk] === h ? p : { ...p, [vk]: h }))} placeholder={placeholder} />
                     </div>
                 )
             })}
@@ -1696,7 +1729,8 @@ function AnswersPanel({ value, onChange, onClose, readOnly, onRefHover, refMatch
         onChange({ selectedAxes: has ? value.selectedAxes.filter(a => a !== key) : [...value.selectedAxes, key] })
     }
     // Borderless inner field — the version sub-card supplies the border/header.
-    const edInner = 'w-full px-2 py-1.5 text-[11px] leading-relaxed resize-y focus:outline-none bg-white'
+    // Fixed height (shared per field via the row handle), so no per-box resize.
+    const edInner = 'w-full px-2 py-1.5 text-[11px] leading-relaxed resize-none overflow-y-auto focus:outline-none bg-white'
 
     // Section collapse state (all sections; supports expand/collapse all via right-click menu).
     const SECTION_KEYS = ['senior', ...RUBRIC_DIMS.map(d => `dim:${d.key}`), 'otherIssues', 'overallReasoning', 'additionalNotes', 'promptForNextTurn', 'axes', 'quality', 'verdict', 'comments']
@@ -2057,6 +2091,8 @@ function AParseEditor({ turn, jobName, turns, onSwitchTurn, onClose }: { turn: a
     const prevTurn = curIdx > 0 ? turns[curIdx - 1] : null
     const prevOverall = prevTurn?.answers?.overall
     const prevLetter = typeof prevOverall === 'number' ? (prevOverall < 0 ? 'A' : prevOverall > 0 ? 'B' : '=') : null
+    // Current turn's overall winner (live from the edited answers).
+    const curLetter = typeof answers.overall === 'number' ? (answers.overall < 0 ? 'A' : answers.overall > 0 ? 'B' : '=') : null
 
     return (
         <div className="fixed inset-0 z-[9970] bg-white flex flex-col">
@@ -2093,6 +2129,13 @@ function AParseEditor({ turn, jobName, turns, onSwitchTurn, onClose }: { turn: a
                             <span title={`Previous turn (${prevTurn?.title}) overall pick`}
                                 className={`text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${prevLetter === 'A' ? 'bg-blue-100 text-blue-700' : prevLetter === 'B' ? 'bg-teal-100 text-teal-700' : 'bg-gray-100 text-gray-600'}`}>
                                 prev: {prevLetter}
+                            </span>
+                        )}
+                        {/* Current turn's overall winner */}
+                        {curLetter && (
+                            <span title="This turn's overall pick"
+                                className={`text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 border ${curLetter === 'A' ? 'bg-blue-50 text-blue-700 border-blue-300' : curLetter === 'B' ? 'bg-teal-50 text-teal-700 border-teal-300' : 'bg-gray-50 text-gray-600 border-gray-300'}`}>
+                                now: {curLetter}
                             </span>
                         )}
                         <span className="text-[10px] text-gray-400 shrink-0">
