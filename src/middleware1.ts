@@ -10,6 +10,7 @@ export const config = {
 };
 
 
+
 export async function middleware(request: NextRequest) {
     const path = request.nextUrl.pathname;
     const query = request.nextUrl.search;
