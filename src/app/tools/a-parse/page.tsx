@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef, useLayoutEffect, Fragment } from 'react'
-import { ListTree, ChevronRight, ChevronDown, Download, Trash2, Wand2, Bot, User, TerminalSquare, Copy, Check, MessageSquareText, Sparkles, X, Eye, EyeOff, PanelRight, Search, Plus, RefreshCw, Briefcase, FileText, Pencil, FileDiff, ScrollText, GitCompare, UnfoldVertical, FoldVertical, ClipboardList, Layers, Link2 } from 'lucide-react'
+import { ListTree, ChevronRight, ChevronDown, Download, Trash2, Wand2, Bot, User, TerminalSquare, Copy, Check, MessageSquareText, Sparkles, X, Eye, EyeOff, PanelRight, Search, Plus, RefreshCw, Briefcase, FileText, Pencil, FileDiff, ScrollText, GitCompare, UnfoldVertical, FoldVertical, ClipboardList, Layers, Link2, SlidersHorizontal } from 'lucide-react'
 import {
     getAParseJobs, createAParseJob, deleteAParseJob, updateAParseJob,
     getAParseTurns, getAParseTurn, createAParseTurn, deleteAParseTurn, updateAParseTurn,
@@ -1272,6 +1272,21 @@ const QUALITY_OPTS = [
     { value: 'complicated', label: "It's complicated" },
 ] as const
 
+// All answer sections (for the show/hide chooser). Keys match the sec() keys.
+const ANSWER_SECTIONS: { key: string; label: string }[] = [
+    { key: 'senior', label: 'Senior engineer expectation' },
+    ...RUBRIC_DIMS.map(d => ({ key: `dim:${d.key}`, label: `${d.label} — reasoning & score` })),
+    { key: 'otherIssues', label: 'Other behavioral issues' },
+    { key: 'overallReasoning', label: 'Overall Reasoning' },
+    { key: 'additionalNotes', label: 'Additional Notes' },
+    { key: 'promptForNextTurn', label: 'Prompt For Next Turn' },
+    { key: 'axes', label: 'Select axes' },
+    { key: 'quality', label: 'Select quality' },
+    { key: 'verdict', label: 'Overall verdict (A vs B)' },
+    { key: 'comments', label: 'Comments' },
+]
+const DEFAULT_HIDDEN_SECTIONS = ['additionalNotes', 'axes', 'quality', 'comments']
+
 const PROMPT_TYPES = [
     'Debugging',
     'Root Cause Analysis *',
@@ -1608,8 +1623,14 @@ function AnswerField({ value, onChange, readOnly, onRefHover, refMatches, classN
     placeholder?: string
 }) {
     const [preview, setPreview] = useState(false)
+    const [copied, setCopied] = useState(false)
     const showView = readOnly || preview
     const boxRef = useRef<HTMLDivElement & HTMLTextAreaElement | null>(null)
+    const copyValue = () => {
+        navigator.clipboard.writeText(value).then(() => {
+            setCopied(true); setTimeout(() => setCopied(false), 1200)
+        })
+    }
     // Report the content's natural height; the parent sizes all versions to the tallest.
     useLayoutEffect(() => {
         const el = boxRef.current
@@ -1631,13 +1652,20 @@ function AnswerField({ value, onChange, readOnly, onRefHover, refMatches, classN
                 <textarea ref={boxRef as any} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
                     spellCheck={false} className={className} style={{ height }} />
             )}
-            {!readOnly && (
-                <button type="button" onClick={() => setPreview(p => !p)}
-                    title={preview ? 'Back to editing' : 'Preview references'}
-                    className="absolute top-1 right-1 p-0.5 rounded bg-white/90 border border-gray-200 text-gray-400 hover:text-indigo-600 shadow-sm">
-                    {preview ? <Pencil size={11} /> : <Eye size={11} />}
+            <div className="absolute top-1 right-1 flex items-center gap-0.5">
+                <button type="button" onClick={copyValue} disabled={!value.trim()}
+                    title="Copy this text"
+                    className="p-0.5 rounded bg-white/90 border border-gray-200 text-gray-400 hover:text-indigo-600 shadow-sm disabled:opacity-30">
+                    {copied ? <Check size={11} className="text-green-500" /> : <Copy size={11} />}
                 </button>
-            )}
+                {!readOnly && (
+                    <button type="button" onClick={() => setPreview(p => !p)}
+                        title={preview ? 'Back to editing' : 'Preview references'}
+                        className="p-0.5 rounded bg-white/90 border border-gray-200 text-gray-400 hover:text-indigo-600 shadow-sm">
+                        {preview ? <Pencil size={11} /> : <Eye size={11} />}
+                    </button>
+                )}
+            </div>
         </div>
     )
 }
@@ -1733,7 +1761,7 @@ function AnswersPanel({ value, onChange, onClose, readOnly, onRefHover, refMatch
     const edInner = 'w-full px-2 py-1.5 text-[11px] leading-relaxed resize-none overflow-y-auto focus:outline-none bg-white'
 
     // Section collapse state (all sections; supports expand/collapse all via right-click menu).
-    const SECTION_KEYS = ['senior', ...RUBRIC_DIMS.map(d => `dim:${d.key}`), 'otherIssues', 'overallReasoning', 'additionalNotes', 'promptForNextTurn', 'axes', 'quality', 'verdict', 'comments']
+    const SECTION_KEYS = ANSWER_SECTIONS.map(s => s.key)
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
     const [sectionCtx, setSectionCtx] = useState<{ x: number; y: number } | null>(null)
     const sec = (key: string) => ({
@@ -1741,6 +1769,27 @@ function AnswersPanel({ value, onChange, onClose, readOnly, onRefHover, refMatch
         onToggle: () => setCollapsed(prev => { const s = new Set(prev); s.has(key) ? s.delete(key) : s.add(key); return s }),
         onHeaderContextMenu: (e: React.MouseEvent) => { e.preventDefault(); setSectionCtx({ x: e.clientX, y: e.clientY }) },
     })
+
+    // Which sections are visible at all (show/hide chooser), persisted. Some hidden by default.
+    const [visibleSections, setVisibleSections] = useState<Set<string>>(() => {
+        try {
+            const saved = JSON.parse(localStorage.getItem('aparse_visible_sections') || 'null')
+            if (Array.isArray(saved)) return new Set(saved)
+        } catch { /* ignore */ }
+        return new Set(SECTION_KEYS.filter(k => !DEFAULT_HIDDEN_SECTIONS.includes(k)))
+    })
+    useEffect(() => { try { localStorage.setItem('aparse_visible_sections', JSON.stringify([...visibleSections])) } catch { /* ignore */ } }, [visibleSections])
+    const vis = (key: string) => visibleSections.has(key)
+    const toggleSectionVisible = (key: string) =>
+        setVisibleSections(prev => { const s = new Set(prev); s.has(key) ? s.delete(key) : s.add(key); return s })
+    const [showSectionMenu, setShowSectionMenu] = useState(false)
+    const sectionMenuRef = useRef<HTMLDivElement>(null)
+    useEffect(() => {
+        if (!showSectionMenu) return
+        const h = (e: MouseEvent) => { if (sectionMenuRef.current && !sectionMenuRef.current.contains(e.target as Node)) setShowSectionMenu(false) }
+        document.addEventListener('mousedown', h)
+        return () => document.removeEventListener('mousedown', h)
+    }, [showSectionMenu])
 
     // Which answer versions to show/edit (checkbox multi-select), persisted.
     const [selVersions, setSelVersions] = useState<VersionKey[]>(() => {
@@ -1804,6 +1853,25 @@ function AnswersPanel({ value, onChange, onClose, readOnly, onRefHover, refMatch
                             </div>
                         )}
                     </div>
+                    {/* Sections show/hide */}
+                    <div className="relative" ref={sectionMenuRef}>
+                        <button onClick={() => setShowSectionMenu(v => !v)}
+                            title="Show / hide sections"
+                            className={`flex items-center gap-0.5 border rounded p-1 ${showSectionMenu ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
+                            <SlidersHorizontal size={13} /><span className="text-[9px] font-semibold">{visibleSections.size}</span>
+                        </button>
+                        {showSectionMenu && (
+                            <div className="absolute right-0 top-full mt-1 z-40 bg-white border border-gray-200 rounded shadow-lg py-1 min-w-56 max-h-72 overflow-y-auto">
+                                <p className="text-[9px] text-gray-400 uppercase font-semibold px-2.5 py-1">Sections</p>
+                                {ANSWER_SECTIONS.map(s => (
+                                    <label key={s.key} className="flex items-center gap-2 px-2.5 py-1 text-[11px] text-gray-700 hover:bg-gray-50 cursor-pointer">
+                                        <input type="checkbox" className="w-3 h-3" checked={visibleSections.has(s.key)} onChange={() => toggleSectionVisible(s.key)} />
+                                        {s.label}
+                                    </label>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                     <button onClick={() => setShowFill(v => !v)}
                         title="Fill from AI — copy a prompt and paste back JSON"
                         className={`border rounded p-1 ${showFill ? 'border-amber-400 bg-amber-50 text-amber-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
@@ -1835,74 +1903,92 @@ function AnswersPanel({ value, onChange, onClose, readOnly, onRefHover, refMatch
                 )}
 
                 <div className="flex-1 overflow-y-auto p-2.5 space-y-2 min-h-0 bg-gray-50/40">
-                    <Field label="How you would have expected a senior engineer to behave given the situations the model encountered" {...sec('senior')}>
-                        <VersionedAnswer value={value.seniorExpectation} onChangeVersion={(vk, t) => setFieldVersion('seniorExpectation', vk, t)} {...va} minHeight={72} />
-                    </Field>
+                    {vis('senior') && (
+                        <Field label="How you would have expected a senior engineer to behave given the situations the model encountered" {...sec('senior')}>
+                            <VersionedAnswer value={value.seniorExpectation} onChangeVersion={(vk, t) => setFieldVersion('seniorExpectation', vk, t)} {...va} minHeight={72} />
+                        </Field>
+                    )}
 
-                    {RUBRIC_DIMS.map(d => (
+                    {RUBRIC_DIMS.filter(d => vis(`dim:${d.key}`)).map(d => (
                         <Field key={d.key} label={`${d.label} — reasoning & score`} {...sec(`dim:${d.key}`)}>
                             <VersionedAnswer value={value.dims[d.key]?.reasoning ?? emptyVersioned()} onChangeVersion={(vk, t) => setDimVersion(d.key, vk, t)} {...va} minHeight={56} />
                             <ABScale value={value.dims[d.key]?.score ?? null} onChange={v => setDim(d.key, { score: v })} lo={d.lo} hi={d.hi} disabled={readOnly} />
                         </Field>
                     ))}
 
-                    <Field label={<>Other behavioral issues <span className="text-gray-400 font-normal">(optional)</span></>} {...sec('otherIssues')}>
-                        <VersionedAnswer value={value.otherIssues} onChangeVersion={(vk, t) => setFieldVersion('otherIssues', vk, t)} {...va} minHeight={56} placeholder="If you notice issues not captured by above dimensions" />
-                    </Field>
+                    {vis('otherIssues') && (
+                        <Field label={<>Other behavioral issues <span className="text-gray-400 font-normal">(optional)</span></>} {...sec('otherIssues')}>
+                            <VersionedAnswer value={value.otherIssues} onChangeVersion={(vk, t) => setFieldVersion('otherIssues', vk, t)} {...va} minHeight={56} placeholder="If you notice issues not captured by above dimensions" />
+                        </Field>
+                    )}
 
-                    <Field label="Overall Reasoning" {...sec('overallReasoning')}>
-                        <VersionedAnswer value={value.overallReasoning} onChangeVersion={(vk, t) => setFieldVersion('overallReasoning', vk, t)} {...va} minHeight={72} />
-                    </Field>
+                    {vis('overallReasoning') && (
+                        <Field label="Overall Reasoning" {...sec('overallReasoning')}>
+                            <VersionedAnswer value={value.overallReasoning} onChangeVersion={(vk, t) => setFieldVersion('overallReasoning', vk, t)} {...va} minHeight={72} />
+                        </Field>
+                    )}
 
-                    <Field label={<>Additional Notes <span className="text-gray-400 font-normal">(optional)</span></>} {...sec('additionalNotes')}>
-                        <VersionedAnswer value={value.additionalNotes} onChangeVersion={(vk, t) => setFieldVersion('additionalNotes', vk, t)} {...va} minHeight={56} />
-                    </Field>
+                    {vis('additionalNotes') && (
+                        <Field label={<>Additional Notes <span className="text-gray-400 font-normal">(optional)</span></>} {...sec('additionalNotes')}>
+                            <VersionedAnswer value={value.additionalNotes} onChangeVersion={(vk, t) => setFieldVersion('additionalNotes', vk, t)} {...va} minHeight={56} />
+                        </Field>
+                    )}
 
-                    <Field label="Prompt For Next Turn" {...sec('promptForNextTurn')}>
-                        <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-semibold text-gray-500 shrink-0 uppercase tracking-wide">Type</span>
-                            <select value={value.promptType} onChange={e => onChange({ promptType: e.target.value })} disabled={readOnly}
-                                className="flex-1 min-w-0 text-[11px] border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:border-indigo-400 disabled:bg-gray-50 disabled:text-gray-500">
-                                <option value="">— select prompt type —</option>
-                                {PROMPT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                            </select>
-                        </div>
-                        <VersionedAnswer value={value.promptForNextTurn} onChangeVersion={(vk, t) => setFieldVersion('promptForNextTurn', vk, t)} {...va} minHeight={56}
-                            placeholder="A prompt to send next to push the better model further" />
-                    </Field>
+                    {vis('promptForNextTurn') && (
+                        <Field label="Prompt For Next Turn" {...sec('promptForNextTurn')}>
+                            <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-semibold text-gray-500 shrink-0 uppercase tracking-wide">Type</span>
+                                <select value={value.promptType} onChange={e => onChange({ promptType: e.target.value })} disabled={readOnly}
+                                    className="flex-1 min-w-0 text-[11px] border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:border-indigo-400 disabled:bg-gray-50 disabled:text-gray-500">
+                                    <option value="">— select prompt type —</option>
+                                    {PROMPT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                                </select>
+                            </div>
+                            <VersionedAnswer value={value.promptForNextTurn} onChangeVersion={(vk, t) => setFieldVersion('promptForNextTurn', vk, t)} {...va} minHeight={56}
+                                placeholder="A prompt to send next to push the better model further" />
+                        </Field>
+                    )}
 
-                    <Field label={<>Select axes <span className="text-gray-400 font-normal">(optional)</span></>} {...sec('axes')}>
-                        <div className="grid grid-cols-2 gap-1">
-                            {RUBRIC_DIMS.map(d => (
-                                <label key={d.key} className={`flex items-center gap-1.5 text-[11px] text-gray-700 ${readOnly ? '' : 'cursor-pointer'}`}>
-                                    <input type="checkbox" className="w-3 h-3" disabled={readOnly} checked={value.selectedAxes.includes(d.key)} onChange={() => toggleAxis(d.key)} />
-                                    {d.label}
-                                </label>
-                            ))}
-                        </div>
-                        <p className="text-[9px] text-gray-400">{value.selectedAxes.length} selected</p>
-                    </Field>
+                    {vis('axes') && (
+                        <Field label={<>Select axes <span className="text-gray-400 font-normal">(optional)</span></>} {...sec('axes')}>
+                            <div className="grid grid-cols-2 gap-1">
+                                {RUBRIC_DIMS.map(d => (
+                                    <label key={d.key} className={`flex items-center gap-1.5 text-[11px] text-gray-700 ${readOnly ? '' : 'cursor-pointer'}`}>
+                                        <input type="checkbox" className="w-3 h-3" disabled={readOnly} checked={value.selectedAxes.includes(d.key)} onChange={() => toggleAxis(d.key)} />
+                                        {d.label}
+                                    </label>
+                                ))}
+                            </div>
+                            <p className="text-[9px] text-gray-400">{value.selectedAxes.length} selected</p>
+                        </Field>
+                    )}
 
-                    <Field label={<>Select quality <span className="text-gray-400 font-normal">(optional)</span></>} {...sec('quality')}>
-                        <div className="flex flex-col gap-1">
-                            {QUALITY_OPTS.map(q => (
-                                <label key={q.value} className={`flex items-center gap-1.5 text-[11px] text-gray-700 ${readOnly ? '' : 'cursor-pointer'}`}>
-                                    <input type="radio" name="aparse-quality" className="w-3 h-3" disabled={readOnly}
-                                        checked={value.quality === q.value}
-                                        onChange={() => onChange({ quality: value.quality === q.value ? '' : q.value })} />
-                                    {q.label}
-                                </label>
-                            ))}
-                        </div>
-                    </Field>
+                    {vis('quality') && (
+                        <Field label={<>Select quality <span className="text-gray-400 font-normal">(optional)</span></>} {...sec('quality')}>
+                            <div className="flex flex-col gap-1">
+                                {QUALITY_OPTS.map(q => (
+                                    <label key={q.value} className={`flex items-center gap-1.5 text-[11px] text-gray-700 ${readOnly ? '' : 'cursor-pointer'}`}>
+                                        <input type="radio" name="aparse-quality" className="w-3 h-3" disabled={readOnly}
+                                            checked={value.quality === q.value}
+                                            onChange={() => onChange({ quality: value.quality === q.value ? '' : q.value })} />
+                                        {q.label}
+                                    </label>
+                                ))}
+                            </div>
+                        </Field>
+                    )}
 
-                    <Field label="Choose the response that is better overall" {...sec('verdict')}>
-                        <ABScale value={value.overall} onChange={v => onChange({ overall: v })} lo="A is better" hi="B is better" disabled={readOnly} />
-                    </Field>
+                    {vis('verdict') && (
+                        <Field label="Choose the response that is better overall" {...sec('verdict')}>
+                            <ABScale value={value.overall} onChange={v => onChange({ overall: v })} lo="A is better" hi="B is better" disabled={readOnly} />
+                        </Field>
+                    )}
 
-                    <Field label={<>Comments <span className="text-gray-400 font-normal">(optional)</span></>} {...sec('comments')}>
-                        <VersionedAnswer value={value.comments} onChangeVersion={(vk, t) => setFieldVersion('comments', vk, t)} {...va} minHeight={56} />
-                    </Field>
+                    {vis('comments') && (
+                        <Field label={<>Comments <span className="text-gray-400 font-normal">(optional)</span></>} {...sec('comments')}>
+                            <VersionedAnswer value={value.comments} onChangeVersion={(vk, t) => setFieldVersion('comments', vk, t)} {...va} minHeight={56} />
+                        </Field>
+                    )}
                 </div>
             </div>
 
@@ -2274,7 +2360,7 @@ const TURN_STATUSES = [
     { value: 'submitted', label: 'Submitted', cls: 'bg-emerald-100 text-emerald-700 border-emerald-300' },
 ]
 
-interface AParseJob { id: string; name: string; turn_count: number; createdAt?: string; model_link?: string | null }
+interface AParseJob { id: string; name: string; turn_count: number; createdAt?: string; model_link?: string | null; last_turn_status?: string | null }
 
 export default function AParsePage() {
     const [jobs, setJobs] = useState<AParseJob[]>([])
@@ -2354,6 +2440,7 @@ export default function AParsePage() {
         // optimistic update in the loaded turns list
         setTurnsByJob(m => ({ ...m, [jobId]: (m[jobId] || []).map(t => t.id === turnId ? { ...t, status } : t) }))
         await updateAParseTurn(turnId, { status })
+        load() // refresh the job row's "last turn status"
     }
 
     const removeJob = async (id: string) => {
@@ -2468,6 +2555,10 @@ export default function AParsePage() {
                                     className={`p-1 rounded shrink-0 ${job.model_link ? 'text-indigo-400 hover:text-indigo-700 hover:bg-indigo-50' : 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50'}`}>
                                     <Link2 size={12} />
                                 </button>
+                                {(() => {
+                                    const s = TURN_STATUSES.find(x => x.value === job.last_turn_status)
+                                    return s ? <span title={`Last turn: ${s.label}`} className={`text-[9px] font-medium px-1.5 py-0.5 rounded border shrink-0 ${s.cls}`}>{s.label}</span> : null
+                                })()}
                                 <span className="text-[10px] text-gray-400 shrink-0">{job.turn_count} turn{job.turn_count !== 1 ? 's' : ''}</span>
                                 <button onClick={() => addTurn(job)} title="Add turn"
                                     className="p-1 text-gray-400 hover:text-teal-700 hover:bg-teal-50 rounded shrink-0"><Plus size={12} /></button>
