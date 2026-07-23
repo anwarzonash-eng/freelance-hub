@@ -1722,8 +1722,24 @@ function VersionedAnswer({ value, versions, onChangeVersion, readOnly, onRefHove
 
 /** Collapsible labelled section (a card). Controlled — the panel owns open/closed
  *  state so it can expand/collapse all at once. Right-click the header for that menu. */
-function Field({ label, open, onToggle, onHeaderContextMenu, children }: {
+/** Compact "which model is selected" chip for a Field header (visible while collapsed). */
+function ScoreBadge({ value }: { value: number | null }) {
+    if (value == null) return null
+    const p = AB_POINTS.find(x => x.v === value)
+    if (!p) return null
+    const isA = p.side === 'A'
+    return (
+        <span title={p.label}
+            className={`shrink-0 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-bold border ${isA ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-teal-50 text-teal-700 border-teal-200'}`}>
+            <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-black text-white text-[8px] leading-none">{p.side}</span>
+            {p.label}
+        </span>
+    )
+}
+
+function Field({ label, badge, open, onToggle, onHeaderContextMenu, children }: {
     label: React.ReactNode
+    badge?: React.ReactNode
     open: boolean
     onToggle: () => void
     onHeaderContextMenu: (e: React.MouseEvent) => void
@@ -1735,6 +1751,7 @@ function Field({ label, open, onToggle, onHeaderContextMenu, children }: {
                 className={`flex items-center gap-1.5 w-full text-left text-[11px] font-semibold text-gray-700 px-2.5 py-1.5 hover:bg-gray-100 ${open ? 'bg-gray-50 border-b border-gray-200' : 'bg-gray-50'}`}>
                 {open ? <ChevronDown size={12} className="text-gray-400 shrink-0" /> : <ChevronRight size={12} className="text-gray-400 shrink-0" />}
                 <span className="flex-1">{label}</span>
+                {badge}
             </button>
             {open && <div className="p-2 space-y-2">{children}</div>}
         </div>
@@ -1910,7 +1927,7 @@ function AnswersPanel({ value, onChange, onClose, readOnly, onRefHover, refMatch
                     )}
 
                     {RUBRIC_DIMS.filter(d => vis(`dim:${d.key}`)).map(d => (
-                        <Field key={d.key} label={`${d.label} — reasoning & score`} {...sec(`dim:${d.key}`)}>
+                        <Field key={d.key} label={`${d.label} — reasoning & score`} badge={<ScoreBadge value={value.dims[d.key]?.score ?? null} />} {...sec(`dim:${d.key}`)}>
                             <VersionedAnswer value={value.dims[d.key]?.reasoning ?? emptyVersioned()} onChangeVersion={(vk, t) => setDimVersion(d.key, vk, t)} {...va} minHeight={56} />
                             <ABScale value={value.dims[d.key]?.score ?? null} onChange={v => setDim(d.key, { score: v })} lo={d.lo} hi={d.hi} disabled={readOnly} />
                         </Field>
@@ -1979,7 +1996,7 @@ function AnswersPanel({ value, onChange, onClose, readOnly, onRefHover, refMatch
                     )}
 
                     {vis('verdict') && (
-                        <Field label="Choose the response that is better overall" {...sec('verdict')}>
+                        <Field label="Choose the response that is better overall" badge={<ScoreBadge value={value.overall} />} {...sec('verdict')}>
                             <ABScale value={value.overall} onChange={v => onChange({ overall: v })} lo="A is better" hi="B is better" disabled={readOnly} />
                         </Field>
                     )}
