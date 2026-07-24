@@ -2438,7 +2438,12 @@ const TURN_STATUSES = [
     { value: 'submitted', label: 'Submitted', cls: 'bg-emerald-100 text-emerald-700 border-emerald-300' },
 ]
 
-interface AParseJob { id: string; name: string; turn_count: number; createdAt?: string; model_link?: string | null; last_turn_status?: string | null; last_turn_tokens_left?: string | null; last_turn_tokens_a?: string | null; last_turn_tokens_b?: string | null }
+const JOB_STATUSES = [
+    { value: 'continued', label: 'Continued', cls: 'bg-indigo-100 text-indigo-700 border-indigo-300' },
+    { value: 'completed', label: 'Completed', cls: 'bg-emerald-100 text-emerald-700 border-emerald-300' },
+]
+
+interface AParseJob { id: string; name: string; status?: string; turn_count: number; createdAt?: string; model_link?: string | null; last_turn_status?: string | null; last_turn_tokens_left?: string | null; last_turn_tokens_a?: string | null; last_turn_tokens_b?: string | null }
 
 export default function AParsePage() {
     const [jobs, setJobs] = useState<AParseJob[]>([])
@@ -2449,6 +2454,9 @@ export default function AParsePage() {
     const [creating, setCreating] = useState(false)
     const [newName, setNewName] = useState('')
     const [newLink, setNewLink] = useState('')
+    const [newStatus, setNewStatus] = useState('continued')
+    // Job status filter — default to only showing continued jobs.
+    const [statusFilter, setStatusFilter] = useState<string>('continued')
     const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null)
     const [linkEditing, setLinkEditing] = useState<{ id: string; value: string } | null>(null)
     const [copiedLink, setCopiedLink] = useState<string | null>(null)
@@ -2488,10 +2496,19 @@ export default function AParsePage() {
     const createJob = async () => {
         const name = newName.trim()
         if (!name) return
-        await createAParseJob(name, newLink.trim() || undefined)
-        setNewName(''); setNewLink(''); setCreating(false)
+        await createAParseJob(name, newLink.trim() || undefined, newStatus)
+        setNewName(''); setNewLink(''); setNewStatus('continued'); setCreating(false)
         load()
     }
+
+    const setJobStatus = async (id: string, status: string) => {
+        setJobs(js => js.map(j => j.id === id ? { ...j, status } : j))
+        await updateAParseJob(id, { status })
+        load()
+    }
+
+    // Apply the status filter ('all' shows everything).
+    const visibleJobs = statusFilter === 'all' ? jobs : jobs.filter(j => (j.status || 'continued') === statusFilter)
 
     const renameJob = async () => {
         if (!renaming || !renaming.name.trim()) { setRenaming(null); return }
@@ -2553,9 +2570,18 @@ export default function AParsePage() {
                 <div className="flex items-center gap-2">
                     <ListTree size={14} className="text-gray-500" />
                     <h1 className="text-sm font-semibold text-gray-800">A Parse — Jobs</h1>
-                    <span className="text-[10px] text-gray-400">{jobs.length} job{jobs.length !== 1 ? 's' : ''}</span>
+                    <span className="text-[10px] text-gray-400">{visibleJobs.length} of {jobs.length} job{jobs.length !== 1 ? 's' : ''}</span>
                 </div>
                 <div className="flex items-center gap-2">
+                    {/* Status filter (defaults to Continued) */}
+                    <div className="flex items-center gap-1">
+                        <span className="text-[10px] text-gray-400">status</span>
+                        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+                            className="text-xs border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:border-indigo-400 text-gray-700">
+                            {JOB_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                            <option value="all">All</option>
+                        </select>
+                    </div>
                     <button onClick={() => load()} disabled={loading}
                         className="flex items-center gap-1 text-xs border border-gray-300 rounded px-2 py-1 hover:bg-gray-50 disabled:opacity-50 text-gray-600">
                         <RefreshCw size={11} className={loading ? 'animate-spin' : ''} /> Refresh
@@ -2582,6 +2608,11 @@ export default function AParsePage() {
                         onKeyDown={e => { if (e.key === 'Enter') createJob(); if (e.key === 'Escape') setCreating(false) }}
                         placeholder="Model link (optional)…"
                         className="flex-1 text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-indigo-400" />
+                    <select value={newStatus} onChange={e => setNewStatus(e.target.value)}
+                        title="Job status"
+                        className="text-xs border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:border-indigo-400 text-gray-700">
+                        {JOB_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                    </select>
                     <button onClick={createJob} disabled={!newName.trim()}
                         className="text-[11px] bg-teal-600 text-white rounded px-2.5 py-1 hover:bg-teal-700 disabled:opacity-40">Create</button>
                     <button onClick={() => setCreating(false)} className="text-[11px] border border-gray-300 rounded px-2 py-1 hover:bg-white text-gray-600">Cancel</button>
@@ -2599,7 +2630,12 @@ export default function AParsePage() {
                         <Briefcase size={20} className="text-gray-300" />
                         No jobs yet. Click <span className="font-medium text-teal-600">Create Job</span> to start.
                     </div>
-                ) : jobs.map(job => {
+                ) : visibleJobs.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center gap-2 py-12 text-gray-400 text-xs">
+                        <Briefcase size={20} className="text-gray-300" />
+                        No <span className="font-medium">{JOB_STATUSES.find(s => s.value === statusFilter)?.label ?? statusFilter}</span> jobs. Change the status filter to see others.
+                    </div>
+                ) : visibleJobs.map(job => {
                     const isOpen = expanded.has(job.id)
                     const turns = turnsByJob[job.id] ?? []
                     const busy = loadingTurns.has(job.id)
@@ -2648,6 +2684,13 @@ export default function AParsePage() {
                                     <span title="Last turn — overall remaining tokens" className="text-[9px] font-mono px-1 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 shrink-0">∑ {formatTokens(job.last_turn_tokens_left)}</span>
                                 )}
                                 <span className="text-[10px] text-gray-400 shrink-0">{job.turn_count} turn{job.turn_count !== 1 ? 's' : ''}</span>
+                                {/* Job status (continued / completed) */}
+                                <select value={job.status || 'continued'} onClick={e => e.stopPropagation()}
+                                    onChange={e => setJobStatus(job.id, e.target.value)}
+                                    title="Job status"
+                                    className={`text-[9px] font-medium rounded border px-1 py-0.5 shrink-0 focus:outline-none ${JOB_STATUSES.find(s => s.value === (job.status || 'continued'))?.cls || 'bg-gray-50 text-gray-500 border-gray-200'}`}>
+                                    {JOB_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                                </select>
                                 <button onClick={() => addTurn(job)} title="Add turn"
                                     className="p-1 text-gray-400 hover:text-teal-700 hover:bg-teal-50 rounded shrink-0"><Plus size={12} /></button>
                                 <button onClick={() => setRenaming({ id: job.id, name: job.name })} title="Rename"

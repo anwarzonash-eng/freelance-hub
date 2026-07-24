@@ -10,11 +10,11 @@ export async function getAParseJobs() {
     return await apiClient(AParseAPIRoutes.GET_JOBS, ApiMethod.GET, undefined, undefined, undefined, true, false)
 }
 
-export async function createAParseJob(name: string, model_link?: string) {
-    return await apiClient(AParseAPIRoutes.CREATE_JOB, ApiMethod.POST, { name, model_link }, undefined, undefined, true, true)
+export async function createAParseJob(name: string, model_link?: string, status?: string) {
+    return await apiClient(AParseAPIRoutes.CREATE_JOB, ApiMethod.POST, { name, model_link, status }, undefined, undefined, true, true)
 }
 
-export async function updateAParseJob(id: string, payload: { name?: string; model_link?: string }) {
+export async function updateAParseJob(id: string, payload: { name?: string; model_link?: string; status?: string }) {
     const params: IApiParams = { path: { id } }
     return await apiClient(AParseAPIRoutes.UPDATE_JOB, ApiMethod.PUT, payload, params, undefined, true, true)
 }
