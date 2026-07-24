@@ -41,6 +41,7 @@ export interface ParsedItem {
     prose?: string       // leading prose before a bash / code_diff block
     command?: string     // extracted bash command
     diff?: string        // extracted code_diff body
+    tokensRemaining?: string // "Tokens Remaining: total …" value for this step (if present)
 }
 
 function stripTokenLines(text: string): string {
@@ -49,6 +50,24 @@ function stripTokenLines(text: string): string {
         .filter(l => !/^\s*Tokens Remaining\s*:/i.test(l))
         .join('\n')
         .trim()
+}
+
+/** Pull the "Tokens Remaining: total 960,973" figure out of a turn's raw text. */
+function extractTokensRemaining(text: string): string | undefined {
+    for (const l of text.split('\n')) {
+        if (!/Tokens Remaining\s*:/i.test(l)) continue
+        const t = /total\s+([\d][\d,]*)/i.exec(l)   // prefer the "total N" figure
+        if (t) return t[1]
+        const m = /([\d][\d,]{2,})/.exec(l)          // else the first grouped number on the line
+        if (m) return m[1]
+    }
+    return undefined
+}
+
+/** The most recent "Tokens Remaining" figure in a run (last step that reports one). */
+function latestTokens(items: ParsedItem[]): string {
+    for (let i = items.length - 1; i >= 0; i--) if (items[i].tokensRemaining) return items[i].tokensRemaining!
+    return ''
 }
 
 function extractBash(content: string): { prose: string; command: string } | null {
@@ -110,10 +129,11 @@ function parseTranscript(text: string): ParsedItem[] {
         const next = accepted[i + 1]
         const rawContent = lines.slice(cur.line + 1, next ? next.line : lines.length).join('\n')
         const content = stripTokenLines(rawContent)
+        const tokensRemaining = extractTokensRemaining(rawContent)
         const label = i % 2 === 0 ? 'Function Assist' : 'Function Result'
 
         if (label === 'Function Result') {
-            items.push({ num: cur.num, label, kind: 'result', content: stripResultHeader(content) })
+            items.push({ num: cur.num, label, kind: 'result', content: stripResultHeader(content), tokensRemaining })
             continue
         }
 
@@ -121,11 +141,11 @@ function parseTranscript(text: string): ParsedItem[] {
         const codeDiff = extractCodeDiff(content)
         const bash = extractBash(content)
         if (codeDiff) {
-            items.push({ num: cur.num, label, kind: 'code_diff', content, prose: codeDiff.prose, diff: codeDiff.diff })
+            items.push({ num: cur.num, label, kind: 'code_diff', content, prose: codeDiff.prose, diff: codeDiff.diff, tokensRemaining })
         } else if (bash) {
-            items.push({ num: cur.num, label, kind: 'bash', content, prose: bash.prose, command: bash.command })
+            items.push({ num: cur.num, label, kind: 'bash', content, prose: bash.prose, command: bash.command, tokensRemaining })
         } else {
-            items.push({ num: cur.num, label, kind: 'text', content })
+            items.push({ num: cur.num, label, kind: 'text', content, tokensRemaining })
         }
     }
     return items
@@ -640,6 +660,12 @@ function TranscriptRow({
                 {item.kind === 'code_diff' && (
                     <span className="text-[9px] px-1 py-0.5 rounded bg-purple-700 text-white font-mono shrink-0 flex items-center gap-0.5"><FileDiff size={9} /> diff</span>
                 )}
+                {item.tokensRemaining && (
+                    <span title={`Tokens remaining at this step: ${item.tokensRemaining}`}
+                        className="text-[9px] px-1 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 font-mono shrink-0">
+                        {item.tokensRemaining}
+                    </span>
+                )}
                 {remark && (
                     <span title="Has ChatGPT remark" className="shrink-0"><Sparkles size={10} className="text-amber-500" /></span>
                 )}
@@ -1080,6 +1106,12 @@ function ModelPanel({
                                     </p>
                                     <p className="text-[9px] text-gray-400">Detail view</p>
                                 </div>
+                                {it.tokensRemaining && (
+                                    <span title="Tokens remaining at this step"
+                                        className="text-[9px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 font-mono shrink-0">
+                                        {it.tokensRemaining} left
+                                    </span>
+                                )}
                                 <CopyBtn text={it.content} className="text-gray-400 hover:text-gray-700 hover:bg-gray-100" />
                                 <button onClick={() => { setDetailIdx(null); setDetailSearch('') }} className="text-gray-400 hover:text-gray-700 shrink-0"><X size={14} /></button>
                             </div>
@@ -1611,10 +1643,11 @@ function renderAnswerWithRefs(
 
 /** Answer field: a textarea when editing; a highlighted, hoverable rendered view when read-only
  *  or when the per-field "preview" eye is toggled on (so you can view refs while editing too). */
-function AnswerField({ value, onChange, readOnly, onRefHover, refMatches, className, height = 56, onMeasure, placeholder }: {
+function AnswerField({ value, onChange, readOnly, preview, onRefHover, refMatches, className, height = 56, onMeasure, placeholder }: {
     value: string
     onChange: (v: string) => void
     readOnly?: boolean
+    preview?: boolean
     onRefHover: (model: 'a' | 'b', turn: number, matchText: string) => void
     refMatches: (model: 'a' | 'b', turn: number, matchText: string) => boolean
     className?: string
@@ -1622,15 +1655,9 @@ function AnswerField({ value, onChange, readOnly, onRefHover, refMatches, classN
     onMeasure?: (h: number) => void
     placeholder?: string
 }) {
-    const [preview, setPreview] = useState(false)
-    const [copied, setCopied] = useState(false)
+    // preview/copy controls live in the version card header now (so they never cover the text).
     const showView = readOnly || preview
     const boxRef = useRef<HTMLDivElement & HTMLTextAreaElement | null>(null)
-    const copyValue = () => {
-        navigator.clipboard.writeText(value).then(() => {
-            setCopied(true); setTimeout(() => setCopied(false), 1200)
-        })
-    }
     // Report the content's natural height; the parent sizes all versions to the tallest.
     useLayoutEffect(() => {
         const el = boxRef.current
@@ -1642,31 +1669,13 @@ function AnswerField({ value, onChange, readOnly, onRefHover, refMatches, classN
         onMeasure?.(h)
     })
     // Same fixed (shared) height in both edit and view so toggling never changes the size.
-    return (
-        <div className="relative">
-            {showView ? (
-                <div ref={boxRef as any} className={`${className} overflow-y-auto whitespace-pre-wrap break-words`} style={{ height }}>
-                    {value.trim() ? renderAnswerWithRefs(value, onRefHover, refMatches) : <span className="text-gray-300">{placeholder || '—'}</span>}
-                </div>
-            ) : (
-                <textarea ref={boxRef as any} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-                    spellCheck={false} className={className} style={{ height }} />
-            )}
-            <div className="absolute top-1 right-1 flex items-center gap-0.5">
-                <button type="button" onClick={copyValue} disabled={!value.trim()}
-                    title="Copy this text"
-                    className="p-0.5 rounded bg-white/90 border border-gray-200 text-gray-400 hover:text-indigo-600 shadow-sm disabled:opacity-30">
-                    {copied ? <Check size={11} className="text-green-500" /> : <Copy size={11} />}
-                </button>
-                {!readOnly && (
-                    <button type="button" onClick={() => setPreview(p => !p)}
-                        title={preview ? 'Back to editing' : 'Preview references'}
-                        className="p-0.5 rounded bg-white/90 border border-gray-200 text-gray-400 hover:text-indigo-600 shadow-sm">
-                        {preview ? <Pencil size={11} /> : <Eye size={11} />}
-                    </button>
-                )}
-            </div>
+    return showView ? (
+        <div ref={boxRef as any} className={`${className} overflow-y-auto whitespace-pre-wrap break-words`} style={{ height }}>
+            {value.trim() ? renderAnswerWithRefs(value, onRefHover, refMatches) : <span className="text-gray-300">{placeholder || '—'}</span>}
         </div>
+    ) : (
+        <textarea ref={boxRef as any} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+            spellCheck={false} className={className} style={{ height }} />
     )
 }
 
@@ -1688,12 +1697,21 @@ function VersionedAnswer({ value, versions, onChangeVersion, readOnly, onRefHove
     // with content and always stay equal.
     const [heights, setHeights] = useState<Record<string, number>>({})
     const rowH = Math.max(minHeight ?? 56, ...list.map(vk => heights[vk] ?? 0))
+    // Per-version preview toggle + copy feedback (both surfaced in the card header).
+    const [previews, setPreviews] = useState<Record<string, boolean>>({})
+    const [copied, setCopied] = useState<string | null>(null)
+    const copyValue = (vk: VersionKey) => {
+        navigator.clipboard.writeText(value[vk]).then(() => {
+            setCopied(vk); setTimeout(() => setCopied(c => (c === vk ? null : c)), 1200)
+        })
+    }
     return (
         <div className="flex flex-wrap gap-2 items-stretch">
             {list.map(vk => {
                 const a = VERSION_ACCENT[vk]
                 const nextKey = VERSION_KEYS[VERSION_KEYS.indexOf(vk) + 1]
                 const canForward = !readOnly && !!nextKey && !!value[vk].trim() && !value[nextKey].trim()
+                const preview = !!previews[vk]
                 return (
                     <div key={vk} className={`flex-1 min-w-[200px] rounded-md border ${a.border} overflow-hidden bg-white`}>
                         <div className={`flex items-center gap-1 px-2 py-0.5 border-b ${a.border} ${a.bar}`}>
@@ -1709,8 +1727,20 @@ function VersionedAnswer({ value, versions, onChangeVersion, readOnly, onRefHove
                                     <ChevronRight size={13} />
                                 </button>
                             )}
+                            <button type="button" onClick={() => copyValue(vk)} disabled={!value[vk].trim()}
+                                title="Copy this text"
+                                className="shrink-0 rounded p-0.5 hover:bg-black/10 disabled:opacity-30 disabled:hover:bg-transparent">
+                                {copied === vk ? <Check size={12} className="text-green-600" /> : <Copy size={12} />}
+                            </button>
+                            {!readOnly && (
+                                <button type="button" onClick={() => setPreviews(p => ({ ...p, [vk]: !p[vk] }))}
+                                    title={preview ? 'Back to editing' : 'Preview references'}
+                                    className="shrink-0 rounded p-0.5 hover:bg-black/10">
+                                    {preview ? <Pencil size={12} /> : <Eye size={12} />}
+                                </button>
+                            )}
                         </div>
-                        <AnswerField value={value[vk]} onChange={t => onChangeVersion(vk, t)} readOnly={readOnly}
+                        <AnswerField value={value[vk]} onChange={t => onChangeVersion(vk, t)} readOnly={readOnly} preview={preview}
                             onRefHover={onRefHover} refMatches={refMatches} className={className} height={rowH}
                             onMeasure={h => setHeights(p => (p[vk] === h ? p : { ...p, [vk]: h }))} placeholder={placeholder} />
                     </div>
@@ -2032,6 +2062,8 @@ function AParseEditor({ turn, jobName, turns, onSwitchTurn, onClose }: { turn: a
 
     const [prompt, setPrompt] = useState<string>(turn.prompt || '')
     const [tokensLeft, setTokensLeft] = useState<string>(turn.tokens_left || '')
+    const [tokensA, setTokensA] = useState<string>(turn.tokens_a || '')
+    const [tokensB, setTokensB] = useState<string>(turn.tokens_b || '')
     const [aInput, setAInput] = useState<string>(turn.model_a_input || '')
     const [bInput, setBInput] = useState<string>(turn.model_b_input || '')
     const [aRemarks, setARemarks] = useState<Record<string, string>>(turn.model_a_remarks || {})
@@ -2103,6 +2135,12 @@ function AParseEditor({ turn, jobName, turns, onSwitchTurn, onClose }: { turn: a
     // Does a reference's [text] actually exist in the target turn? (whitespace-insensitive)
     const itemsA = useMemo(() => parseTranscript(aInput), [aInput])
     const itemsB = useMemo(() => parseTranscript(bInput), [bInput])
+    // Latest "Tokens Remaining" in each pasted transcript (the last step that shows one).
+    const latestA = useMemo(() => latestTokens(itemsA), [itemsA])
+    const latestB = useMemo(() => latestTokens(itemsB), [itemsB])
+    // Whenever a transcript is pasted/changed, auto-fill the per-model remaining tokens.
+    useEffect(() => { if (latestA && latestA !== tokensA) setTokensA(latestA) /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [latestA])
+    useEffect(() => { if (latestB && latestB !== tokensB) setTokensB(latestB) /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [latestB])
     const refMatches = useCallback((model: 'a' | 'b', turnNum: number, text: string) => {
         const items = model === 'a' ? itemsA : itemsB
         const it = items.find(i => i.num === turnNum)
@@ -2170,7 +2208,7 @@ function AParseEditor({ turn, jobName, turns, onSwitchTurn, onClose }: { turn: a
     const first = useRef(true)
     const dirtyRef = useRef(false)
     const latestRef = useRef<any>(null)
-    latestRef.current = { prompt, tokens_left: tokensLeft, model_a_input: aInput, model_b_input: bInput, model_a_remarks: aRemarks, model_b_remarks: bRemarks, answers }
+    latestRef.current = { prompt, tokens_left: tokensLeft, tokens_a: tokensA, tokens_b: tokensB, model_a_input: aInput, model_b_input: bInput, model_a_remarks: aRemarks, model_b_remarks: bRemarks, answers }
     useEffect(() => {
         if (first.current) { first.current = false; return }
         dirtyRef.current = true
@@ -2182,7 +2220,7 @@ function AParseEditor({ turn, jobName, turns, onSwitchTurn, onClose }: { turn: a
             } catch { setSaveStatus('idle') }
         }, 700)
         return () => clearTimeout(t)
-    }, [prompt, tokensLeft, aInput, bInput, aRemarks, bRemarks, answers, turn.id])
+    }, [prompt, tokensLeft, tokensA, tokensB, aInput, bInput, aRemarks, bRemarks, answers, turn.id])
 
     // Flush any pending edits when the editor unmounts or the turn is switched.
     useEffect(() => () => {
@@ -2225,6 +2263,29 @@ function AParseEditor({ turn, jobName, turns, onSwitchTurn, onClose }: { turn: a
                             ) : (
                                 <input value={tokensLeft} onChange={e => setTokensLeft(e.target.value)}
                                     placeholder="e.g. 956000" className="w-24 text-[11px] border border-gray-300 rounded px-1.5 py-0.5 focus:outline-none focus:border-indigo-400" />
+                            )}
+                        </div>
+                        {/* Per-model remaining tokens (auto-filled from the latest token count in each pasted transcript) */}
+                        <div className="flex items-center gap-1 shrink-0" title="Remaining tokens for Model A (auto-filled from the pasted transcript)">
+                            <span className="text-[10px] font-semibold text-blue-500">A</span>
+                            {readOnly ? (
+                                <span className="w-24 text-[11px] font-medium text-blue-700 border border-blue-200 bg-blue-50 rounded px-1.5 py-0.5">
+                                    {formatTokens(tokensA) || '—'}
+                                </span>
+                            ) : (
+                                <input value={tokensA} onChange={e => setTokensA(e.target.value)}
+                                    placeholder="auto" className="w-24 text-[11px] border border-blue-300 rounded px-1.5 py-0.5 focus:outline-none focus:border-blue-500" />
+                            )}
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0" title="Remaining tokens for Model B (auto-filled from the pasted transcript)">
+                            <span className="text-[10px] font-semibold text-teal-500">B</span>
+                            {readOnly ? (
+                                <span className="w-24 text-[11px] font-medium text-teal-700 border border-teal-200 bg-teal-50 rounded px-1.5 py-0.5">
+                                    {formatTokens(tokensB) || '—'}
+                                </span>
+                            ) : (
+                                <input value={tokensB} onChange={e => setTokensB(e.target.value)}
+                                    placeholder="auto" className="w-24 text-[11px] border border-teal-300 rounded px-1.5 py-0.5 focus:outline-none focus:border-teal-500" />
                             )}
                         </div>
                         {/* Previous turn's overall winner (A / B only) */}
@@ -2377,7 +2438,7 @@ const TURN_STATUSES = [
     { value: 'submitted', label: 'Submitted', cls: 'bg-emerald-100 text-emerald-700 border-emerald-300' },
 ]
 
-interface AParseJob { id: string; name: string; turn_count: number; createdAt?: string; model_link?: string | null; last_turn_status?: string | null }
+interface AParseJob { id: string; name: string; turn_count: number; createdAt?: string; model_link?: string | null; last_turn_status?: string | null; last_turn_tokens_left?: string | null; last_turn_tokens_a?: string | null; last_turn_tokens_b?: string | null }
 
 export default function AParsePage() {
     const [jobs, setJobs] = useState<AParseJob[]>([])
@@ -2576,6 +2637,16 @@ export default function AParsePage() {
                                     const s = TURN_STATUSES.find(x => x.value === job.last_turn_status)
                                     return s ? <span title={`Last turn: ${s.label}`} className={`text-[9px] font-medium px-1.5 py-0.5 rounded border shrink-0 ${s.cls}`}>{s.label}</span> : null
                                 })()}
+                                {/* Last turn — remaining tokens (Model A / Model B / overall) */}
+                                {job.last_turn_tokens_a && (
+                                    <span title="Last turn — Model A remaining tokens" className="text-[9px] font-mono px-1 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 shrink-0">A {formatTokens(job.last_turn_tokens_a)}</span>
+                                )}
+                                {job.last_turn_tokens_b && (
+                                    <span title="Last turn — Model B remaining tokens" className="text-[9px] font-mono px-1 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200 shrink-0">B {formatTokens(job.last_turn_tokens_b)}</span>
+                                )}
+                                {job.last_turn_tokens_left && (
+                                    <span title="Last turn — overall remaining tokens" className="text-[9px] font-mono px-1 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 shrink-0">∑ {formatTokens(job.last_turn_tokens_left)}</span>
+                                )}
                                 <span className="text-[10px] text-gray-400 shrink-0">{job.turn_count} turn{job.turn_count !== 1 ? 's' : ''}</span>
                                 <button onClick={() => addTurn(job)} title="Add turn"
                                     className="p-1 text-gray-400 hover:text-teal-700 hover:bg-teal-50 rounded shrink-0"><Plus size={12} /></button>
@@ -2621,6 +2692,10 @@ export default function AParsePage() {
                                                         {t.title}
                                                     </button>
                                                     {t.prompt?.trim() && <span title="Has prompt" className="text-[9px] text-indigo-400 shrink-0">prompt</span>}
+                                                    {/* Per-model + overall remaining tokens for this turn */}
+                                                    {t.tokens_a && <span title="Model A remaining tokens" className="text-[9px] font-mono px-1 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 shrink-0">A {formatTokens(t.tokens_a)}</span>}
+                                                    {t.tokens_b && <span title="Model B remaining tokens" className="text-[9px] font-mono px-1 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200 shrink-0">B {formatTokens(t.tokens_b)}</span>}
+                                                    {t.tokens_left && <span title="Overall remaining tokens" className="text-[9px] font-mono px-1 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 shrink-0">∑ {formatTokens(t.tokens_left)}</span>}
                                                     {/* Turn status */}
                                                     <select value={t.status || ''} onClick={e => e.stopPropagation()}
                                                         onChange={e => setTurnStatus(t.id, job.id, e.target.value)}
