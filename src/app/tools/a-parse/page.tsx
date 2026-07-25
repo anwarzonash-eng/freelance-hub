@@ -475,6 +475,7 @@ function CopyPromptModal({ title, prompt, onClose, savedValue, onSaveValue }: {
     const [copied, setCopied] = useState(false)
     const [output, setOutput] = useState(savedValue ?? '')
     const [savedFlash, setSavedFlash] = useState(false)
+    const [preview, setPreview] = useState(false) // rendered-Markdown "view version"
     const dirty = output !== (savedValue ?? '')
     const copy = () => {
         navigator.clipboard.writeText(prompt).then(() => {
@@ -491,7 +492,7 @@ function CopyPromptModal({ title, prompt, onClose, savedValue, onSaveValue }: {
         <div className="fixed inset-0 z-[9995] flex items-center justify-center bg-black/40"
             onClick={e => { if (e.target === e.currentTarget) onClose() }}>
             <div className="bg-white border border-gray-200 rounded-xl shadow-2xl flex flex-col overflow-hidden"
-                style={{ width: 820, maxWidth: '95vw', maxHeight: '92vh' }}>
+                style={{ width: preview ? 1180 : 820, maxWidth: '95vw', maxHeight: '92vh' }}>
                 <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-100 shrink-0 bg-gray-50">
                     <Sparkles size={13} className="text-amber-500 shrink-0" />
                     <span className="text-[11px] font-semibold text-gray-700 flex-1 truncate">{title}</span>
@@ -502,25 +503,40 @@ function CopyPromptModal({ title, prompt, onClose, savedValue, onSaveValue }: {
                     <button onClick={onClose} className="text-gray-300 hover:text-gray-600 shrink-0 ml-1"><X size={14} /></button>
                 </div>
                 <div className="p-3 overflow-y-auto space-y-3">
-                    <div>
-                        <p className="text-[10px] text-gray-400 mb-1.5">1. Copy this prompt into ChatGPT/Claude — it already includes the transcript and asks for Markdown (.md) output.</p>
-                        <pre className="text-[10px] text-gray-700 whitespace-pre-wrap leading-relaxed bg-gray-50 border border-gray-200 rounded px-2.5 py-2 max-h-[38vh] overflow-y-auto font-mono">
-                            {prompt}
-                        </pre>
-                    </div>
+                    {!preview && (
+                        <div>
+                            <p className="text-[10px] text-gray-400 mb-1.5">1. Copy this prompt into ChatGPT/Claude — it already includes the transcript and asks for Markdown (.md) output.</p>
+                            <pre className="text-[10px] text-gray-700 whitespace-pre-wrap leading-relaxed bg-gray-50 border border-gray-200 rounded px-2.5 py-2 max-h-[38vh] overflow-y-auto font-mono">
+                                {prompt}
+                            </pre>
+                        </div>
+                    )}
                     {onSaveValue && (
                         <div>
                             <div className="flex items-center justify-between mb-1.5">
                                 <p className="text-[10px] text-gray-400">2. Paste the generated Markdown here and save it for review.</p>
-                                <button onClick={save} disabled={!dirty}
-                                    className="flex items-center gap-1 text-[11px] bg-emerald-600 text-white rounded px-2.5 py-1 hover:bg-emerald-700 disabled:opacity-40">
-                                    {savedFlash ? <Check size={12} /> : null} {savedFlash ? 'Saved' : dirty ? 'Save' : 'Saved'}
-                                </button>
+                                <div className="flex items-center gap-1.5">
+                                    <button onClick={() => setPreview(p => !p)} disabled={!output.trim()}
+                                        title={preview ? 'Back to editing' : 'View rendered Markdown'}
+                                        className={`flex items-center gap-1 text-[11px] rounded px-2.5 py-1 border disabled:opacity-40 ${preview ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
+                                        {preview ? <><Pencil size={12} /> Edit</> : <><Eye size={12} /> View</>}
+                                    </button>
+                                    <button onClick={save} disabled={!dirty}
+                                        className="flex items-center gap-1 text-[11px] bg-emerald-600 text-white rounded px-2.5 py-1 hover:bg-emerald-700 disabled:opacity-40">
+                                        {savedFlash ? <Check size={12} /> : null} {savedFlash ? 'Saved' : dirty ? 'Save' : 'Saved'}
+                                    </button>
+                                </div>
                             </div>
-                            <textarea value={output} onChange={e => setOutput(e.target.value)}
-                                placeholder="Paste the AI's Markdown output here…"
-                                spellCheck={false}
-                                className="w-full h-56 border border-gray-300 rounded px-2.5 py-2 text-[11px] font-mono leading-relaxed resize-y focus:outline-none focus:border-emerald-400" />
+                            {preview ? (
+                                <div className="apmd text-[12px] text-gray-800 leading-relaxed border border-gray-200 rounded px-4 py-3 bg-white overflow-y-auto"
+                                    style={{ height: '68vh' }}
+                                    dangerouslySetInnerHTML={{ __html: renderMarkdown(output) }} />
+                            ) : (
+                                <textarea value={output} onChange={e => setOutput(e.target.value)}
+                                    placeholder="Paste the AI's Markdown output here…"
+                                    spellCheck={false}
+                                    className="w-full h-56 border border-gray-300 rounded px-2.5 py-2 text-[11px] font-mono leading-relaxed resize-y focus:outline-none focus:border-emerald-400" />
+                            )}
                         </div>
                     )}
                 </div>
