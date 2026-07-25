@@ -2443,7 +2443,20 @@ const JOB_STATUSES = [
     { value: 'completed', label: 'Completed', cls: 'bg-emerald-100 text-emerald-700 border-emerald-300' },
 ]
 
-interface AParseJob { id: string; name: string; status?: string; turn_count: number; createdAt?: string; model_link?: string | null; last_turn_status?: string | null; last_turn_tokens_left?: string | null; last_turn_tokens_a?: string | null; last_turn_tokens_b?: string | null }
+/** Winning model for a turn from its overall A↔B score: A (<0), B (>0), '=' (0), or null. */
+function overallWinner(overall: unknown): 'A' | 'B' | '=' | null {
+    return typeof overall === 'number' ? (overall < 0 ? 'A' : overall > 0 ? 'B' : '=') : null
+}
+
+/** Small A/B/= winner chip. */
+function WinnerChip({ letter, title }: { letter: 'A' | 'B' | '='; title: string }) {
+    const cls = letter === 'A' ? 'bg-blue-100 text-blue-700 border-blue-300'
+        : letter === 'B' ? 'bg-teal-100 text-teal-700 border-teal-300'
+            : 'bg-gray-100 text-gray-600 border-gray-300'
+    return <span title={title} className={`text-[9px] font-semibold px-1.5 py-0.5 rounded border shrink-0 ${cls}`}>{letter === '=' ? 'tie' : `${letter} wins`}</span>
+}
+
+interface AParseJob { id: string; name: string; status?: string; turn_count: number; createdAt?: string; model_link?: string | null; last_turn_status?: string | null; last_turn_tokens_left?: string | null; last_turn_tokens_a?: string | null; last_turn_tokens_b?: string | null; last_review_winner?: 'A' | 'B' | '=' | null }
 
 export default function AParsePage() {
     const [jobs, setJobs] = useState<AParseJob[]>([])
@@ -2457,7 +2470,7 @@ export default function AParsePage() {
     const [newStatus, setNewStatus] = useState('continued')
     // Job status filter — default to only showing continued jobs.
     const [statusFilter, setStatusFilter] = useState<string>('continued')
-    const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null)
+    const [renaming, setRenaming] = useState<{ id: string; name: string; status: string } | null>(null)
     const [linkEditing, setLinkEditing] = useState<{ id: string; value: string } | null>(null)
     const [copiedLink, setCopiedLink] = useState<string | null>(null)
     const [openTurn, setOpenTurn] = useState<{ turn: any; jobName: string; jobId: string } | null>(null)
@@ -2512,7 +2525,7 @@ export default function AParsePage() {
 
     const renameJob = async () => {
         if (!renaming || !renaming.name.trim()) { setRenaming(null); return }
-        await updateAParseJob(renaming.id, { name: renaming.name.trim() })
+        await updateAParseJob(renaming.id, { name: renaming.name.trim(), status: renaming.status })
         setRenaming(null)
         load()
     }
@@ -2648,11 +2661,19 @@ export default function AParsePage() {
                                 </button>
                                 <Briefcase size={13} className="text-teal-600 shrink-0" />
                                 {renaming?.id === job.id ? (
-                                    <input autoFocus value={renaming.name}
-                                        onChange={e => setRenaming({ id: job.id, name: e.target.value })}
-                                        onKeyDown={e => { if (e.key === 'Enter') renameJob(); if (e.key === 'Escape') setRenaming(null) }}
-                                        onBlur={renameJob}
-                                        className="flex-1 text-xs border border-gray-300 rounded px-2 py-0.5 focus:outline-none focus:border-teal-400" />
+                                    <div className="flex-1 flex items-center gap-1.5 min-w-0">
+                                        <input autoFocus value={renaming.name}
+                                            onChange={e => setRenaming({ ...renaming, name: e.target.value })}
+                                            onKeyDown={e => { if (e.key === 'Enter') renameJob(); if (e.key === 'Escape') setRenaming(null) }}
+                                            className="flex-1 min-w-0 text-xs border border-gray-300 rounded px-2 py-0.5 focus:outline-none focus:border-teal-400" />
+                                        <select value={renaming.status} onChange={e => setRenaming({ ...renaming, status: e.target.value })}
+                                            title="Job status"
+                                            className="text-[10px] border border-gray-300 rounded px-1 py-0.5 bg-white focus:outline-none focus:border-teal-400 text-gray-700 shrink-0">
+                                            {JOB_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                                        </select>
+                                        <button onClick={renameJob} title="Save" className="p-1 text-teal-600 hover:bg-teal-50 rounded shrink-0"><Check size={13} /></button>
+                                        <button onClick={() => setRenaming(null)} title="Cancel" className="p-1 text-gray-400 hover:bg-gray-100 rounded shrink-0"><X size={13} /></button>
+                                    </div>
                                 ) : (
                                     <button onClick={() => toggleExpand(job.id)} className="flex-1 text-left text-xs font-medium text-gray-800 truncate">
                                         {job.name}
@@ -2673,6 +2694,10 @@ export default function AParsePage() {
                                     const s = TURN_STATUSES.find(x => x.value === job.last_turn_status)
                                     return s ? <span title={`Last turn: ${s.label}`} className={`text-[9px] font-medium px-1.5 py-0.5 rounded border shrink-0 ${s.cls}`}>{s.label}</span> : null
                                 })()}
+                                {/* Winner of the last submitted / ready-for-review turn */}
+                                {job.last_review_winner && (
+                                    <WinnerChip letter={job.last_review_winner} title="Winner of the last submitted / ready-for-review turn" />
+                                )}
                                 {/* Last turn — remaining tokens (Model A / Model B / overall) */}
                                 {job.last_turn_tokens_a && (
                                     <span title="Last turn — Model A remaining tokens" className="text-[9px] font-mono px-1 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 shrink-0">A {formatTokens(job.last_turn_tokens_a)}</span>
@@ -2684,16 +2709,14 @@ export default function AParsePage() {
                                     <span title="Last turn — overall remaining tokens" className="text-[9px] font-mono px-1 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 shrink-0">∑ {formatTokens(job.last_turn_tokens_left)}</span>
                                 )}
                                 <span className="text-[10px] text-gray-400 shrink-0">{job.turn_count} turn{job.turn_count !== 1 ? 's' : ''}</span>
-                                {/* Job status (continued / completed) */}
-                                <select value={job.status || 'continued'} onClick={e => e.stopPropagation()}
-                                    onChange={e => setJobStatus(job.id, e.target.value)}
-                                    title="Job status"
-                                    className={`text-[9px] font-medium rounded border px-1 py-0.5 shrink-0 focus:outline-none ${JOB_STATUSES.find(s => s.value === (job.status || 'continued'))?.cls || 'bg-gray-50 text-gray-500 border-gray-200'}`}>
-                                    {JOB_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                                </select>
+                                {/* Job status badge (edit via the pencil) */}
+                                {renaming?.id !== job.id && (() => {
+                                    const js = JOB_STATUSES.find(s => s.value === (job.status || 'continued'))
+                                    return <span title="Job status" className={`text-[9px] font-medium rounded border px-1.5 py-0.5 shrink-0 ${js?.cls || 'bg-gray-50 text-gray-500 border-gray-200'}`}>{js?.label ?? job.status}</span>
+                                })()}
                                 <button onClick={() => addTurn(job)} title="Add turn"
                                     className="p-1 text-gray-400 hover:text-teal-700 hover:bg-teal-50 rounded shrink-0"><Plus size={12} /></button>
-                                <button onClick={() => setRenaming({ id: job.id, name: job.name })} title="Rename"
+                                <button onClick={() => setRenaming({ id: job.id, name: job.name, status: job.status || 'continued' })} title="Edit name & status"
                                     className="p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded shrink-0"><Pencil size={12} /></button>
                                 {SHOW_DELETE_BUTTONS && (
                                     <button onClick={() => removeJob(job.id)} title="Delete job"
@@ -2735,6 +2758,8 @@ export default function AParsePage() {
                                                         {t.title}
                                                     </button>
                                                     {t.prompt?.trim() && <span title="Has prompt" className="text-[9px] text-indigo-400 shrink-0">prompt</span>}
+                                                    {/* Winning model for this turn */}
+                                                    {(() => { const w = overallWinner(t.answers?.overall); return w ? <WinnerChip letter={w} title="Winning model for this turn" /> : null })()}
                                                     {/* Per-model + overall remaining tokens for this turn */}
                                                     {t.tokens_a && <span title="Model A remaining tokens" className="text-[9px] font-mono px-1 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 shrink-0">A {formatTokens(t.tokens_a)}</span>}
                                                     {t.tokens_b && <span title="Model B remaining tokens" className="text-[9px] font-mono px-1 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200 shrink-0">B {formatTokens(t.tokens_b)}</span>}
