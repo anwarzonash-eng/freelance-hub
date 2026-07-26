@@ -70,6 +70,12 @@ function latestTokens(items: ParsedItem[]): string {
     return ''
 }
 
+/** Number of steps in a run — the count of numbered (n) turns, matching what the
+ *  model panel shows when the turn is opened. */
+function countModelSteps(text: string): number {
+    return parseTranscript(text || '').length
+}
+
 function extractBash(content: string): { prose: string; command: string } | null {
     const lines = content.split('\n')
     const bashIdx = lines.findIndex(l => l.trim().toLowerCase() === 'bash')
@@ -202,6 +208,11 @@ function promptContext(originalPrompt: string): string {
         : ''
 }
 
+// Force ChatGPT/Claude to return the Markdown INLINE (copyable in the chat) instead of
+// spinning up a canvas / downloadable .md document.
+const MD_INLINE_INSTRUCTION =
+    'IMPORTANT — how to deliver the answer: output the Markdown INLINE in your chat reply as plain text, wrapped in ONE fenced ```markdown code block so I can copy it with the block\'s copy button in a single click. Do NOT create a canvas, do NOT open/write a document, and do NOT produce a downloadable file or attachment. No preamble or commentary before or after the code block. Use this exact output format inside the block:'
+
 /** Copy-only: condense one model's run into high-level summary steps. */
 function buildSummaryPrompt(items: ParsedItem[], originalPrompt: string): string {
     const lines = [
@@ -214,7 +225,7 @@ function buildSummaryPrompt(items: ParsedItem[], originalPrompt: string): string
         '- Keep each step to one line: a short imperative title, then what happened.',
         '- Preserve the order the work actually occurred in.',
         '',
-        'Return the whole answer as a Markdown (.md) document — no preamble, no code fences around it. Output format:',
+        MD_INLINE_INSTRUCTION,
         '',
         '## Summary — <N> steps (from <total> turns)',
         '1. **<Step title>** — <what it did>. [retry / failed / recovered — if applicable]',
@@ -233,7 +244,7 @@ function buildComparePrompt(itemsA: ParsedItem[], itemsB: ParsedItem[], original
         '',
         'Compare the two runs at the level of WHAT each model was trying to accomplish, not individual commands. I want to see where they behaved similarly and where they diverged.',
         '',
-        'Return the whole answer as a Markdown (.md) document — no preamble, no code fences around it. Output format:',
+        MD_INLINE_INSTRUCTION,
         '',
         '## Comparison — Model A vs Model B',
         '',
@@ -483,8 +494,15 @@ function CopyPromptModal({ title, prompt, onClose, savedValue, onSaveValue }: {
             setTimeout(() => setCopied(false), 1500)
         })
     }
+    // If pasted with the wrapping ```markdown fence, unwrap it so we store/render clean Markdown.
+    const stripFence = (s: string) => {
+        const m = /^\s*```(?:markdown|md)?\s*\n([\s\S]*?)\n```\s*$/.exec(s)
+        return m ? m[1] : s
+    }
     const save = () => {
-        onSaveValue?.(output)
+        const clean = stripFence(output)
+        if (clean !== output) setOutput(clean)
+        onSaveValue?.(clean)
         setSavedFlash(true)
         setTimeout(() => setSavedFlash(false), 1500)
     }
@@ -530,7 +548,7 @@ function CopyPromptModal({ title, prompt, onClose, savedValue, onSaveValue }: {
                             {preview ? (
                                 <div className="apmd text-[12px] text-gray-800 leading-relaxed border border-gray-200 rounded px-4 py-3 bg-white overflow-y-auto"
                                     style={{ height: '68vh' }}
-                                    dangerouslySetInnerHTML={{ __html: renderMarkdown(output) }} />
+                                    dangerouslySetInnerHTML={{ __html: renderMarkdown(stripFence(output)) }} />
                             ) : (
                                 <textarea value={output} onChange={e => setOutput(e.target.value)}
                                     placeholder="Paste the AI's Markdown output here…"
@@ -1541,26 +1559,30 @@ function parseAnswersJson(raw: string): RubricAnswers {
 
 /** Merge parsed AI JSON into current answers, writing only the AI version + non-text fields
  *  so existing human/final versions are preserved. */
-function mergeAiVersion(cur: RubricAnswers, parsed: RubricAnswers): RubricAnswers {
-    const setAi = (base: VersionedText, incoming: VersionedText): VersionedText => ({ ...base, ai: incoming.ai })
+/** Merge parsed JSON into `cur`, writing the incoming text into the chosen version
+ *  (default 'ai') and leaving the other versions untouched. Scores / scales / axes /
+ *  quality / overall are version-independent and always taken from the parsed JSON. */
+function mergeVersion(cur: RubricAnswers, parsed: RubricAnswers, vk: VersionKey = 'ai'): RubricAnswers {
+    // The parsed JSON always lands in its 'ai' slot (see parseAnswersJson), so read from there.
+    const put = (base: VersionedText, incoming: VersionedText): VersionedText => ({ ...base, [vk]: incoming.ai })
     const dims: Record<string, DimAnswer> = {}
     RUBRIC_DIMS.forEach(d => {
         const c = cur.dims[d.key] ?? { reasoning: emptyVersioned(), score: null }
         const p = parsed.dims[d.key] ?? { reasoning: emptyVersioned(), score: null }
-        dims[d.key] = { reasoning: setAi(c.reasoning, p.reasoning), score: p.score }
+        dims[d.key] = { reasoning: put(c.reasoning, p.reasoning), score: p.score }
     })
     return {
-        seniorExpectation: setAi(cur.seniorExpectation, parsed.seniorExpectation),
+        seniorExpectation: put(cur.seniorExpectation, parsed.seniorExpectation),
         dims,
-        otherIssues: setAi(cur.otherIssues, parsed.otherIssues),
-        overallReasoning: setAi(cur.overallReasoning, parsed.overallReasoning),
-        additionalNotes: setAi(cur.additionalNotes, parsed.additionalNotes),
-        promptForNextTurn: setAi(cur.promptForNextTurn, parsed.promptForNextTurn),
+        otherIssues: put(cur.otherIssues, parsed.otherIssues),
+        overallReasoning: put(cur.overallReasoning, parsed.overallReasoning),
+        additionalNotes: put(cur.additionalNotes, parsed.additionalNotes),
+        promptForNextTurn: put(cur.promptForNextTurn, parsed.promptForNextTurn),
         promptType: parsed.promptType || cur.promptType,
         selectedAxes: parsed.selectedAxes,
         quality: parsed.quality,
         overall: parsed.overall,
-        comments: setAi(cur.comments, parsed.comments),
+        comments: put(cur.comments, parsed.comments),
         summaryA: cur.summaryA, summaryB: cur.summaryB, comparison: cur.comparison,
     }
 }
@@ -1881,10 +1903,12 @@ function AnswersPanel({ value, onChange, onClose, readOnly, onRefHover, refMatch
     const [showFill, setShowFill] = useState(false)
     const [fillJson, setFillJson] = useState('')
     const [fillErr, setFillErr] = useState('')
+    const [fillVersion, setFillVersion] = useState<VersionKey>('ai') // which version the JSON fills into
     const applyFill = () => {
         try {
             const parsed = parseAnswersJson(fillJson)
-            onChange(mergeAiVersion(value, parsed)) // write only the AI version; keep human/final
+            onChange(mergeVersion(value, parsed, fillVersion)) // write only the chosen version; keep the rest
+            setSelVersions(prev => prev.includes(fillVersion) ? prev : [...prev, fillVersion]) // reveal the filled version
             setFillErr(''); setFillJson(''); setShowFill(false)
         } catch {
             setFillErr('Could not parse that JSON. Paste the raw object the AI returned.')
@@ -1956,10 +1980,17 @@ function AnswersPanel({ value, onChange, onClose, readOnly, onRefHover, refMatch
                             spellCheck={false}
                             className="w-full h-24 border border-gray-300 rounded px-2 py-1.5 text-[10px] font-mono leading-relaxed resize-y focus:outline-none focus:border-amber-400" />
                         {fillErr && <p className="text-[10px] text-red-500">{fillErr}</p>}
-                        <div className="flex justify-end">
+                        <div className="flex items-center justify-between gap-2">
+                            <label className="flex items-center gap-1.5 text-[10px] text-gray-700">
+                                <span className="font-semibold">3. Fill into version</span>
+                                <select value={fillVersion} onChange={e => setFillVersion(e.target.value as VersionKey)}
+                                    className="text-[10px] border border-gray-300 rounded px-1.5 py-0.5 bg-white focus:outline-none focus:border-amber-400">
+                                    {ANSWER_VERSIONS.map(v => <option key={v.key} value={v.key}>{v.label}</option>)}
+                                </select>
+                            </label>
                             <button onClick={applyFill} disabled={!fillJson.trim() || readOnly}
                                 className="flex items-center gap-1 text-[11px] bg-amber-500 text-white rounded px-3 py-1 hover:bg-amber-600 disabled:opacity-40">
-                                <Check size={12} /> Apply to form
+                                <Check size={12} /> Apply to {VERSION_LABEL[fillVersion]}
                             </button>
                         </div>
                     </div>
@@ -2472,7 +2503,7 @@ function WinnerChip({ letter, title }: { letter: 'A' | 'B' | '='; title: string 
     return <span title={title} className={`text-[9px] font-semibold px-1.5 py-0.5 rounded border shrink-0 ${cls}`}>{letter === '=' ? 'tie' : `${letter} wins`}</span>
 }
 
-interface AParseJob { id: string; name: string; status?: string; turn_count: number; createdAt?: string; model_link?: string | null; last_turn_status?: string | null; last_turn_tokens_left?: string | null; last_turn_tokens_a?: string | null; last_turn_tokens_b?: string | null; last_review_winner?: 'A' | 'B' | '=' | null }
+interface AParseJob { id: string; name: string; status?: string; turn_count: number; createdAt?: string; model_link?: string | null; last_turn_status?: string | null; last_turn_tokens_left?: string | null; last_turn_tokens_a?: string | null; last_turn_tokens_b?: string | null; last_review_winner?: 'A' | 'B' | '=' | null; steps_a_total?: number; steps_b_total?: number }
 
 export default function AParsePage() {
     const [jobs, setJobs] = useState<AParseJob[]>([])
@@ -2507,7 +2538,10 @@ export default function AParsePage() {
         try {
             const res: any = await getAParseTurns(jobId)
             const list = res?.data ?? res
-            setTurnsByJob(m => ({ ...m, [jobId]: Array.isArray(list) ? list : [] }))
+            const enriched = Array.isArray(list)
+                ? list.map((t: any) => ({ ...t, _stepsA: countModelSteps(t.model_a_input), _stepsB: countModelSteps(t.model_b_input) }))
+                : []
+            setTurnsByJob(m => ({ ...m, [jobId]: enriched }))
         } finally {
             setLoadingTurns(s => { const n = new Set(s); n.delete(jobId); return n })
         }
@@ -2714,6 +2748,12 @@ export default function AParsePage() {
                                 {job.last_review_winner && (
                                     <WinnerChip letter={job.last_review_winner} title="Winner of the last submitted / ready-for-review turn" />
                                 )}
+                                {/* Total steps across all turns (Model A / Model B) */}
+                                {((job.steps_a_total ?? 0) > 0 || (job.steps_b_total ?? 0) > 0) && (
+                                    <span title="Total steps across all turns (Model A / Model B)" className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 border border-gray-200 shrink-0">
+                                        A {job.steps_a_total ?? 0} · B {job.steps_b_total ?? 0} steps
+                                    </span>
+                                )}
                                 {/* Last turn — remaining tokens (Model A / Model B / overall) */}
                                 {job.last_turn_tokens_a && (
                                     <span title="Last turn — Model A remaining tokens" className="text-[9px] font-mono px-1 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 shrink-0">A {formatTokens(job.last_turn_tokens_a)}</span>
@@ -2776,6 +2816,12 @@ export default function AParsePage() {
                                                     {t.prompt?.trim() && <span title="Has prompt" className="text-[9px] text-indigo-400 shrink-0">prompt</span>}
                                                     {/* Winning model for this turn */}
                                                     {(() => { const w = overallWinner(t.answers?.overall); return w ? <WinnerChip letter={w} title="Winning model for this turn" /> : null })()}
+                                                    {/* Steps per model for this turn */}
+                                                    {(t._stepsA > 0 || t._stepsB > 0) && (
+                                                        <span title="Steps taken this turn (Model A / Model B)" className="text-[9px] font-mono px-1 py-0.5 rounded bg-gray-100 text-gray-600 border border-gray-200 shrink-0">
+                                                            A {t._stepsA} · B {t._stepsB} steps
+                                                        </span>
+                                                    )}
                                                     {/* Per-model + overall remaining tokens for this turn */}
                                                     {t.tokens_a && <span title="Model A remaining tokens" className="text-[9px] font-mono px-1 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 shrink-0">A {formatTokens(t.tokens_a)}</span>}
                                                     {t.tokens_b && <span title="Model B remaining tokens" className="text-[9px] font-mono px-1 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200 shrink-0">B {formatTokens(t.tokens_b)}</span>}
