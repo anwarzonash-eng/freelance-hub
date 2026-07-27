@@ -165,11 +165,13 @@ export enum AParseAPIRoutes {
     CREATE_JOB = 'aparse/jobs',
     UPDATE_JOB = 'aparse/jobs/:id',
     DELETE_JOB = 'aparse/jobs/:id',
+    RESTORE_JOB = 'aparse/jobs/:id/restore',
     GET_TURNS = 'aparse/jobs/:jobId/turns',
     CREATE_TURN = 'aparse/jobs/:jobId/turns',
     GET_TURN = 'aparse/turns/:id',
     UPDATE_TURN = 'aparse/turns/:id',
     DELETE_TURN = 'aparse/turns/:id',
+    RESTORE_TURN = 'aparse/turns/:id/restore',
 }
 
 export enum ProfessionalsAPIRoutes {

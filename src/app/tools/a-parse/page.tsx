@@ -1,10 +1,10 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef, useLayoutEffect, Fragment } from 'react'
-import { ListTree, ChevronRight, ChevronDown, Download, Trash2, Wand2, Bot, User, TerminalSquare, Copy, Check, MessageSquareText, Sparkles, X, Eye, EyeOff, PanelRight, Search, Plus, RefreshCw, Briefcase, FileText, Pencil, FileDiff, ScrollText, GitCompare, UnfoldVertical, FoldVertical, ClipboardList, Layers, Link2, SlidersHorizontal } from 'lucide-react'
+import { ListTree, ChevronRight, ChevronDown, Download, Trash2, Wand2, Bot, User, TerminalSquare, Copy, Check, MessageSquareText, Sparkles, X, Eye, EyeOff, PanelRight, Search, Plus, RefreshCw, Briefcase, FileText, Pencil, FileDiff, ScrollText, GitCompare, UnfoldVertical, FoldVertical, ClipboardList, Layers, Link2, SlidersHorizontal, RotateCcw } from 'lucide-react'
 import {
-    getAParseJobs, createAParseJob, deleteAParseJob, updateAParseJob,
-    getAParseTurns, getAParseTurn, createAParseTurn, deleteAParseTurn, updateAParseTurn,
+    getAParseJobs, createAParseJob, deleteAParseJob, restoreAParseJob, updateAParseJob,
+    getAParseTurns, getAParseTurn, createAParseTurn, deleteAParseTurn, restoreAParseTurn, updateAParseTurn,
 } from '@/app/api_handlers/api/aparse.api'
 import ContextMenu, { ContextMenuItem } from '@/app/components/jobs/ContextMenu'
 
@@ -2490,8 +2490,22 @@ function AParseEditor({ turn, jobName, turns, onSwitchTurn, onClose }: { turn: a
  * Page — Jobs list. Each job holds many turns; a turn opens the
  * full-screen A Parse editor above.
  * ------------------------------------------------------------------ */
-// Delete actions stay wired up but their buttons are hidden for now.
-const SHOW_DELETE_BUTTONS = false
+// Delete/restore are admin-only. Admin = JWT role 'admin' or a wildcard '*' in roles.
+function isAdminUser(): boolean {
+    try {
+        if (localStorage.getItem('userRole') === 'admin') return true
+        const roles = JSON.parse(localStorage.getItem('roles') || '[]')
+        return Array.isArray(roles) && roles.includes('*')
+    } catch { return false }
+}
+
+// Deleted-view filter options for the listing.
+const DELETED_FILTERS = [
+    { value: 'false', label: 'Not deleted' },
+    { value: 'true', label: 'Deleted' },
+    { value: 'all', label: 'All' },
+] as const
+type DeletedFilter = typeof DELETED_FILTERS[number]['value']
 
 const TURN_STATUSES = [
     { value: 'ready_review', label: 'Ready For Review', cls: 'bg-sky-100 text-sky-700 border-sky-300' },
@@ -2517,7 +2531,7 @@ function WinnerChip({ letter, title }: { letter: 'A' | 'B' | '='; title: string 
     return <span title={title} className={`text-[9px] font-semibold px-1.5 py-0.5 rounded border shrink-0 ${cls}`}>{letter === '=' ? 'tie' : `${letter} wins`}</span>
 }
 
-interface AParseJob { id: string; name: string; status?: string; turn_count: number; createdAt?: string; model_link?: string | null; last_turn_status?: string | null; last_turn_tokens_left?: string | null; last_turn_tokens_a?: string | null; last_turn_tokens_b?: string | null; last_review_winner?: 'A' | 'B' | '=' | null; steps_a_total?: number; steps_b_total?: number }
+interface AParseJob { id: string; name: string; status?: string; turn_count: number; createdAt?: string; model_link?: string | null; last_turn_status?: string | null; last_turn_tokens_left?: string | null; last_turn_tokens_a?: string | null; last_turn_tokens_b?: string | null; last_review_winner?: 'A' | 'B' | '=' | null; steps_a_total?: number; steps_b_total?: number; is_deleted?: boolean }
 
 export default function AParsePage() {
     const [jobs, setJobs] = useState<AParseJob[]>([])
@@ -2531,6 +2545,9 @@ export default function AParsePage() {
     const [newStatus, setNewStatus] = useState('continued')
     // Job status filter — default to only showing continued jobs.
     const [statusFilter, setStatusFilter] = useState<string>('continued')
+    // Deleted-view filter — default to only showing non-deleted.
+    const [deletedFilter, setDeletedFilter] = useState<DeletedFilter>('false')
+    const [admin] = useState<boolean>(() => isAdminUser())
     const [renaming, setRenaming] = useState<{ id: string; name: string; status: string } | null>(null)
     const [linkEditing, setLinkEditing] = useState<{ id: string; value: string } | null>(null)
     const [copiedLink, setCopiedLink] = useState<string | null>(null)
@@ -2539,18 +2556,18 @@ export default function AParsePage() {
     const load = useCallback(async () => {
         setLoading(true)
         try {
-            const res: any = await getAParseJobs()
+            const res: any = await getAParseJobs(deletedFilter)
             const list = res?.data ?? res
             setJobs(Array.isArray(list) ? list : [])
         } finally { setLoading(false) }
-    }, [])
+    }, [deletedFilter])
 
     useEffect(() => { load() }, [load])
 
     const loadTurns = useCallback(async (jobId: string) => {
         setLoadingTurns(s => new Set(s).add(jobId))
         try {
-            const res: any = await getAParseTurns(jobId)
+            const res: any = await getAParseTurns(jobId, deletedFilter)
             const list = res?.data ?? res
             const enriched = Array.isArray(list)
                 ? list.map((t: any) => ({ ...t, _stepsA: countModelSteps(t.model_a_input), _stepsB: countModelSteps(t.model_b_input) }))
@@ -2559,7 +2576,13 @@ export default function AParsePage() {
         } finally {
             setLoadingTurns(s => { const n = new Set(s); n.delete(jobId); return n })
         }
-    }, [])
+    }, [deletedFilter])
+
+    // Refresh any already-expanded jobs' turns when the deleted filter changes.
+    useEffect(() => {
+        expanded.forEach(jobId => loadTurns(jobId))
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [deletedFilter])
 
     const toggleExpand = (jobId: string) => {
         setExpanded(prev => {
@@ -2616,8 +2639,15 @@ export default function AParsePage() {
     }
 
     const removeJob = async (id: string) => {
-        if (!confirm('Delete this job and all its turns?')) return
+        if (!admin) return
+        if (!confirm('Delete this job and all its turns? (soft delete — can be restored)')) return
         await deleteAParseJob(id)
+        load()
+    }
+
+    const restoreJob = async (id: string) => {
+        if (!admin) return
+        await restoreAParseJob(id)
         load()
     }
 
@@ -2630,8 +2660,16 @@ export default function AParsePage() {
     }
 
     const removeTurn = async (turnId: string, jobId: string) => {
-        if (!confirm('Delete this turn?')) return
+        if (!admin) return
+        if (!confirm('Delete this turn? (soft delete — can be restored)')) return
         await deleteAParseTurn(turnId)
+        await loadTurns(jobId)
+        load()
+    }
+
+    const restoreTurn = async (turnId: string, jobId: string) => {
+        if (!admin) return
+        await restoreAParseTurn(turnId)
         await loadTurns(jobId)
         load()
     }
@@ -2659,6 +2697,16 @@ export default function AParsePage() {
                             <option value="all">All</option>
                         </select>
                     </div>
+                    {/* Deleted filter (admin only; defaults to Not deleted) */}
+                    {admin && (
+                        <div className="flex items-center gap-1">
+                            <span className="text-[10px] text-gray-400">deleted</span>
+                            <select value={deletedFilter} onChange={e => setDeletedFilter(e.target.value as DeletedFilter)}
+                                className="text-xs border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:border-indigo-400 text-gray-700">
+                                {DELETED_FILTERS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
+                            </select>
+                        </div>
+                    )}
                     <button onClick={() => load()} disabled={loading}
                         className="flex items-center gap-1 text-xs border border-gray-300 rounded px-2 py-1 hover:bg-gray-50 disabled:opacity-50 text-gray-600">
                         <RefreshCw size={11} className={loading ? 'animate-spin' : ''} /> Refresh
@@ -2784,14 +2832,20 @@ export default function AParsePage() {
                                     const js = JOB_STATUSES.find(s => s.value === (job.status || 'continued'))
                                     return <span title="Job status" className={`text-[9px] font-medium rounded border px-1.5 py-0.5 shrink-0 ${js?.cls || 'bg-gray-50 text-gray-500 border-gray-200'}`}>{js?.label ?? job.status}</span>
                                 })()}
+                                {job.is_deleted && (
+                                    <span title="This job is soft-deleted" className="text-[9px] font-semibold px-1.5 py-0.5 rounded border shrink-0 bg-red-100 text-red-700 border-red-300">deleted</span>
+                                )}
                                 <button onClick={() => addTurn(job)} title="Add turn"
                                     className="p-1 text-gray-400 hover:text-teal-700 hover:bg-teal-50 rounded shrink-0"><Plus size={12} /></button>
                                 <button onClick={() => setRenaming({ id: job.id, name: job.name, status: job.status || 'continued' })} title="Edit name & status"
                                     className="p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded shrink-0"><Pencil size={12} /></button>
-                                {SHOW_DELETE_BUTTONS && (
-                                    <button onClick={() => removeJob(job.id)} title="Delete job"
+                                {admin && (job.is_deleted ? (
+                                    <button onClick={() => restoreJob(job.id)} title="Restore job"
+                                        className="p-1 text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 rounded shrink-0"><RotateCcw size={12} /></button>
+                                ) : (
+                                    <button onClick={() => removeJob(job.id)} title="Delete job (soft)"
                                         className="p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded shrink-0"><Trash2 size={12} /></button>
-                                )}
+                                ))}
                             </div>
 
                             {/* Model link editor */}
@@ -2828,6 +2882,7 @@ export default function AParsePage() {
                                                         {t.title}
                                                     </button>
                                                     {t.prompt?.trim() && <span title="Has prompt" className="text-[9px] text-indigo-400 shrink-0">prompt</span>}
+                                                    {t.is_deleted && <span title="This turn is soft-deleted" className="text-[9px] font-semibold px-1.5 py-0.5 rounded border shrink-0 bg-red-100 text-red-700 border-red-300">deleted</span>}
                                                     {/* Winning model for this turn */}
                                                     {(() => { const w = overallWinner(t.answers?.overall); return w ? <WinnerChip letter={w} title="Winning model for this turn" /> : null })()}
                                                     {/* Steps per model for this turn */}
@@ -2848,10 +2903,13 @@ export default function AParsePage() {
                                                         <option value="">No status</option>
                                                         {TURN_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                                                     </select>
-                                                    {SHOW_DELETE_BUTTONS && (
-                                                        <button onClick={() => removeTurn(t.id, job.id)} title="Delete turn"
+                                                    {admin && (t.is_deleted ? (
+                                                        <button onClick={() => restoreTurn(t.id, job.id)} title="Restore turn"
+                                                            className="p-0.5 text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 rounded shrink-0"><RotateCcw size={11} /></button>
+                                                    ) : (
+                                                        <button onClick={() => removeTurn(t.id, job.id)} title="Delete turn (soft)"
                                                             className="p-0.5 text-red-300 hover:text-red-600 hover:bg-red-50 rounded shrink-0"><Trash2 size={11} /></button>
-                                                    )}
+                                                    ))}
                                                 </div>
                                             ))}
                                             <button onClick={() => addTurn(job)}

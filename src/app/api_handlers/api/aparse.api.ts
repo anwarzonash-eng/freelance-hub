@@ -6,8 +6,9 @@ import { ApiMethod } from '../api_methods.enum'
 import { AParseAPIRoutes } from '../api_routes.enums'
 
 // ── Jobs ────────────────────────────────────────────────────────────────────
-export async function getAParseJobs() {
-    return await apiClient(AParseAPIRoutes.GET_JOBS, ApiMethod.GET, undefined, undefined, undefined, true, false)
+export async function getAParseJobs(deleted: 'true' | 'false' | 'all' = 'false') {
+    const params: IApiParams = { query: { deleted } }
+    return await apiClient(AParseAPIRoutes.GET_JOBS, ApiMethod.GET, undefined, params, undefined, true, false)
 }
 
 export async function createAParseJob(name: string, model_link?: string, status?: string) {
@@ -24,9 +25,14 @@ export async function deleteAParseJob(id: string) {
     return await apiClient(AParseAPIRoutes.DELETE_JOB, ApiMethod.DELETE, undefined, params, undefined, true, true)
 }
 
+export async function restoreAParseJob(id: string) {
+    const params: IApiParams = { path: { id } }
+    return await apiClient(AParseAPIRoutes.RESTORE_JOB, ApiMethod.PUT, undefined, params, undefined, true, true)
+}
+
 // ── Turns ───────────────────────────────────────────────────────────────────
-export async function getAParseTurns(jobId: string) {
-    const params: IApiParams = { path: { jobId } }
+export async function getAParseTurns(jobId: string, deleted: 'true' | 'false' | 'all' = 'false') {
+    const params: IApiParams = { path: { jobId }, query: { deleted } }
     return await apiClient(AParseAPIRoutes.GET_TURNS, ApiMethod.GET, undefined, params, undefined, true, false)
 }
 
@@ -48,4 +54,9 @@ export async function updateAParseTurn(id: string, payload: any) {
 export async function deleteAParseTurn(id: string) {
     const params: IApiParams = { path: { id } }
     return await apiClient(AParseAPIRoutes.DELETE_TURN, ApiMethod.DELETE, undefined, params, undefined, true, true)
+}
+
+export async function restoreAParseTurn(id: string) {
+    const params: IApiParams = { path: { id } }
+    return await apiClient(AParseAPIRoutes.RESTORE_TURN, ApiMethod.PUT, undefined, params, undefined, true, true)
 }
