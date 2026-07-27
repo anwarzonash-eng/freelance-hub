@@ -1429,6 +1429,7 @@ interface RubricAnswers {
     additionalNotes: VersionedText
     promptForNextTurn: VersionedText
     promptType: string
+    tokenBurnRationale: string // "why you think this prompt will burn 150-200K tokens" (not versioned)
     selectedAxes: string[]
     quality: string
     overall: number | null
@@ -1445,6 +1446,7 @@ function emptyAnswers(): RubricAnswers {
     return {
         seniorExpectation: emptyVersioned(), dims, otherIssues: emptyVersioned(), overallReasoning: emptyVersioned(),
         additionalNotes: emptyVersioned(), promptForNextTurn: emptyVersioned(), promptType: '',
+        tokenBurnRationale: '',
         selectedAxes: [], quality: '', overall: null, comments: emptyVersioned(),
         summaryA: '', summaryB: '', comparison: '',
     }
@@ -1466,6 +1468,7 @@ function normalizeAnswers(raw: any): RubricAnswers {
         additionalNotes: toVersioned(raw.additionalNotes),
         promptForNextTurn: toVersioned(raw.promptForNextTurn),
         promptType: raw.promptType ?? '',
+        tokenBurnRationale: typeof raw.tokenBurnRationale === 'string' ? raw.tokenBurnRationale : '',
         selectedAxes: Array.isArray(raw.selectedAxes) ? raw.selectedAxes : [],
         quality: raw.quality ?? '',
         overall: typeof raw.overall === 'number' ? raw.overall : null,
@@ -1564,6 +1567,7 @@ function parseAnswersJson(raw: string): RubricAnswers {
         quality: ['poor', 'great', 'complicated'].includes(src.quality) ? src.quality : '',
         overall: typeof src.overall === 'number' ? src.overall : null,
         comments: toVersioned(String(src.comments ?? '')),
+        tokenBurnRationale: typeof src.tokenBurnRationale === 'string' ? src.tokenBurnRationale : '',
         summaryA: '', summaryB: '', comparison: '',
     }
 }
@@ -1590,6 +1594,7 @@ function mergeVersion(cur: RubricAnswers, parsed: RubricAnswers, vk: VersionKey 
         additionalNotes: put(cur.additionalNotes, parsed.additionalNotes),
         promptForNextTurn: put(cur.promptForNextTurn, parsed.promptForNextTurn),
         promptType: parsed.promptType || cur.promptType,
+        tokenBurnRationale: parsed.tokenBurnRationale || cur.tokenBurnRationale,
         selectedAxes: parsed.selectedAxes,
         quality: parsed.quality,
         overall: parsed.overall,
@@ -1918,6 +1923,8 @@ function AnswersPanel({ value, onChange, onClose, readOnly, onRefHover, refMatch
     const [fillJson, setFillJson] = useState('')
     const [fillErr, setFillErr] = useState('')
     const [fillVersion, setFillVersion] = useState<VersionKey>('ai') // which version the JSON fills into
+    // Show/hide for the extra (non-versioned) token-burn rationale inside "Prompt For Next Turn".
+    const [showBurn, setShowBurn] = useState(false)
     const applyFill = () => {
         try {
             const parsed = parseAnswersJson(fillJson)
@@ -2054,6 +2061,22 @@ function AnswersPanel({ value, onChange, onClose, readOnly, onRefHover, refMatch
                             </div>
                             <VersionedAnswer value={value.promptForNextTurn} onChangeVersion={(vk, t) => setFieldVersion('promptForNextTurn', vk, t)} {...va} minHeight={56}
                                 placeholder="A prompt to send next to push the better model further" />
+                            {/* Extra non-versioned field, shown at the end; toggle to show/hide within this box */}
+                            <div className="border-t border-gray-200 pt-2 mt-1">
+                                <button type="button" onClick={() => setShowBurn(s => !s)}
+                                    className="flex items-center gap-1 text-[10px] font-semibold text-gray-500 hover:text-gray-700">
+                                    {showBurn ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+                                    Why you think this prompt will burn 150–200K tokens
+                                </button>
+                                {showBurn && (
+                                    <textarea value={value.tokenBurnRationale}
+                                        onChange={e => onChange({ tokenBurnRationale: e.target.value })}
+                                        readOnly={readOnly} disabled={readOnly}
+                                        placeholder="Explain why this prompt is expected to burn 150–200K tokens…"
+                                        spellCheck={false}
+                                        className="mt-1.5 w-full h-24 border border-gray-300 rounded px-2 py-1.5 text-[11px] leading-relaxed resize-y focus:outline-none focus:border-indigo-400 disabled:bg-gray-50 disabled:text-gray-600" />
+                                )}
+                            </div>
                         </Field>
                     )}
 
