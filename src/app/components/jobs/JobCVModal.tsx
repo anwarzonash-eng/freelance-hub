@@ -1983,6 +1983,39 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
     });
   };
 
+  // ── Rebuild the AI JSON from the current CV fields (same shape applyJSON consumes) ──
+  const [jsonCopied, setJsonCopied] = useState(false);
+  const buildCvJson = () => {
+    const experience_titles: Record<string, string> = {};
+    const experience_content: Record<string, { point: string }[]> = {};
+    experienceItems.forEach((item, i) => {
+      const key = `experience${i + 1}`;
+      experience_titles[key] = item.use_ai_title
+        ? (item.ai_title ?? item.designation ?? "")
+        : (item.designation ?? "");
+      experience_content[key] = (item.bullets ?? [])
+        .filter((b) => b && b.trim())
+        .map((b) => ({ point: b }));
+    });
+    return JSON.stringify(
+      {
+        core_skills: coreSkills,
+        cv_headline: form.headline,
+        summary: form.summary,
+        experience_titles,
+        experience_content,
+      },
+      null,
+      2,
+    );
+  };
+  const copyCvJson = () => {
+    navigator.clipboard.writeText(buildCvJson()).then(() => {
+      setJsonCopied(true);
+      setTimeout(() => setJsonCopied(false), 1500);
+    });
+  };
+
   // ── AI JSON apply ────────────────────────────────────────────────────────
   const applyJSON = () => {
     const errors: string[] = [];
@@ -3118,11 +3151,23 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
                   )}
                   Paste AI Output
                 </button>
-                {jsonApplied && (
-                  <span className="flex items-center gap-1 text-[10px] text-green-600">
-                    <Check size={10} /> Applied successfully
-                  </span>
-                )}
+                <div className="flex items-center gap-2">
+                  {jsonApplied && (
+                    <span className="flex items-center gap-1 text-[10px] text-green-600">
+                      <Check size={10} /> Applied successfully
+                    </span>
+                  )}
+                  {/* Copy the current CV's data back out as JSON (rebuilt from the saved fields) */}
+                  <button
+                    type="button"
+                    onClick={copyCvJson}
+                    title="Copy the current CV's data as JSON"
+                    className="flex items-center gap-1 text-[10px] font-semibold text-teal-700 border border-teal-200 rounded px-1.5 py-0.5 hover:bg-teal-50"
+                  >
+                    {jsonCopied ? <Check size={11} /> : <Copy size={11} />}
+                    {jsonCopied ? "Copied" : "Copy JSON"}
+                  </button>
+                </div>
               </div>
               {showJsonPaste && (
                 <>

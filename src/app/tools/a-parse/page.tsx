@@ -2709,6 +2709,10 @@ export default function AParsePage() {
                     <ListTree size={14} className="text-gray-500" />
                     <h1 className="text-sm font-semibold text-gray-800">A Parse — Jobs</h1>
                     <span className="text-[10px] text-gray-400">{visibleJobs.length} of {jobs.length} job{jobs.length !== 1 ? 's' : ''}</span>
+                    {(() => {
+                        const totalTurns = visibleJobs.reduce((s, j) => s + (j.turn_count ?? 0), 0)
+                        return <span title="Total turns across the filtered jobs" className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 border border-gray-200">{totalTurns} turn{totalTurns !== 1 ? 's' : ''}</span>
+                    })()}
                 </div>
                 <div className="flex items-center gap-2">
                     {/* Status filter (defaults to Continued) */}
