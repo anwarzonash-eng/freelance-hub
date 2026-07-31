@@ -1865,8 +1865,16 @@ function AnswersPanel({ value, onChange, onClose, readOnly, onRefHover, refMatch
     const edInner = 'w-full px-2 py-1.5 text-[11px] leading-relaxed resize-none overflow-y-auto focus:outline-none bg-white'
 
     // Section collapse state (all sections; supports expand/collapse all via right-click menu).
+    // Persisted so the expanded/collapsed layout is restored next time the panel opens.
     const SECTION_KEYS = ANSWER_SECTIONS.map(s => s.key)
-    const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+    const [collapsed, setCollapsed] = useState<Set<string>>(() => {
+        try {
+            const saved = JSON.parse(localStorage.getItem('aparse_collapsed_sections') || 'null')
+            if (Array.isArray(saved)) return new Set(saved)
+        } catch { /* ignore */ }
+        return new Set()
+    })
+    useEffect(() => { try { localStorage.setItem('aparse_collapsed_sections', JSON.stringify([...collapsed])) } catch { /* ignore */ } }, [collapsed])
     const [sectionCtx, setSectionCtx] = useState<{ x: number; y: number } | null>(null)
     const sec = (key: string) => ({
         open: !collapsed.has(key),
