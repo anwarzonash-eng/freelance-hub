@@ -2562,7 +2562,7 @@ function WinnerChip({ letter, title }: { letter: 'A' | 'B' | '='; title: string 
     return <span title={title} className={`text-[9px] font-semibold px-1.5 py-0.5 rounded border shrink-0 ${cls}`}>{letter === '=' ? 'tie' : `${letter} wins`}</span>
 }
 
-interface AParseJob { id: string; name: string; status?: string; turn_count: number; createdAt?: string; model_link?: string | null; last_turn_status?: string | null; last_turn_tokens_left?: string | null; last_turn_tokens_a?: string | null; last_turn_tokens_b?: string | null; last_review_winner?: 'A' | 'B' | '=' | null; last_turn_winner?: 'A' | 'B' | '=' | null; steps_a_total?: number; steps_b_total?: number; is_deleted?: boolean; report?: { prompt1Category?: string; tasksDescription?: string } }
+interface AParseJob { id: string; name: string; status?: string; turn_count: number; createdAt?: string; model_link?: string | null; last_turn_status?: string | null; last_turn_tokens_left?: string | null; last_turn_tokens_a?: string | null; last_turn_tokens_b?: string | null; last_review_winner?: 'A' | 'B' | '=' | null; last_turn_winner?: 'A' | 'B' | '=' | null; steps_a_total?: number; steps_b_total?: number; is_deleted?: boolean; report?: { prompt1Category?: string; tasksDescription?: string; liveId?: string; primaryLanguage?: string; secondaryLanguage?: string } }
 
 /* ------------------------------------------------------------------ *
  * Per-job detailed report modal.
@@ -2577,6 +2577,9 @@ function JobReportModal({ job, admin, onClose, onSaved }: { job: AParseJob; admi
     const [loading, setLoading] = useState(true)
     const [prompt1Category, setPrompt1Category] = useState(job.report?.prompt1Category || '')
     const [tasksDescription, setTasksDescription] = useState(job.report?.tasksDescription || '')
+    const [liveId, setLiveId] = useState(job.report?.liveId || '')
+    const [primaryLanguage, setPrimaryLanguage] = useState(job.report?.primaryLanguage || '')
+    const [secondaryLanguage, setSecondaryLanguage] = useState(job.report?.secondaryLanguage || '')
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
 
     useEffect(() => {
@@ -2606,11 +2609,15 @@ function JobReportModal({ job, admin, onClose, onSaved }: { job: AParseJob; admi
         text: (t.prompt || '').replace(/\s+/g, ' ').trim(),
     }))
 
-    const dirty = prompt1Category !== (job.report?.prompt1Category || '') || tasksDescription !== (job.report?.tasksDescription || '')
+    const dirty = prompt1Category !== (job.report?.prompt1Category || '')
+        || tasksDescription !== (job.report?.tasksDescription || '')
+        || liveId !== (job.report?.liveId || '')
+        || primaryLanguage !== (job.report?.primaryLanguage || '')
+        || secondaryLanguage !== (job.report?.secondaryLanguage || '')
     const save = async () => {
         setSaveStatus('saving')
         try {
-            await updateAParseJob(job.id, { report: { prompt1Category, tasksDescription } })
+            await updateAParseJob(job.id, { report: { prompt1Category, tasksDescription, liveId, primaryLanguage, secondaryLanguage } })
             setSaveStatus('saved'); onSaved()
             setTimeout(() => setSaveStatus('idle'), 1500)
         } catch { setSaveStatus('idle') }
@@ -2649,6 +2656,25 @@ function JobReportModal({ job, admin, onClose, onSaved }: { job: AParseJob; admi
                         <Metric label="Tokens consumed" value={consumed != null ? consumed.toLocaleString('en-US') : '—'}
                             sub={winner && winner !== '=' ? `1,000,000 − ${winner} remaining` : 'no clear winner'} />
                         {admin && <Metric label="Score" value={score.toFixed(2)} />}
+                    </div>
+
+                    {/* Editable identity / language fields */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                        <label className="flex flex-col gap-1">
+                            <span className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">Live ID</span>
+                            <input value={liveId} onChange={e => setLiveId(e.target.value)} placeholder="e.g. live-1234"
+                                className="text-[11px] border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-indigo-400" />
+                        </label>
+                        <label className="flex flex-col gap-1">
+                            <span className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">Primary language</span>
+                            <input value={primaryLanguage} onChange={e => setPrimaryLanguage(e.target.value)} placeholder="e.g. TypeScript"
+                                className="text-[11px] border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-indigo-400" />
+                        </label>
+                        <label className="flex flex-col gap-1">
+                            <span className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">Secondary language</span>
+                            <input value={secondaryLanguage} onChange={e => setSecondaryLanguage(e.target.value)} placeholder="e.g. Python"
+                                className="text-[11px] border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-indigo-400" />
+                        </label>
                     </div>
 
                     {/* Prompt categories per turn */}
