@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { RefreshCw, ExternalLink, Pencil, Trash2, FileText, Search, X, Link, Briefcase, Building2, SlidersHorizontal, AlignLeft, User, Layers, Clock, Eye, MessageSquare } from 'lucide-react'
+import { RefreshCw, ExternalLink, Pencil, Trash2, FileText, Search, X, Link, Briefcase, Building2, SlidersHorizontal, AlignLeft, User, Layers, Clock, Eye, MessageSquare, Plus } from 'lucide-react'
 import { useColResize } from '@/app/hooks/useColResize'
 import { formatHistoryDate } from '@/app/utils/time'
 import { JOB_DATE_OPTIONS, inJobDateRange } from '@/app/utils/jobDateFilter'
@@ -189,6 +189,8 @@ export default function CvsPage() {
     const [data, setData] = useState<any[]>([])
     const [loading, setLoading] = useState(false)
     const [editingCV, setEditingCV] = useState<any | null>(null)
+    // Manual CV creation (not linked to any job).
+    const [creatingCV, setCreatingCV] = useState(false)
     const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; row: any } | null>(null)
     const [userMap, setUserMap] = useState<Record<string, string>>({})
     const [applicants, setApplicants] = useState<{ id: string; name: string }[]>([])
@@ -483,6 +485,11 @@ export default function CvsPage() {
                     <button onClick={() => load()} disabled={loading}
                         className="flex items-center gap-1 text-xs border border-gray-300 rounded px-2 py-1 hover:bg-gray-50 disabled:opacity-50 text-gray-600">
                         <RefreshCw size={11} className={loading ? 'animate-spin' : ''} /> Refresh
+                    </button>
+                    <button onClick={() => setCreatingCV(true)}
+                        title="Create a CV manually (not linked to a job)"
+                        className="flex items-center gap-1 text-xs bg-teal-600 text-white rounded px-2.5 py-1 hover:bg-teal-700">
+                        <Plus size={13} /> Create CV
                     </button>
                 </div>
             </div>
@@ -1110,6 +1117,14 @@ export default function CvsPage() {
                 <JobCVModal
                     cv={editingCV}
                     onClose={() => { setEditingCV(null); load() }}
+                    onSaved={load}
+                />
+            )}
+
+            {/* Manual CV creation — no job, no cv → blank form; saved CV stays unlinked (job_id null) */}
+            {creatingCV && (
+                <JobCVModal
+                    onClose={() => { setCreatingCV(false); load() }}
                     onSaved={load}
                 />
             )}

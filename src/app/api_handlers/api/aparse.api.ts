@@ -15,7 +15,7 @@ export async function createAParseJob(name: string, model_link?: string, status?
     return await apiClient(AParseAPIRoutes.CREATE_JOB, ApiMethod.POST, { name, model_link, status }, undefined, undefined, true, true)
 }
 
-export async function updateAParseJob(id: string, payload: { name?: string; model_link?: string; status?: string }) {
+export async function updateAParseJob(id: string, payload: { name?: string; model_link?: string; status?: string; report?: any }) {
     const params: IApiParams = { path: { id } }
     return await apiClient(AParseAPIRoutes.UPDATE_JOB, ApiMethod.PUT, payload, params, undefined, true, true)
 }

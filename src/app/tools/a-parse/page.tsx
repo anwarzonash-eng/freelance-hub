@@ -2554,7 +2554,139 @@ function WinnerChip({ letter, title }: { letter: 'A' | 'B' | '='; title: string 
     return <span title={title} className={`text-[9px] font-semibold px-1.5 py-0.5 rounded border shrink-0 ${cls}`}>{letter === '=' ? 'tie' : `${letter} wins`}</span>
 }
 
-interface AParseJob { id: string; name: string; status?: string; turn_count: number; createdAt?: string; model_link?: string | null; last_turn_status?: string | null; last_turn_tokens_left?: string | null; last_turn_tokens_a?: string | null; last_turn_tokens_b?: string | null; last_review_winner?: 'A' | 'B' | '=' | null; steps_a_total?: number; steps_b_total?: number; is_deleted?: boolean }
+interface AParseJob { id: string; name: string; status?: string; turn_count: number; createdAt?: string; model_link?: string | null; last_turn_status?: string | null; last_turn_tokens_left?: string | null; last_turn_tokens_a?: string | null; last_turn_tokens_b?: string | null; last_review_winner?: 'A' | 'B' | '=' | null; last_turn_winner?: 'A' | 'B' | '=' | null; steps_a_total?: number; steps_b_total?: number; is_deleted?: boolean; report?: { prompt1Category?: string; tasksDescription?: string } }
+
+/* ------------------------------------------------------------------ *
+ * Per-job detailed report modal.
+ * ------------------------------------------------------------------ */
+function reportTokenNum(v?: string | null): number | null {
+    const d = (v || '').replace(/[^\d]/g, '')
+    return d ? Number(d) : null
+}
+
+function JobReportModal({ job, admin, onClose, onSaved }: { job: AParseJob; admin: boolean; onClose: () => void; onSaved: () => void }) {
+    const [turns, setTurns] = useState<any[]>([])
+    const [loading, setLoading] = useState(true)
+    const [prompt1Category, setPrompt1Category] = useState(job.report?.prompt1Category || '')
+    const [tasksDescription, setTasksDescription] = useState(job.report?.tasksDescription || '')
+    const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
+
+    useEffect(() => {
+        getAParseTurns(job.id).then((res: any) => {
+            const list = res?.data ?? res
+            setTurns(Array.isArray(list) ? list : [])
+        }).finally(() => setLoading(false))
+    }, [job.id])
+
+    const totalSteps = (job.steps_a_total ?? 0) + (job.steps_b_total ?? 0)
+    const totalTurns = job.turn_count ?? turns.length
+    const remA = job.last_turn_tokens_a ?? null
+    const remB = job.last_turn_tokens_b ?? null
+    const winner = job.last_turn_winner ?? null
+    // Tokens consumed = 1,000,000 − remaining tokens of the last turn's winning model.
+    const winnerRemStr = winner === 'A' ? remA : winner === 'B' ? remB : (remA ?? remB)
+    const winnerRem = reportTokenNum(winnerRemStr)
+    const consumed = winnerRem != null ? 1_000_000 - winnerRem : null
+    const score = totalTurns ? (totalTurns * 100 / 60) : 0
+
+    // Prompt K's category comes from turn (K-1)'s promptType. Turn 1's is set here in the report.
+    const promptRows = turns.map((t, i) => ({
+        n: i + 1,
+        title: t.title || `Turn ${i + 1}`,
+        category: i === 0 ? prompt1Category : (turns[i - 1]?.answers?.promptType || ''),
+        editable: i === 0,
+        text: (t.prompt || '').replace(/\s+/g, ' ').trim(),
+    }))
+
+    const dirty = prompt1Category !== (job.report?.prompt1Category || '') || tasksDescription !== (job.report?.tasksDescription || '')
+    const save = async () => {
+        setSaveStatus('saving')
+        try {
+            await updateAParseJob(job.id, { report: { prompt1Category, tasksDescription } })
+            setSaveStatus('saved'); onSaved()
+            setTimeout(() => setSaveStatus('idle'), 1500)
+        } catch { setSaveStatus('idle') }
+    }
+
+    const Metric = ({ label, value, sub }: { label: string; value: React.ReactNode; sub?: string }) => (
+        <div className="border border-gray-200 rounded-lg p-3 bg-white">
+            <p className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">{label}</p>
+            <p className="text-lg font-bold text-gray-800 leading-tight mt-0.5">{value}</p>
+            {sub && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}
+        </div>
+    )
+
+    return (
+        <div className="fixed inset-0 z-[9996] flex items-center justify-center bg-black/40"
+            onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+            <div className="bg-white border border-gray-200 rounded-xl shadow-2xl flex flex-col overflow-hidden"
+                style={{ width: 900, maxWidth: '95vw', maxHeight: '92vh' }}>
+                <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-100 shrink-0 bg-gray-50">
+                    <ClipboardList size={14} className="text-indigo-500 shrink-0" />
+                    <span className="text-[12px] font-semibold text-gray-700 flex-1 truncate">Report — {job.name}</span>
+                    <span className="text-[10px] text-gray-400">{saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? 'Saved ✓' : ''}</span>
+                    <button onClick={save} disabled={!dirty}
+                        className="flex items-center gap-1 text-[11px] bg-emerald-600 text-white rounded px-2.5 py-1 hover:bg-emerald-700 disabled:opacity-40">
+                        <Check size={12} /> Save
+                    </button>
+                    <button onClick={onClose} className="text-gray-300 hover:text-gray-600 shrink-0 ml-1"><X size={15} /></button>
+                </div>
+
+                <div className="p-4 overflow-y-auto space-y-4">
+                    {/* Metric cards */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                        <Metric label="Total steps" value={totalSteps} sub={`A ${job.steps_a_total ?? 0} · B ${job.steps_b_total ?? 0}`} />
+                        <Metric label="Total turns" value={totalTurns} />
+                        <Metric label="Remaining tokens" value={<span className="text-sm">A {formatTokens(remA || '') || '—'} · B {formatTokens(remB || '') || '—'}</span>} sub="last turn" />
+                        <Metric label="Tokens consumed" value={consumed != null ? consumed.toLocaleString('en-US') : '—'}
+                            sub={winner && winner !== '=' ? `1,000,000 − ${winner} remaining` : 'no clear winner'} />
+                        {admin && <Metric label="Score" value={score.toFixed(2)} />}
+                    </div>
+
+                    {/* Prompt categories per turn */}
+                    <div>
+                        <p className="text-[11px] font-semibold text-gray-700 mb-1.5">Prompts & categories</p>
+                        {loading ? (
+                            <div className="flex items-center gap-2 py-4 text-gray-400 text-xs"><RefreshCw size={12} className="animate-spin" /> Loading turns…</div>
+                        ) : promptRows.length === 0 ? (
+                            <p className="text-[11px] text-gray-400">No turns yet.</p>
+                        ) : (
+                            <div className="border border-gray-200 rounded-lg overflow-hidden">
+                                {promptRows.map((r, i) => (
+                                    <div key={i} className={`flex items-start gap-2 px-2.5 py-1.5 text-[11px] ${i ? 'border-t border-gray-100' : ''}`}>
+                                        <span className="text-gray-400 font-mono w-16 shrink-0">Prompt {r.n}</span>
+                                        <div className="w-56 shrink-0">
+                                            {r.editable ? (
+                                                <select value={prompt1Category} onChange={e => setPrompt1Category(e.target.value)}
+                                                    title="Category for the first prompt (set here)"
+                                                    className="w-full text-[11px] border border-indigo-300 rounded px-1.5 py-0.5 bg-indigo-50/40 focus:outline-none focus:border-indigo-500">
+                                                    <option value="">— set category —</option>
+                                                    {PROMPT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                                                </select>
+                                            ) : (
+                                                <span className={`inline-block px-1.5 py-0.5 rounded ${r.category ? 'bg-gray-100 text-gray-700' : 'text-gray-300'}`}>{r.category || '—'}</span>
+                                            )}
+                                        </div>
+                                        <span className="flex-1 min-w-0 text-gray-500 truncate" title={r.text}>{r.text || <span className="text-gray-300">(no prompt text)</span>}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Tasks description (user-editable) */}
+                    <div>
+                        <p className="text-[11px] font-semibold text-gray-700 mb-1.5">Tasks description</p>
+                        <textarea value={tasksDescription} onChange={e => setTasksDescription(e.target.value)}
+                            placeholder="Add a description of the tasks for this job…"
+                            spellCheck={false}
+                            className="w-full h-32 border border-gray-300 rounded px-2.5 py-2 text-[11px] leading-relaxed resize-y focus:outline-none focus:border-indigo-400" />
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
+}
 
 export default function AParsePage() {
     const [jobs, setJobs] = useState<AParseJob[]>([])
@@ -2575,6 +2707,7 @@ export default function AParsePage() {
     const [linkEditing, setLinkEditing] = useState<{ id: string; value: string } | null>(null)
     const [copiedLink, setCopiedLink] = useState<string | null>(null)
     const [openTurn, setOpenTurn] = useState<{ turn: any; jobName: string; jobId: string } | null>(null)
+    const [reportJob, setReportJob] = useState<AParseJob | null>(null)
 
     const load = useCallback(async () => {
         setLoading(true)
@@ -2862,6 +2995,8 @@ export default function AParsePage() {
                                 {job.is_deleted && (
                                     <span title="This job is soft-deleted" className="text-[9px] font-semibold px-1.5 py-0.5 rounded border shrink-0 bg-red-100 text-red-700 border-red-300">deleted</span>
                                 )}
+                                <button onClick={() => setReportJob(job)} title="View report"
+                                    className="p-1 text-gray-400 hover:text-indigo-700 hover:bg-indigo-50 rounded shrink-0"><ClipboardList size={12} /></button>
                                 <button onClick={() => addTurn(job)} title="Add turn"
                                     className="p-1 text-gray-400 hover:text-teal-700 hover:bg-teal-50 rounded shrink-0"><Plus size={12} /></button>
                                 <button onClick={() => setRenaming({ id: job.id, name: job.name, status: job.status || 'continued' })} title="Edit name & status"
@@ -2967,6 +3102,15 @@ export default function AParsePage() {
                         } catch { setOpenTurn({ turn: t, jobName, jobId }) }
                     }}
                     onClose={closeEditor}
+                />
+            )}
+
+            {reportJob && (
+                <JobReportModal
+                    job={reportJob}
+                    admin={admin}
+                    onClose={() => setReportJob(null)}
+                    onSaved={load}
                 />
             )}
         </div>
