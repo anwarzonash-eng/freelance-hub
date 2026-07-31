@@ -2878,7 +2878,13 @@ export default function AParsePage() {
                     <span className="text-[10px] text-gray-400">{visibleJobs.length} of {jobs.length} job{jobs.length !== 1 ? 's' : ''}</span>
                     {(() => {
                         const totalTurns = visibleJobs.reduce((s, j) => s + (j.turn_count ?? 0), 0)
-                        return <span title="Total turns across the filtered jobs" className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 border border-gray-200">{totalTurns} turn{totalTurns !== 1 ? 's' : ''}</span>
+                        const score = totalTurns ? (totalTurns * 100 / 60) : 0
+                        return (
+                            <>
+                                <span title="Total turns across the filtered jobs" className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 border border-gray-200">{totalTurns} turn{totalTurns !== 1 ? 's' : ''}</span>
+                                {admin && <span title="Score across the filtered jobs" className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">score {score.toFixed(2)}</span>}
+                            </>
+                        )
                     })()}
                 </div>
                 <div className="flex items-center gap-2">
