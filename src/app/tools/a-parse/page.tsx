@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef, useLayoutEffect, Fragment } from 'react'
-import { ListTree, ChevronRight, ChevronDown, Download, Trash2, Wand2, Bot, User, TerminalSquare, Copy, Check, MessageSquareText, Sparkles, X, Eye, EyeOff, PanelRight, Search, Plus, RefreshCw, Briefcase, FileText, Pencil, FileDiff, ScrollText, GitCompare, UnfoldVertical, FoldVertical, ClipboardList, Layers, Link2, SlidersHorizontal, RotateCcw } from 'lucide-react'
+import { ListTree, ChevronRight, ChevronDown, Download, Trash2, Wand2, Bot, User, TerminalSquare, Copy, Check, MessageSquareText, Sparkles, X, Eye, EyeOff, PanelRight, Search, Plus, RefreshCw, Briefcase, FileText, Pencil, FileDiff, ScrollText, GitCompare, UnfoldVertical, FoldVertical, ClipboardList, Layers, Link2, SlidersHorizontal, RotateCcw, CalendarDays } from 'lucide-react'
 import {
     getAParseJobs, createAParseJob, deleteAParseJob, restoreAParseJob, updateAParseJob,
     getAParseTurns, getAParseTurn, createAParseTurn, deleteAParseTurn, restoreAParseTurn, updateAParseTurn,
+    getAParseWeeks, createAParseWeek, updateAParseWeek, deleteAParseWeek,
 } from '@/app/api_handlers/api/aparse.api'
 import ContextMenu, { ContextMenuItem } from '@/app/components/jobs/ContextMenu'
 
@@ -2549,6 +2550,88 @@ const JOB_STATUSES = [
     { value: 'completed', label: 'Completed', cls: 'bg-emerald-100 text-emerald-700 border-emerald-300' },
 ]
 
+const LANGUAGE_OPTIONS = ['Python', 'JavaScript', 'TypeScript', 'Java', 'C++', 'C#', 'Go', 'Rust', 'Other']
+
+/** Week assign + CRUD dropdown (used in the job edit row; admin only). */
+function WeekManagerDropdown({ weeks, value, onAssign, onAdd, onRename, onRemove }: {
+    weeks: { id: string; name: string }[]
+    value: string | null
+    onAssign: (weekId: string | null) => void
+    onAdd: (name: string) => Promise<string | undefined>
+    onRename: (id: string, name: string) => void
+    onRemove: (id: string) => void
+}) {
+    const [open, setOpen] = useState(false)
+    const [newName, setNewName] = useState('')
+    const [editId, setEditId] = useState<string | null>(null)
+    const [editName, setEditName] = useState('')
+    const ref = useRef<HTMLDivElement>(null)
+    useEffect(() => {
+        if (!open) return
+        const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+        document.addEventListener('mousedown', h)
+        return () => document.removeEventListener('mousedown', h)
+    }, [open])
+    const current = weeks.find(w => w.id === value)
+    const submitAdd = async () => {
+        const id = await onAdd(newName)
+        setNewName('')
+        if (id) onAssign(id)
+    }
+    return (
+        <div className="relative shrink-0" ref={ref}>
+            <button type="button" onClick={() => setOpen(o => !o)}
+                title="Assign week / manage weeks"
+                className={`flex items-center gap-1 text-[10px] border rounded px-1.5 py-0.5 ${open ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
+                <CalendarDays size={11} /> {current ? current.name : 'No week'}
+                <ChevronDown size={10} />
+            </button>
+            {open && (
+                <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-gray-200 rounded shadow-lg py-1 min-w-52 max-h-72 overflow-y-auto">
+                    <button type="button" onClick={() => { onAssign(null); setOpen(false) }}
+                        className={`flex items-center w-full text-left px-2.5 py-1 text-[11px] hover:bg-gray-50 ${!value ? 'text-indigo-700 font-semibold' : 'text-gray-600'}`}>
+                        No week
+                    </button>
+                    <div className="border-t border-gray-100 my-1" />
+                    {weeks.map(w => (
+                        <div key={w.id} className="flex items-center gap-1 px-1.5 py-0.5 hover:bg-gray-50 group">
+                            {editId === w.id ? (
+                                <>
+                                    <input autoFocus value={editName} onChange={e => setEditName(e.target.value)}
+                                        onKeyDown={e => { if (e.key === 'Enter') { onRename(w.id, editName); setEditId(null) } if (e.key === 'Escape') setEditId(null) }}
+                                        className="flex-1 min-w-0 text-[11px] border border-gray-300 rounded px-1 py-0.5 focus:outline-none focus:border-indigo-400" />
+                                    <button type="button" onClick={() => { onRename(w.id, editName); setEditId(null) }} className="p-0.5 text-teal-600 hover:bg-teal-50 rounded"><Check size={12} /></button>
+                                    <button type="button" onClick={() => setEditId(null)} className="p-0.5 text-gray-400 hover:bg-gray-100 rounded"><X size={12} /></button>
+                                </>
+                            ) : (
+                                <>
+                                    <button type="button" onClick={() => { onAssign(w.id); setOpen(false) }}
+                                        className={`flex-1 text-left text-[11px] truncate ${value === w.id ? 'text-indigo-700 font-semibold' : 'text-gray-700'}`}>
+                                        {w.name}
+                                    </button>
+                                    <button type="button" onClick={() => { setEditId(w.id); setEditName(w.name) }} title="Rename week"
+                                        className="p-0.5 text-gray-300 hover:text-gray-700 hover:bg-gray-100 rounded opacity-0 group-hover:opacity-100"><Pencil size={11} /></button>
+                                    <button type="button" onClick={() => onRemove(w.id)} title="Delete week"
+                                        className="p-0.5 text-red-300 hover:text-red-600 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100"><Trash2 size={11} /></button>
+                                </>
+                            )}
+                        </div>
+                    ))}
+                    <div className="border-t border-gray-100 my-1" />
+                    <div className="flex items-center gap-1 px-1.5 py-0.5">
+                        <input value={newName} onChange={e => setNewName(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') submitAdd() }}
+                            placeholder="New week…"
+                            className="flex-1 min-w-0 text-[11px] border border-gray-300 rounded px-1.5 py-0.5 focus:outline-none focus:border-indigo-400" />
+                        <button type="button" onClick={submitAdd} disabled={!newName.trim()}
+                            className="p-0.5 text-teal-600 hover:bg-teal-50 rounded disabled:opacity-30"><Plus size={13} /></button>
+                    </div>
+                </div>
+            )}
+        </div>
+    )
+}
+
 /** Winning model for a turn from its overall A↔B score: A (<0), B (>0), '=' (0), or null. */
 function overallWinner(overall: unknown): 'A' | 'B' | '=' | null {
     return typeof overall === 'number' ? (overall < 0 ? 'A' : overall > 0 ? 'B' : '=') : null
@@ -2562,7 +2645,9 @@ function WinnerChip({ letter, title }: { letter: 'A' | 'B' | '='; title: string 
     return <span title={title} className={`text-[9px] font-semibold px-1.5 py-0.5 rounded border shrink-0 ${cls}`}>{letter === '=' ? 'tie' : `${letter} wins`}</span>
 }
 
-interface AParseJob { id: string; name: string; status?: string; turn_count: number; createdAt?: string; model_link?: string | null; last_turn_status?: string | null; last_turn_tokens_left?: string | null; last_turn_tokens_a?: string | null; last_turn_tokens_b?: string | null; last_review_winner?: 'A' | 'B' | '=' | null; last_turn_winner?: 'A' | 'B' | '=' | null; steps_a_total?: number; steps_b_total?: number; is_deleted?: boolean; report?: { prompt1Category?: string; tasksDescription?: string; liveId?: string; primaryLanguage?: string; secondaryLanguage?: string } }
+interface AParseJob { id: string; name: string; status?: string; turn_count: number; createdAt?: string; model_link?: string | null; last_turn_status?: string | null; last_turn_tokens_left?: string | null; last_turn_tokens_a?: string | null; last_turn_tokens_b?: string | null; last_review_winner?: 'A' | 'B' | '=' | null; last_turn_winner?: 'A' | 'B' | '=' | null; steps_a_total?: number; steps_b_total?: number; is_deleted?: boolean; week_id?: string | null; report?: { prompt1Category?: string; tasksDescription?: string; liveId?: string; primaryLanguage?: string; secondaryLanguage?: string } }
+
+interface AParseWeek { id: string; name: string; position?: number }
 
 /* ------------------------------------------------------------------ *
  * Per-job detailed report modal.
@@ -2667,13 +2752,19 @@ function JobReportModal({ job, admin, onClose, onSaved }: { job: AParseJob; admi
                         </label>
                         <label className="flex flex-col gap-1">
                             <span className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">Primary language</span>
-                            <input value={primaryLanguage} onChange={e => setPrimaryLanguage(e.target.value)} placeholder="e.g. TypeScript"
-                                className="text-[11px] border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-indigo-400" />
+                            <select value={primaryLanguage} onChange={e => setPrimaryLanguage(e.target.value)}
+                                className="text-[11px] border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:border-indigo-400">
+                                <option value="">— select —</option>
+                                {LANGUAGE_OPTIONS.map(l => <option key={l} value={l}>{l}</option>)}
+                            </select>
                         </label>
                         <label className="flex flex-col gap-1">
                             <span className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">Secondary language</span>
-                            <input value={secondaryLanguage} onChange={e => setSecondaryLanguage(e.target.value)} placeholder="e.g. Python"
-                                className="text-[11px] border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-indigo-400" />
+                            <select value={secondaryLanguage} onChange={e => setSecondaryLanguage(e.target.value)}
+                                className="text-[11px] border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:border-indigo-400">
+                                <option value="">— select —</option>
+                                {LANGUAGE_OPTIONS.map(l => <option key={l} value={l}>{l}</option>)}
+                            </select>
                         </label>
                     </div>
 
@@ -2736,8 +2827,12 @@ export default function AParsePage() {
     const [statusFilter, setStatusFilter] = useState<string>('continued')
     // Deleted-view filter — default to only showing non-deleted.
     const [deletedFilter, setDeletedFilter] = useState<DeletedFilter>('false')
+    // Week filter — 'all' | 'none' | <week id>.
+    const [weekFilter, setWeekFilter] = useState<string>('all')
+    const [weeks, setWeeks] = useState<AParseWeek[]>([])
+    const weekName = useCallback((id?: string | null) => (id ? (weeks.find(w => w.id === id)?.name ?? null) : null), [weeks])
     const [admin] = useState<boolean>(() => isAdminUser())
-    const [renaming, setRenaming] = useState<{ id: string; name: string; status: string } | null>(null)
+    const [renaming, setRenaming] = useState<{ id: string; name: string; status: string; week_id: string | null } | null>(null)
     const [linkEditing, setLinkEditing] = useState<{ id: string; value: string } | null>(null)
     const [copiedLink, setCopiedLink] = useState<string | null>(null)
     const [openTurn, setOpenTurn] = useState<{ turn: any; jobName: string; jobId: string } | null>(null)
@@ -2746,13 +2841,20 @@ export default function AParsePage() {
     const load = useCallback(async () => {
         setLoading(true)
         try {
-            const res: any = await getAParseJobs(deletedFilter)
+            const res: any = await getAParseJobs(deletedFilter, weekFilter)
             const list = res?.data ?? res
             setJobs(Array.isArray(list) ? list : [])
         } finally { setLoading(false) }
-    }, [deletedFilter])
+    }, [deletedFilter, weekFilter])
 
     useEffect(() => { load() }, [load])
+
+    const loadWeeks = useCallback(async () => {
+        const res: any = await getAParseWeeks()
+        const list = res?.data ?? res
+        setWeeks(Array.isArray(list) ? list : [])
+    }, [])
+    useEffect(() => { loadWeeks() }, [loadWeeks])
 
     const loadTurns = useCallback(async (jobId: string) => {
         setLoadingTurns(s => new Set(s).add(jobId))
@@ -2802,8 +2904,34 @@ export default function AParsePage() {
 
     const renameJob = async () => {
         if (!renaming || !renaming.name.trim()) { setRenaming(null); return }
-        await updateAParseJob(renaming.id, { name: renaming.name.trim(), status: renaming.status })
+        const payload: any = { name: renaming.name.trim(), status: renaming.status }
+        if (admin) payload.week_id = renaming.week_id // week assignment is admin-only
+        await updateAParseJob(renaming.id, payload)
         setRenaming(null)
+        load()
+    }
+
+    // ── Week CRUD (admin only) ──────────────────────────────────────────────
+    const addWeek = async (name: string) => {
+        const n = name.trim()
+        if (!n) return
+        const res: any = await createAParseWeek(n)
+        const created = res?.data ?? res
+        await loadWeeks()
+        return created?.id as string | undefined
+    }
+    const renameWeek = async (id: string, name: string) => {
+        if (!name.trim()) return
+        await updateAParseWeek(id, name.trim())
+        loadWeeks()
+    }
+    const removeWeek = async (id: string) => {
+        if (!confirm('Delete this week? Jobs assigned to it will become unassigned.')) return
+        await deleteAParseWeek(id)
+        // If the deleted week was the active filter or the one being edited, reset those.
+        setWeekFilter(f => (f === id ? 'all' : f))
+        setRenaming(r => (r && r.week_id === id ? { ...r, week_id: null } : r))
+        await loadWeeks()
         load()
     }
 
@@ -2888,6 +3016,16 @@ export default function AParsePage() {
                     })()}
                 </div>
                 <div className="flex items-center gap-2">
+                    {/* Week filter (all users) */}
+                    <div className="flex items-center gap-1">
+                        <span className="text-[10px] text-gray-400">week</span>
+                        <select value={weekFilter} onChange={e => setWeekFilter(e.target.value)}
+                            className="text-xs border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:border-indigo-400 text-gray-700 max-w-[140px]">
+                            <option value="all">All weeks</option>
+                            <option value="none">No week</option>
+                            {weeks.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                        </select>
+                    </div>
                     {/* Status filter (defaults to Continued) */}
                     <div className="flex items-center gap-1">
                         <span className="text-[10px] text-gray-400">status</span>
@@ -2983,6 +3121,16 @@ export default function AParsePage() {
                                             className="text-[10px] border border-gray-300 rounded px-1 py-0.5 bg-white focus:outline-none focus:border-teal-400 text-gray-700 shrink-0">
                                             {JOB_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                                         </select>
+                                        {admin && (
+                                            <WeekManagerDropdown
+                                                weeks={weeks}
+                                                value={renaming.week_id}
+                                                onAssign={wid => setRenaming(r => (r ? { ...r, week_id: wid } : r))}
+                                                onAdd={addWeek}
+                                                onRename={renameWeek}
+                                                onRemove={removeWeek}
+                                            />
+                                        )}
                                         <button onClick={renameJob} title="Save" className="p-1 text-teal-600 hover:bg-teal-50 rounded shrink-0"><Check size={13} /></button>
                                         <button onClick={() => setRenaming(null)} title="Cancel" className="p-1 text-gray-400 hover:bg-gray-100 rounded shrink-0"><X size={13} /></button>
                                     </div>
@@ -3027,6 +3175,10 @@ export default function AParsePage() {
                                     <span title="Last turn — overall remaining tokens" className="text-[9px] font-mono px-1 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 shrink-0">∑ {formatTokens(job.last_turn_tokens_left)}</span>
                                 )}
                                 <span className="text-[10px] text-gray-400 shrink-0">{job.turn_count} turn{job.turn_count !== 1 ? 's' : ''}</span>
+                                {/* Week badge */}
+                                {weekName(job.week_id) && (
+                                    <span title="Assigned week" className="text-[9px] font-medium px-1.5 py-0.5 rounded border shrink-0 bg-violet-50 text-violet-700 border-violet-200 flex items-center gap-0.5"><CalendarDays size={9} /> {weekName(job.week_id)}</span>
+                                )}
                                 {/* Job status badge (edit via the pencil) */}
                                 {renaming?.id !== job.id && (() => {
                                     const js = JOB_STATUSES.find(s => s.value === (job.status || 'continued'))
@@ -3039,7 +3191,7 @@ export default function AParsePage() {
                                     className="p-1 text-gray-400 hover:text-indigo-700 hover:bg-indigo-50 rounded shrink-0"><ClipboardList size={12} /></button>
                                 <button onClick={() => addTurn(job)} title="Add turn"
                                     className="p-1 text-gray-400 hover:text-teal-700 hover:bg-teal-50 rounded shrink-0"><Plus size={12} /></button>
-                                <button onClick={() => setRenaming({ id: job.id, name: job.name, status: job.status || 'continued' })} title="Edit name & status"
+                                <button onClick={() => setRenaming({ id: job.id, name: job.name, status: job.status || 'continued', week_id: job.week_id ?? null })} title="Edit name & status"
                                     className="p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded shrink-0"><Pencil size={12} /></button>
                                 {admin && (job.is_deleted ? (
                                     <button onClick={() => restoreJob(job.id)} title="Restore job"

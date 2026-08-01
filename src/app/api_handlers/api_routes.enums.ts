@@ -161,6 +161,10 @@ export enum AiJobsAPIRoutes {
 }
 
 export enum AParseAPIRoutes {
+    GET_WEEKS = 'aparse/weeks',
+    CREATE_WEEK = 'aparse/weeks',
+    UPDATE_WEEK = 'aparse/weeks/:id',
+    DELETE_WEEK = 'aparse/weeks/:id',
     GET_JOBS = 'aparse/jobs',
     CREATE_JOB = 'aparse/jobs',
     UPDATE_JOB = 'aparse/jobs/:id',
