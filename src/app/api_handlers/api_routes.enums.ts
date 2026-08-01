@@ -165,6 +165,7 @@ export enum AParseAPIRoutes {
     CREATE_WEEK = 'aparse/weeks',
     UPDATE_WEEK = 'aparse/weeks/:id',
     DELETE_WEEK = 'aparse/weeks/:id',
+    SET_CURRENT_WEEK = 'aparse/weeks/:id/current',
     GET_JOBS = 'aparse/jobs',
     CREATE_JOB = 'aparse/jobs',
     UPDATE_JOB = 'aparse/jobs/:id',

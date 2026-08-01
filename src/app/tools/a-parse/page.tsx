@@ -1,11 +1,11 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef, useLayoutEffect, Fragment } from 'react'
-import { ListTree, ChevronRight, ChevronDown, Download, Trash2, Wand2, Bot, User, TerminalSquare, Copy, Check, MessageSquareText, Sparkles, X, Eye, EyeOff, PanelRight, Search, Plus, RefreshCw, Briefcase, FileText, Pencil, FileDiff, ScrollText, GitCompare, UnfoldVertical, FoldVertical, ClipboardList, Layers, Link2, SlidersHorizontal, RotateCcw, CalendarDays } from 'lucide-react'
+import { ListTree, ChevronRight, ChevronDown, Download, Trash2, Wand2, Bot, User, TerminalSquare, Copy, Check, MessageSquareText, Sparkles, X, Eye, EyeOff, PanelRight, Search, Plus, RefreshCw, Briefcase, FileText, Pencil, FileDiff, ScrollText, GitCompare, UnfoldVertical, FoldVertical, ClipboardList, Layers, Link2, SlidersHorizontal, RotateCcw, CalendarDays, Star } from 'lucide-react'
 import {
     getAParseJobs, createAParseJob, deleteAParseJob, restoreAParseJob, updateAParseJob,
     getAParseTurns, getAParseTurn, createAParseTurn, deleteAParseTurn, restoreAParseTurn, updateAParseTurn,
-    getAParseWeeks, createAParseWeek, updateAParseWeek, deleteAParseWeek,
+    getAParseWeeks, createAParseWeek, updateAParseWeek, deleteAParseWeek, setAParseWeekCurrent,
 } from '@/app/api_handlers/api/aparse.api'
 import ContextMenu, { ContextMenuItem } from '@/app/components/jobs/ContextMenu'
 
@@ -2553,13 +2553,14 @@ const JOB_STATUSES = [
 const LANGUAGE_OPTIONS = ['Python', 'JavaScript', 'TypeScript', 'Java', 'C++', 'C#', 'Go', 'Rust', 'Other']
 
 /** Week assign + CRUD dropdown (used in the job edit row; admin only). */
-function WeekManagerDropdown({ weeks, value, onAssign, onAdd, onRename, onRemove }: {
-    weeks: { id: string; name: string }[]
+function WeekManagerDropdown({ weeks, value, onAssign, onAdd, onRename, onRemove, onSetCurrent }: {
+    weeks: { id: string; name: string; is_current?: boolean }[]
     value: string | null
     onAssign: (weekId: string | null) => void
     onAdd: (name: string) => Promise<string | undefined>
     onRename: (id: string, name: string) => void
     onRemove: (id: string) => void
+    onSetCurrent: (id: string) => void
 }) {
     const [open, setOpen] = useState(false)
     const [newName, setNewName] = useState('')
@@ -2606,9 +2607,12 @@ function WeekManagerDropdown({ weeks, value, onAssign, onAdd, onRename, onRemove
                             ) : (
                                 <>
                                     <button type="button" onClick={() => { onAssign(w.id); setOpen(false) }}
-                                        className={`flex-1 text-left text-[11px] truncate ${value === w.id ? 'text-indigo-700 font-semibold' : 'text-gray-700'}`}>
+                                        className={`flex-1 text-left text-[11px] truncate flex items-center gap-1 ${value === w.id ? 'text-indigo-700 font-semibold' : 'text-gray-700'}`}>
+                                        {w.is_current && <Star size={10} className="text-amber-500 fill-amber-400 shrink-0" />}
                                         {w.name}
                                     </button>
+                                    <button type="button" onClick={() => onSetCurrent(w.id)} title={w.is_current ? 'Current week' : 'Mark as current week'}
+                                        className={`p-0.5 rounded ${w.is_current ? 'text-amber-500' : 'text-gray-300 hover:text-amber-500 hover:bg-amber-50 opacity-0 group-hover:opacity-100'}`}><Star size={11} className={w.is_current ? 'fill-amber-400' : ''} /></button>
                                     <button type="button" onClick={() => { setEditId(w.id); setEditName(w.name) }} title="Rename week"
                                         className="p-0.5 text-gray-300 hover:text-gray-700 hover:bg-gray-100 rounded opacity-0 group-hover:opacity-100"><Pencil size={11} /></button>
                                     <button type="button" onClick={() => onRemove(w.id)} title="Delete week"
@@ -2647,7 +2651,7 @@ function WinnerChip({ letter, title }: { letter: 'A' | 'B' | '='; title: string 
 
 interface AParseJob { id: string; name: string; status?: string; turn_count: number; createdAt?: string; model_link?: string | null; last_turn_status?: string | null; last_turn_tokens_left?: string | null; last_turn_tokens_a?: string | null; last_turn_tokens_b?: string | null; last_review_winner?: 'A' | 'B' | '=' | null; last_turn_winner?: 'A' | 'B' | '=' | null; steps_a_total?: number; steps_b_total?: number; is_deleted?: boolean; week_id?: string | null; report?: { prompt1Category?: string; tasksDescription?: string; liveId?: string; primaryLanguage?: string; secondaryLanguage?: string } }
 
-interface AParseWeek { id: string; name: string; position?: number }
+interface AParseWeek { id: string; name: string; position?: number; is_current?: boolean }
 
 /* ------------------------------------------------------------------ *
  * Per-job detailed report modal.
@@ -2849,10 +2853,17 @@ export default function AParsePage() {
 
     useEffect(() => { load() }, [load])
 
+    const weekDefaultAppliedRef = useRef(false)
     const loadWeeks = useCallback(async () => {
         const res: any = await getAParseWeeks()
-        const list = res?.data ?? res
-        setWeeks(Array.isArray(list) ? list : [])
+        const list: AParseWeek[] = Array.isArray(res?.data ?? res) ? (res?.data ?? res) : []
+        setWeeks(list)
+        // On first load, default the filter to the current week (if one is marked).
+        if (!weekDefaultAppliedRef.current) {
+            weekDefaultAppliedRef.current = true
+            const cur = list.find(w => w.is_current)
+            if (cur) setWeekFilter(cur.id)
+        }
     }, [])
     useEffect(() => { loadWeeks() }, [loadWeeks])
 
@@ -2923,6 +2934,10 @@ export default function AParsePage() {
     const renameWeek = async (id: string, name: string) => {
         if (!name.trim()) return
         await updateAParseWeek(id, name.trim())
+        loadWeeks()
+    }
+    const markWeekCurrent = async (id: string) => {
+        await setAParseWeekCurrent(id)
         loadWeeks()
     }
     const removeWeek = async (id: string) => {
@@ -3020,10 +3035,10 @@ export default function AParsePage() {
                     <div className="flex items-center gap-1">
                         <span className="text-[10px] text-gray-400">week</span>
                         <select value={weekFilter} onChange={e => setWeekFilter(e.target.value)}
-                            className="text-xs border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:border-indigo-400 text-gray-700 max-w-[140px]">
+                            className="text-xs border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:border-indigo-400 text-gray-700 min-w-[200px]">
                             <option value="all">All weeks</option>
                             <option value="none">No week</option>
-                            {weeks.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                            {weeks.map(w => <option key={w.id} value={w.id}>{w.name}{w.is_current ? ' ★ (current)' : ''}</option>)}
                         </select>
                     </div>
                     {/* Status filter (defaults to Continued) */}
@@ -3129,6 +3144,7 @@ export default function AParsePage() {
                                                 onAdd={addWeek}
                                                 onRename={renameWeek}
                                                 onRemove={removeWeek}
+                                                onSetCurrent={markWeekCurrent}
                                             />
                                         )}
                                         <button onClick={renameJob} title="Save" className="p-1 text-teal-600 hover:bg-teal-50 rounded shrink-0"><Check size={13} /></button>

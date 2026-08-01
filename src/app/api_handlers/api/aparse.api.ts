@@ -24,6 +24,11 @@ export async function deleteAParseWeek(id: string) {
     return await apiClient(AParseAPIRoutes.DELETE_WEEK, ApiMethod.DELETE, undefined, params, undefined, true, true)
 }
 
+export async function setAParseWeekCurrent(id: string) {
+    const params: IApiParams = { path: { id } }
+    return await apiClient(AParseAPIRoutes.SET_CURRENT_WEEK, ApiMethod.PUT, undefined, params, undefined, true, true)
+}
+
 // ── Jobs ────────────────────────────────────────────────────────────────────
 export async function getAParseJobs(deleted: 'true' | 'false' | 'all' = 'false', week: string = 'all') {
     const params: IApiParams = { query: { deleted, week } }
