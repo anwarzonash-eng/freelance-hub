@@ -30,8 +30,12 @@ export async function setAParseWeekCurrent(id: string) {
 }
 
 // ── Jobs ────────────────────────────────────────────────────────────────────
-export async function getAParseJobs(deleted: 'true' | 'false' | 'all' = 'false', week: string = 'all') {
-    const params: IApiParams = { query: { deleted, week } }
+export async function getAParseAssignees() {
+    return await apiClient(AParseAPIRoutes.GET_ASSIGNEES, ApiMethod.GET, undefined, undefined, undefined, true, false)
+}
+
+export async function getAParseJobs(deleted: 'true' | 'false' | 'all' = 'false', week: string = 'all', assignee: string = 'all') {
+    const params: IApiParams = { query: { deleted, week, assignee } }
     return await apiClient(AParseAPIRoutes.GET_JOBS, ApiMethod.GET, undefined, params, undefined, true, false)
 }
 
@@ -39,7 +43,7 @@ export async function createAParseJob(name: string, model_link?: string, status?
     return await apiClient(AParseAPIRoutes.CREATE_JOB, ApiMethod.POST, { name, model_link, status }, undefined, undefined, true, true)
 }
 
-export async function updateAParseJob(id: string, payload: { name?: string; model_link?: string; status?: string; report?: any; week_id?: string | null }) {
+export async function updateAParseJob(id: string, payload: { name?: string; model_link?: string; status?: string; report?: any; week_id?: string | null; assigned_to?: string | null }) {
     const params: IApiParams = { path: { id } }
     return await apiClient(AParseAPIRoutes.UPDATE_JOB, ApiMethod.PUT, payload, params, undefined, true, true)
 }

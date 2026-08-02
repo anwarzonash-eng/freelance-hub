@@ -6,7 +6,9 @@ import {
     getAParseJobs, createAParseJob, deleteAParseJob, restoreAParseJob, updateAParseJob,
     getAParseTurns, getAParseTurn, createAParseTurn, deleteAParseTurn, restoreAParseTurn, updateAParseTurn,
     getAParseWeeks, createAParseWeek, updateAParseWeek, deleteAParseWeek, setAParseWeekCurrent,
+    getAParseAssignees,
 } from '@/app/api_handlers/api/aparse.api'
+import { listAuthUsers } from '@/app/api_handlers/api/auth.api'
 import ContextMenu, { ContextMenuItem } from '@/app/components/jobs/ContextMenu'
 
 /* ------------------------------------------------------------------ *
@@ -2649,7 +2651,7 @@ function WinnerChip({ letter, title }: { letter: 'A' | 'B' | '='; title: string 
     return <span title={title} className={`text-[9px] font-semibold px-1.5 py-0.5 rounded border shrink-0 ${cls}`}>{letter === '=' ? 'tie' : `${letter} wins`}</span>
 }
 
-interface AParseJob { id: string; name: string; status?: string; turn_count: number; createdAt?: string; model_link?: string | null; last_turn_status?: string | null; last_turn_tokens_left?: string | null; last_turn_tokens_a?: string | null; last_turn_tokens_b?: string | null; last_review_winner?: 'A' | 'B' | '=' | null; last_turn_winner?: 'A' | 'B' | '=' | null; steps_a_total?: number; steps_b_total?: number; is_deleted?: boolean; week_id?: string | null; report?: { prompt1Category?: string; tasksDescription?: string; liveId?: string; primaryLanguage?: string; secondaryLanguage?: string } }
+interface AParseJob { id: string; name: string; status?: string; turn_count: number; createdAt?: string; model_link?: string | null; last_turn_status?: string | null; last_turn_tokens_left?: string | null; last_turn_tokens_a?: string | null; last_turn_tokens_b?: string | null; last_review_winner?: 'A' | 'B' | '=' | null; last_turn_winner?: 'A' | 'B' | '=' | null; steps_a_total?: number; steps_b_total?: number; is_deleted?: boolean; week_id?: string | null; assigned_to?: string | null; report?: { prompt1Category?: string; tasksDescription?: string; liveId?: string; primaryLanguage?: string; secondaryLanguage?: string } }
 
 interface AParseWeek { id: string; name: string; position?: number; is_current?: boolean }
 
@@ -2835,8 +2837,12 @@ export default function AParsePage() {
     const [weekFilter, setWeekFilter] = useState<string>('all')
     const [weeks, setWeeks] = useState<AParseWeek[]>([])
     const weekName = useCallback((id?: string | null) => (id ? (weeks.find(w => w.id === id)?.name ?? null) : null), [weeks])
+    // Assignee filter — 'all' | 'none' | <userid>.
+    const [assigneeFilter, setAssigneeFilter] = useState<string>('all')
+    const [assignees, setAssignees] = useState<string[]>([]) // userids that jobs are assigned to
+    const [allUsers, setAllUsers] = useState<string[]>([])   // all userids (admin only, for the assign dropdown)
     const [admin] = useState<boolean>(() => isAdminUser())
-    const [renaming, setRenaming] = useState<{ id: string; name: string; status: string; week_id: string | null } | null>(null)
+    const [renaming, setRenaming] = useState<{ id: string; name: string; status: string; week_id: string | null; assigned_to: string | null } | null>(null)
     const [linkEditing, setLinkEditing] = useState<{ id: string; value: string } | null>(null)
     const [copiedLink, setCopiedLink] = useState<string | null>(null)
     const [openTurn, setOpenTurn] = useState<{ turn: any; jobName: string; jobId: string } | null>(null)
@@ -2845,13 +2851,30 @@ export default function AParsePage() {
     const load = useCallback(async () => {
         setLoading(true)
         try {
-            const res: any = await getAParseJobs(deletedFilter, weekFilter)
+            const res: any = await getAParseJobs(deletedFilter, weekFilter, assigneeFilter)
             const list = res?.data ?? res
             setJobs(Array.isArray(list) ? list : [])
         } finally { setLoading(false) }
-    }, [deletedFilter, weekFilter])
+    }, [deletedFilter, weekFilter, assigneeFilter])
 
     useEffect(() => { load() }, [load])
+
+    // Assignee filter options — only users that jobs are actually assigned to.
+    const loadAssignees = useCallback(async () => {
+        const res: any = await getAParseAssignees()
+        const list = res?.data ?? res
+        setAssignees(Array.isArray(list) ? list : [])
+    }, [])
+    useEffect(() => { loadAssignees() }, [loadAssignees])
+
+    // Full user list for the admin assign dropdown.
+    useEffect(() => {
+        if (!admin) return
+        listAuthUsers().then((res: any) => {
+            const list = res?.data ?? res
+            if (Array.isArray(list)) setAllUsers(list.map((u: any) => u.userid).filter(Boolean).sort())
+        }).catch(() => { })
+    }, [admin])
 
     const weekDefaultAppliedRef = useRef(false)
     const loadWeeks = useCallback(async () => {
@@ -2916,10 +2939,11 @@ export default function AParsePage() {
     const renameJob = async () => {
         if (!renaming || !renaming.name.trim()) { setRenaming(null); return }
         const payload: any = { name: renaming.name.trim(), status: renaming.status }
-        if (admin) payload.week_id = renaming.week_id // week assignment is admin-only
+        if (admin) { payload.week_id = renaming.week_id; payload.assigned_to = renaming.assigned_to } // week/user assignment is admin-only
         await updateAParseJob(renaming.id, payload)
         setRenaming(null)
         load()
+        if (admin) loadAssignees() // assignee options may have changed
     }
 
     // ── Week CRUD (admin only) ──────────────────────────────────────────────
@@ -3041,6 +3065,16 @@ export default function AParsePage() {
                             {weeks.map(w => <option key={w.id} value={w.id}>{w.name}{w.is_current ? ' ★ (current)' : ''}</option>)}
                         </select>
                     </div>
+                    {/* Assignee filter (all users) — only users that have jobs assigned */}
+                    <div className="flex items-center gap-1">
+                        <span className="text-[10px] text-gray-400">user</span>
+                        <select value={assigneeFilter} onChange={e => setAssigneeFilter(e.target.value)}
+                            className="text-xs border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:border-indigo-400 text-gray-700 min-w-[150px]">
+                            <option value="all">All users</option>
+                            <option value="none">Unassigned</option>
+                            {assignees.map(u => <option key={u} value={u}>{u}</option>)}
+                        </select>
+                    </div>
                     {/* Status filter (defaults to Continued) */}
                     <div className="flex items-center gap-1">
                         <span className="text-[10px] text-gray-400">status</span>
@@ -3147,6 +3181,16 @@ export default function AParsePage() {
                                                 onSetCurrent={markWeekCurrent}
                                             />
                                         )}
+                                        {admin && (
+                                            <select value={renaming.assigned_to || ''} onChange={e => setRenaming(r => (r ? { ...r, assigned_to: e.target.value || null } : r))}
+                                                title="Assign to user"
+                                                className="text-[10px] border border-gray-300 rounded px-1 py-0.5 bg-white focus:outline-none focus:border-teal-400 text-gray-700 shrink-0 max-w-[130px]">
+                                                <option value="">— assignee —</option>
+                                                {/* include the current assignee even if it's not in the user list anymore */}
+                                                {renaming.assigned_to && !allUsers.includes(renaming.assigned_to) && <option value={renaming.assigned_to}>{renaming.assigned_to}</option>}
+                                                {allUsers.map(u => <option key={u} value={u}>{u}</option>)}
+                                            </select>
+                                        )}
                                         <button onClick={renameJob} title="Save" className="p-1 text-teal-600 hover:bg-teal-50 rounded shrink-0"><Check size={13} /></button>
                                         <button onClick={() => setRenaming(null)} title="Cancel" className="p-1 text-gray-400 hover:bg-gray-100 rounded shrink-0"><X size={13} /></button>
                                     </div>
@@ -3195,6 +3239,10 @@ export default function AParsePage() {
                                 {weekName(job.week_id) && (
                                     <span title="Assigned week" className="text-[9px] font-medium px-1.5 py-0.5 rounded border shrink-0 bg-violet-50 text-violet-700 border-violet-200 flex items-center gap-0.5"><CalendarDays size={9} /> {weekName(job.week_id)}</span>
                                 )}
+                                {/* Assignee badge */}
+                                {job.assigned_to && (
+                                    <span title="Assigned user" className="text-[9px] font-medium px-1.5 py-0.5 rounded border shrink-0 bg-sky-50 text-sky-700 border-sky-200 flex items-center gap-0.5"><User size={9} /> {job.assigned_to}</span>
+                                )}
                                 {/* Job status badge (edit via the pencil) */}
                                 {renaming?.id !== job.id && (() => {
                                     const js = JOB_STATUSES.find(s => s.value === (job.status || 'continued'))
@@ -3207,7 +3255,7 @@ export default function AParsePage() {
                                     className="p-1 text-gray-400 hover:text-indigo-700 hover:bg-indigo-50 rounded shrink-0"><ClipboardList size={12} /></button>
                                 <button onClick={() => addTurn(job)} title="Add turn"
                                     className="p-1 text-gray-400 hover:text-teal-700 hover:bg-teal-50 rounded shrink-0"><Plus size={12} /></button>
-                                <button onClick={() => setRenaming({ id: job.id, name: job.name, status: job.status || 'continued', week_id: job.week_id ?? null })} title="Edit name & status"
+                                <button onClick={() => setRenaming({ id: job.id, name: job.name, status: job.status || 'continued', week_id: job.week_id ?? null, assigned_to: job.assigned_to ?? null })} title="Edit name & status"
                                     className="p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded shrink-0"><Pencil size={12} /></button>
                                 {admin && (job.is_deleted ? (
                                     <button onClick={() => restoreJob(job.id)} title="Restore job"
