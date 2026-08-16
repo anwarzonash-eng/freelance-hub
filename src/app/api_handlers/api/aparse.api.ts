@@ -39,11 +39,11 @@ export async function getAParseJobs(deleted: 'true' | 'false' | 'all' = 'false',
     return await apiClient(AParseAPIRoutes.GET_JOBS, ApiMethod.GET, undefined, params, undefined, true, false)
 }
 
-export async function createAParseJob(name: string, model_link?: string, status?: string) {
-    return await apiClient(AParseAPIRoutes.CREATE_JOB, ApiMethod.POST, { name, model_link, status }, undefined, undefined, true, true)
+export async function createAParseJob(name: string, model_link?: string, status?: string, chatgpt_link?: string, gemini_link?: string) {
+    return await apiClient(AParseAPIRoutes.CREATE_JOB, ApiMethod.POST, { name, model_link, chatgpt_link, gemini_link, status }, undefined, undefined, true, true)
 }
 
-export async function updateAParseJob(id: string, payload: { name?: string; model_link?: string; status?: string; report?: any; week_id?: string | null; assigned_to?: string | null }) {
+export async function updateAParseJob(id: string, payload: { name?: string; model_link?: string; chatgpt_link?: string; gemini_link?: string; status?: string; report?: any; week_id?: string | null; assigned_to?: string | null }) {
     const params: IApiParams = { path: { id } }
     return await apiClient(AParseAPIRoutes.UPDATE_JOB, ApiMethod.PUT, payload, params, undefined, true, true)
 }

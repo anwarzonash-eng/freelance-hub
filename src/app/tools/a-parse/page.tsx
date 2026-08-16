@@ -2651,7 +2651,7 @@ function WinnerChip({ letter, title }: { letter: 'A' | 'B' | '='; title: string 
     return <span title={title} className={`text-[9px] font-semibold px-1.5 py-0.5 rounded border shrink-0 ${cls}`}>{letter === '=' ? 'tie' : `${letter} wins`}</span>
 }
 
-interface AParseJob { id: string; name: string; status?: string; turn_count: number; createdAt?: string; model_link?: string | null; last_turn_status?: string | null; last_turn_tokens_left?: string | null; last_turn_tokens_a?: string | null; last_turn_tokens_b?: string | null; last_review_winner?: 'A' | 'B' | '=' | null; last_turn_winner?: 'A' | 'B' | '=' | null; steps_a_total?: number; steps_b_total?: number; is_deleted?: boolean; week_id?: string | null; assigned_to?: string | null; report?: { prompt1Category?: string; tasksDescription?: string; liveId?: string; primaryLanguage?: string; secondaryLanguage?: string } }
+interface AParseJob { id: string; name: string; status?: string; turn_count: number; createdAt?: string; model_link?: string | null; chatgpt_link?: string | null; gemini_link?: string | null; last_turn_status?: string | null; last_turn_tokens_left?: string | null; last_turn_tokens_a?: string | null; last_turn_tokens_b?: string | null; last_review_winner?: 'A' | 'B' | '=' | null; last_turn_winner?: 'A' | 'B' | '=' | null; steps_a_total?: number; steps_b_total?: number; is_deleted?: boolean; week_id?: string | null; assigned_to?: string | null; report?: { prompt1Category?: string; tasksDescription?: string; liveId?: string; primaryLanguage?: string; secondaryLanguage?: string } }
 
 interface AParseWeek { id: string; name: string; position?: number; is_current?: boolean }
 
@@ -2828,6 +2828,8 @@ export default function AParsePage() {
     const [creating, setCreating] = useState(false)
     const [newName, setNewName] = useState('')
     const [newLink, setNewLink] = useState('')
+    const [newChatgpt, setNewChatgpt] = useState('')
+    const [newGemini, setNewGemini] = useState('')
     const [newStatus, setNewStatus] = useState('continued')
     // Job status filter — default to only showing continued jobs.
     const [statusFilter, setStatusFilter] = useState<string>('continued')
@@ -2843,8 +2845,8 @@ export default function AParsePage() {
     const [allUsers, setAllUsers] = useState<string[]>([])   // all userids (admin only, for the assign dropdown)
     const [admin] = useState<boolean>(() => isAdminUser())
     const [renaming, setRenaming] = useState<{ id: string; name: string; status: string; week_id: string | null; assigned_to: string | null } | null>(null)
-    const [linkEditing, setLinkEditing] = useState<{ id: string; value: string } | null>(null)
-    const [copiedLink, setCopiedLink] = useState<string | null>(null)
+    const [linkEditing, setLinkEditing] = useState<{ id: string; claude: string; chatgpt: string; gemini: string } | null>(null)
+    const [copiedLink, setCopiedLink] = useState<string | null>(null) // `${jobId}:${which}`
     const [openTurn, setOpenTurn] = useState<{ turn: any; jobName: string; jobId: string } | null>(null)
     const [reportJob, setReportJob] = useState<AParseJob | null>(null)
 
@@ -2922,8 +2924,8 @@ export default function AParsePage() {
     const createJob = async () => {
         const name = newName.trim()
         if (!name) return
-        await createAParseJob(name, newLink.trim() || undefined, newStatus)
-        setNewName(''); setNewLink(''); setNewStatus('continued'); setCreating(false)
+        await createAParseJob(name, newLink.trim() || undefined, newStatus, newChatgpt.trim() || undefined, newGemini.trim() || undefined)
+        setNewName(''); setNewLink(''); setNewChatgpt(''); setNewGemini(''); setNewStatus('continued'); setCreating(false)
         load()
     }
 
@@ -2976,16 +2978,21 @@ export default function AParsePage() {
 
     const saveJobLink = async () => {
         if (!linkEditing) return
-        await updateAParseJob(linkEditing.id, { model_link: linkEditing.value.trim() })
+        await updateAParseJob(linkEditing.id, {
+            model_link: linkEditing.claude.trim(),
+            chatgpt_link: linkEditing.chatgpt.trim(),
+            gemini_link: linkEditing.gemini.trim(),
+        })
         setLinkEditing(null)
         load()
     }
 
-    const copyJobLink = (job: AParseJob) => {
-        if (!job.model_link) return
-        navigator.clipboard.writeText(job.model_link)
-        setCopiedLink(job.id)
-        setTimeout(() => setCopiedLink(c => (c === job.id ? null : c)), 1500)
+    const copyLink = (jobId: string, which: string, url?: string | null) => {
+        if (!url) return
+        navigator.clipboard.writeText(url)
+        const key = `${jobId}:${which}`
+        setCopiedLink(key)
+        setTimeout(() => setCopiedLink(c => (c === key ? null : c)), 1500)
     }
 
     const setTurnStatus = async (turnId: string, jobId: string, status: string) => {
@@ -3107,7 +3114,7 @@ export default function AParsePage() {
 
             {/* New job inline row */}
             {creating && (
-                <div className="flex items-center gap-2 mb-2 border border-teal-200 bg-teal-50 rounded p-2 shrink-0">
+                <div className="flex items-center gap-2 flex-wrap mb-2 border border-teal-200 bg-teal-50 rounded p-2 shrink-0">
                     <Briefcase size={13} className="text-teal-600 shrink-0" />
                     <input autoFocus value={newName}
                         onChange={e => setNewName(e.target.value)}
@@ -3118,8 +3125,18 @@ export default function AParsePage() {
                     <input value={newLink}
                         onChange={e => setNewLink(e.target.value)}
                         onKeyDown={e => { if (e.key === 'Enter') createJob(); if (e.key === 'Escape') setCreating(false) }}
-                        placeholder="Model link (optional)…"
-                        className="flex-1 text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-indigo-400" />
+                        placeholder="Claude link (optional)…"
+                        className="flex-1 min-w-[160px] text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-indigo-400" />
+                    <input value={newChatgpt}
+                        onChange={e => setNewChatgpt(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') createJob(); if (e.key === 'Escape') setCreating(false) }}
+                        placeholder="ChatGPT link (optional)…"
+                        className="flex-1 min-w-[160px] text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-indigo-400" />
+                    <input value={newGemini}
+                        onChange={e => setNewGemini(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') createJob(); if (e.key === 'Escape') setCreating(false) }}
+                        placeholder="Gemini link (optional)…"
+                        className="flex-1 min-w-[160px] text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-indigo-400" />
                     <select value={newStatus} onChange={e => setNewStatus(e.target.value)}
                         title="Job status"
                         className="text-xs border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:border-indigo-400 text-gray-700">
@@ -3199,15 +3216,21 @@ export default function AParsePage() {
                                         {job.name}
                                     </button>
                                 )}
-                                {/* Model link — copy-only + edit */}
-                                <button onClick={() => copyJobLink(job)} disabled={!job.model_link}
-                                    title={job.model_link ? 'Copy model link' : 'No model link set'}
-                                    className={`p-1 rounded shrink-0 disabled:opacity-30 ${copiedLink === job.id ? 'text-green-600 bg-green-50' : job.model_link ? 'text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50' : 'text-gray-300'}`}>
-                                    {copiedLink === job.id ? <Check size={12} /> : <Copy size={12} />}
-                                </button>
-                                <button onClick={() => setLinkEditing({ id: job.id, value: job.model_link || '' })}
-                                    title={job.model_link ? 'Edit model link' : 'Set model link'}
-                                    className={`p-1 rounded shrink-0 ${job.model_link ? 'text-indigo-400 hover:text-indigo-700 hover:bg-indigo-50' : 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50'}`}>
+                                {/* Chat links — copy each (Claude / ChatGPT / Gemini) + edit all */}
+                                {([
+                                    { key: 'claude', label: 'Claude', url: job.model_link },
+                                    { key: 'chatgpt', label: 'ChatGPT', url: job.chatgpt_link },
+                                    { key: 'gemini', label: 'Gemini', url: job.gemini_link },
+                                ] as const).map(l => (
+                                    <button key={l.key} onClick={() => copyLink(job.id, l.key, l.url)} disabled={!l.url}
+                                        title={l.url ? `Copy ${l.label} link` : `No ${l.label} link set`}
+                                        className={`flex items-center gap-0.5 px-1 py-0.5 rounded shrink-0 text-[9px] font-semibold disabled:opacity-30 ${copiedLink === `${job.id}:${l.key}` ? 'text-green-600 bg-green-50' : l.url ? 'text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50' : 'text-gray-300'}`}>
+                                        {copiedLink === `${job.id}:${l.key}` ? <Check size={11} /> : <Copy size={11} />}{l.label}
+                                    </button>
+                                ))}
+                                <button onClick={() => setLinkEditing({ id: job.id, claude: job.model_link || '', chatgpt: job.chatgpt_link || '', gemini: job.gemini_link || '' })}
+                                    title="Edit chat links"
+                                    className={`p-1 rounded shrink-0 ${(job.model_link || job.chatgpt_link || job.gemini_link) ? 'text-indigo-400 hover:text-indigo-700 hover:bg-indigo-50' : 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50'}`}>
                                     <Link2 size={12} />
                                 </button>
                                 {(() => {
@@ -3266,17 +3289,27 @@ export default function AParsePage() {
                                 ))}
                             </div>
 
-                            {/* Model link editor */}
+                            {/* Chat links editor (Claude / ChatGPT / Gemini) */}
                             {linkEditing?.id === job.id && (
-                                <div className="flex items-center gap-2 px-2 py-1.5 bg-indigo-50 border-t border-indigo-100">
-                                    <Link2 size={12} className="text-indigo-500 shrink-0" />
-                                    <input autoFocus value={linkEditing.value}
-                                        onChange={e => setLinkEditing({ id: job.id, value: e.target.value })}
-                                        onKeyDown={e => { if (e.key === 'Enter') saveJobLink(); if (e.key === 'Escape') setLinkEditing(null) }}
-                                        placeholder="Paste the model / chat link…"
-                                        className="flex-1 text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-indigo-400" />
-                                    <button onClick={saveJobLink} className="text-[11px] bg-indigo-600 text-white rounded px-2.5 py-1 hover:bg-indigo-700">Save</button>
-                                    <button onClick={() => setLinkEditing(null)} className="text-[11px] border border-gray-300 rounded px-2 py-1 hover:bg-white text-gray-600">Cancel</button>
+                                <div className="px-2 py-2 bg-indigo-50 border-t border-indigo-100 space-y-1.5">
+                                    {([
+                                        { key: 'claude' as const, label: 'Claude' },
+                                        { key: 'chatgpt' as const, label: 'ChatGPT' },
+                                        { key: 'gemini' as const, label: 'Gemini' },
+                                    ]).map((l, i) => (
+                                        <div key={l.key} className="flex items-center gap-2">
+                                            <span className="text-[10px] font-semibold text-indigo-600 w-14 shrink-0">{l.label}</span>
+                                            <input autoFocus={i === 0} value={linkEditing[l.key]}
+                                                onChange={e => setLinkEditing(le => (le ? { ...le, [l.key]: e.target.value } : le))}
+                                                onKeyDown={e => { if (e.key === 'Enter') saveJobLink(); if (e.key === 'Escape') setLinkEditing(null) }}
+                                                placeholder={`Paste the ${l.label} chat link…`}
+                                                className="flex-1 text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-indigo-400" />
+                                        </div>
+                                    ))}
+                                    <div className="flex items-center justify-end gap-2 pl-16">
+                                        <button onClick={saveJobLink} className="text-[11px] bg-indigo-600 text-white rounded px-2.5 py-1 hover:bg-indigo-700">Save</button>
+                                        <button onClick={() => setLinkEditing(null)} className="text-[11px] border border-gray-300 rounded px-2 py-1 hover:bg-white text-gray-600">Cancel</button>
+                                    </div>
                                 </div>
                             )}
 

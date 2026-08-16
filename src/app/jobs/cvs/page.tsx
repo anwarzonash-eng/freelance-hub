@@ -59,6 +59,7 @@ function CvStatusBadge({ value }: { value: string }) {
 
 const CVS_TABLE_COLS = [
     { key: 'cv_title',      label: 'CV Title',      default: true  },
+    { key: 'private_title', label: 'Private Title', default: true  },
     { key: 'applicant',     label: 'Applicant',     default: true  },
     { key: 'organisation',  label: 'Organisation',  default: true  },
     { key: 'sponsorship',   label: 'Sponsorship',   default: false },
@@ -75,7 +76,7 @@ const CVS_DEFAULT_COLS = new Set(CVS_TABLE_COLS.filter(c => c.default).map(c => 
 
 const CVS_COL_WIDTHS: Record<string, number> = {
     actions: 160,
-    cv_title: 200, applicant: 120, organisation: 140,
+    cv_title: 200, private_title: 150, applicant: 120, organisation: 140,
     sponsorship: 90, freelance: 110, job_link: 70, email: 180, exp_yrs: 70,
     status: 100, created: 90, job_created: 110, created_by: 90,
 }
@@ -95,8 +96,14 @@ const EMPTY_FILTERS = {
     job_date: '',
     job_date_from: '',
     job_date_to: '',
+    source: '', // '' = all, 'linked' = from job listing (has job), 'manual' = created manually
 }
 type CvFilters = typeof EMPTY_FILTERS
+
+/** A CV is "from the job listing" if it's linked to a job; manual CVs have no job link. */
+function cvIsLinked(cv: any): boolean {
+    return !!(cv.job_id || cv.job_link)
+}
 
 function filterCvs(list: any[], f: CvFilters) {
     let out = list
@@ -107,6 +114,7 @@ function filterCvs(list: any[], f: CvFilters) {
         const isExactNumber = kw !== '' && Number.isInteger(kwNum)
         out = out.filter(cv =>
             cv.cv_title?.toLowerCase().includes(kw) ||
+            cv.private_title?.toLowerCase().includes(kw) ||
             cv.applicant_name?.toLowerCase().includes(kw) ||
             cv.organization_name?.toLowerCase().includes(kw) ||
             (cv.company_id && String(cv.company_id).toLowerCase() === kw) ||
@@ -121,6 +129,9 @@ function filterCvs(list: any[], f: CvFilters) {
     if (f.company_id) {
         out = out.filter(cv => String(cv.company_id ?? '') === f.company_id)
     }
+
+    if (f.source === 'linked') out = out.filter(cvIsLinked)
+    else if (f.source === 'manual') out = out.filter(cv => !cvIsLinked(cv))
 
     if (f.email.trim()) {
         const q = f.email.trim().toLowerCase()
@@ -169,6 +180,7 @@ const CV_FILTER_ITEMS = [
     { key: 'exp_yrs',               label: 'By Exp (yrs)' },
     { key: 'created_by',            label: 'Created By' },
     { key: 'notes_by',              label: 'Notes Added by' },
+    { key: 'source',                label: 'By Source' },
     { key: 'job_date',              label: 'Job Creation Date' },
     { key: 'status',                label: 'By CV Status' },
     { key: 'job_application_status', label: 'By App Status' },
@@ -342,6 +354,7 @@ export default function CvsPage() {
                 job_date: searchParams.get('job_date') || '',
                 job_date_from: searchParams.get('job_date_from') || '',
                 job_date_to: searchParams.get('job_date_to') || '',
+                source: searchParams.get('source') || '',
             }
             hydratedFromUrl.current = true
             setFilters(fromUrl)
@@ -635,6 +648,19 @@ export default function CvsPage() {
                         </select>
                     </div>
 
+                    <div className={`flex flex-col gap-0.5${visibleFilters.has('source') ? '' : ' hidden'}`}>
+                        <label className="text-[10px] text-gray-400 uppercase">By Source</label>
+                        <select
+                            className={`border rounded px-2 py-1 text-xs focus:outline-none min-w-[130px] transition-colors ${filters.source ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-white'}`}
+                            value={filters.source}
+                            onChange={e => setFilters(f => ({ ...f, source: e.target.value }))}
+                        >
+                            <option value="">All</option>
+                            <option value="linked">From Job Listing</option>
+                            <option value="manual">Manual</option>
+                        </select>
+                    </div>
+
                     <div className={`flex flex-col gap-0.5${visibleFilters.has('job_date') ? '' : ' hidden'}`}>
                         <label className="text-[10px] text-gray-400 uppercase">Job Creation Date</label>
                         <div className="flex items-center gap-1">
@@ -830,6 +856,7 @@ export default function CvsPage() {
                                 {rh('actions')}
                             </th>
                             {col('cv_title') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.cv_title }}>CV Title{rh('cv_title')}</th>}
+                            {col('private_title') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.private_title }}>Private Title{rh('private_title')}</th>}
                             {col('applicant') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.applicant }}>Applicant{rh('applicant')}</th>}
                             {col('organisation') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.organisation }}>Organisation{rh('organisation')}</th>}
                             {col('sponsorship') && <th className="px-2 py-1.5 text-left font-medium text-gray-600 border-r border-gray-200 relative overflow-hidden" style={{ width: colW.sponsorship }}>Sponsorship{rh('sponsorship')}</th>}
@@ -903,6 +930,11 @@ export default function CvsPage() {
                                 </td>
                                 {col('cv_title') && <td className="px-2 py-1.5 border-r border-gray-100 max-w-[200px]">
                                     <div className="truncate font-medium text-gray-800">{row.cv_title || '—'}</div>
+                                </td>}
+                                {col('private_title') && <td className="px-2 py-1.5 border-r border-gray-100 max-w-[150px]">
+                                    {row.private_title
+                                        ? <span title={row.private_title} className="inline-block max-w-full truncate align-bottom text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">{row.private_title}</span>
+                                        : <span className="text-gray-300">—</span>}
                                 </td>}
                                 {col('applicant') && <td className="px-2 py-1.5 border-r border-gray-100">
                                     <div className="text-gray-700">{row.applicant_name || '—'}</div>

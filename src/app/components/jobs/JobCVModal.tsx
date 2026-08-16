@@ -1357,6 +1357,7 @@ const CV_STATUS_COLORS: Record<string, string> = {
 
 const INIT_FORM = {
   cv_title: "",
+  private_title: "",
   applicant_name: "",
   headline: "",
   target_job_title: "",
@@ -1685,6 +1686,7 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
     setSavedId(data.id ?? null);
     setForm({
       cv_title: data.cv_title ?? "",
+      private_title: data.private_title ?? "",
       applicant_name: data.applicant_name ?? "",
       headline: data.headline ?? "",
       target_job_title: data.target_job_title ?? "",
@@ -2392,6 +2394,14 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
               )
             </span>
           )}
+          {/* Private title — internal tag to identify this CV (not shown on the CV) */}
+          <input
+            value={form.private_title}
+            onChange={(e) => set("private_title", e.target.value)}
+            placeholder="Private title (tag)…"
+            title="Private title — internal tag to identify this CV"
+            className="shrink-0 w-44 text-[11px] border border-amber-300 bg-amber-50 rounded px-2 py-0.5 focus:outline-none focus:border-amber-500 text-amber-800 placeholder:text-amber-400"
+          />
         </div>
 
         {/* Applicant selector */}
