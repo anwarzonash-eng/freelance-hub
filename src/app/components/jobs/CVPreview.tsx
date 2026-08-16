@@ -426,22 +426,84 @@ export const FONT_SETTING_GROUPS: { group: string; fields: { key: keyof CVFontSe
 export const FONT_SETTING_FIELDS: { key: keyof CVFontSettings; label: string; hint: string }[] =
     FONT_SETTING_GROUPS.flatMap(g => g.fields.map(f => ({ ...f, hint: g.group })))
 
-const NAVY = '#1F3864'
-const SLATE = '#44546A'
-const TEXT_COLOR = '#262626'
+// ─── Themes ────────────────────────────────────────────────────────────────────
+// All themes stay single-column, real-text and standard-font so they remain fully
+// ATS-parseable. Themes only change colors, font family and the section-heading
+// treatment — never the structure, order or content of the CV.
+export type CVThemeId = 'theme1' | 'theme2' | 'theme3'
+export const CV_THEMES: { id: CVThemeId; label: string }[] = [
+    { id: 'theme1', label: 'Theme 1 — Classic Navy' },
+    { id: 'theme2', label: 'Theme 2 — Minimal Serif' },
+    { id: 'theme3', label: 'Theme 3 — Accent Teal' },
+]
+export function normalizeTheme(v: unknown): CVThemeId {
+    return v === 'theme2' || v === 'theme3' ? v : 'theme1'
+}
+interface ThemeStyle {
+    fontFamily: string; heading: string; slate: string; text: string; link: string
+    dividerColor: string; dividerWidth: number; uppercase: boolean; letterSpacing: string
+    // Structural knobs that make each theme read as a distinct layout (all ATS-safe).
+    nameAlign: 'left' | 'center'
+    headingVariant: 'underline' | 'ruleHeavy' | 'bar'
+    headingAlign: 'left' | 'center'
+    headingBg: string       // used by the 'bar' variant
+    headingText: string     // heading text color for the 'bar' variant
+    bullet: 'disc' | 'circle' | 'square'
+    sep: string             // contact-line separator
+    nameRule: boolean       // full-width accent rule under the whole name block
+    rootPadding: string
+}
+const THEME_STYLES: Record<CVThemeId, ThemeStyle> = {
+    // Theme 1 = the original look (default for existing CVs).
+    theme1: {
+        fontFamily: 'Calibri, Arial, system-ui, sans-serif', heading: '#1F3864', slate: '#44546A', text: '#262626', link: '#1F3864',
+        dividerColor: '#1F3864', dividerWidth: 1, uppercase: true, letterSpacing: '0.6px',
+        nameAlign: 'left', headingVariant: 'underline', headingAlign: 'left', headingBg: '#1F3864', headingText: '#fff',
+        bullet: 'disc', sep: ' | ', nameRule: false, rootPadding: '48px 58px',
+    },
+    // Theme 2 = classic centered serif, heavy rules, square bullets.
+    theme2: {
+        fontFamily: 'Georgia, "Times New Roman", Times, serif', heading: '#111111', slate: '#555555', text: '#222222', link: '#111111',
+        dividerColor: '#111111', dividerWidth: 2, uppercase: false, letterSpacing: '0.3px',
+        nameAlign: 'center', headingVariant: 'ruleHeavy', headingAlign: 'center', headingBg: '#111111', headingText: '#fff',
+        bullet: 'square', sep: '  ·  ', nameRule: true, rootPadding: '46px 60px',
+    },
+    // Theme 3 = teal accent with filled section-heading bars, circle bullets.
+    theme3: {
+        fontFamily: 'Arial, Helvetica, system-ui, sans-serif', heading: '#0F766E', slate: '#475569', text: '#1F2937', link: '#0F766E',
+        dividerColor: '#0F766E', dividerWidth: 2, uppercase: true, letterSpacing: '1px',
+        nameAlign: 'left', headingVariant: 'bar', headingAlign: 'left', headingBg: '#0F766E', headingText: '#ffffff',
+        bullet: 'circle', sep: '  •  ', nameRule: true, rootPadding: '44px 54px',
+    },
+}
 
-function Divider({ title, size, onAdd }: { title: string; size: number; onAdd?: () => void }) {
+function Divider({ title, size, onAdd, theme }: { title: string; size: number; onAdd?: () => void; theme: ThemeStyle }) {
     const [hovered, setHovered] = useState(false)
+    const isBar = theme.headingVariant === 'bar'
+    // Container styling per variant.
+    const containerStyle: React.CSSProperties = isBar
+        ? { marginTop: '16px', marginBottom: '7px', background: theme.headingBg, padding: '3px 9px', borderRadius: '2px' }
+        : {
+            marginTop: '16px', marginBottom: '6px', paddingBottom: '2px',
+            borderBottom: `${theme.dividerWidth}px solid ${theme.dividerColor}`,
+            ...(theme.headingVariant === 'ruleHeavy' ? { borderTop: `${theme.dividerWidth}px solid ${theme.dividerColor}`, paddingTop: '3px' } : {}),
+        }
     return (
-        <div style={{ marginTop: '16px', marginBottom: '6px', borderBottom: `1px solid ${NAVY}`, paddingBottom: '2px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative' }}
+        <div style={{ ...containerStyle, display: 'flex', alignItems: 'center', justifyContent: theme.headingAlign === 'center' ? 'center' : 'space-between', position: 'relative' }}
             onMouseEnter={() => setHovered(true)}
             onMouseLeave={() => setHovered(false)}>
-            <span style={{ fontWeight: 700, fontSize: `${size}pt`, color: NAVY, textTransform: 'uppercase', letterSpacing: '0.6px' }}>
+            <span style={{
+                fontWeight: 700, fontSize: `${size}pt`,
+                color: isBar ? theme.headingText : theme.heading,
+                textTransform: theme.uppercase ? 'uppercase' : 'none',
+                letterSpacing: theme.letterSpacing,
+                textAlign: theme.headingAlign, flex: theme.headingAlign === 'center' ? 1 : undefined,
+            }}>
                 {title}
             </span>
             {onAdd && hovered && (
                 <button className="no-print" type="button" onClick={e => { e.stopPropagation(); onAdd() }}
-                    style={{ fontSize: '10px', color: '#27ae60', background: 'rgba(255,255,255,0.97)', border: '1px solid #27ae60', borderRadius: '4px', padding: '1px 8px', cursor: 'pointer', lineHeight: '1.6' }}>
+                    style={{ position: theme.headingAlign === 'center' ? 'absolute' : undefined, right: theme.headingAlign === 'center' ? '6px' : undefined, fontSize: '10px', color: '#27ae60', background: 'rgba(255,255,255,0.97)', border: '1px solid #27ae60', borderRadius: '4px', padding: '1px 8px', cursor: 'pointer', lineHeight: '1.6' }}>
                     +
                 </button>
             )}
@@ -451,7 +513,7 @@ function Divider({ title, size, onAdd }: { title: string; size: number; onAdd?: 
 
 export default function CVPreview({
     data, highlightEnabled = true, fontSettings, onEdit, forceKeywords,
-    onSkillsReorder, onBulletEdit, onKeywordHover,
+    onSkillsReorder, onBulletEdit, onKeywordHover, theme,
 }: {
     data: CVData
     highlightEnabled?: boolean
@@ -459,12 +521,20 @@ export default function CVPreview({
     forceKeywords?: Set<string>
     fontSettings?: Partial<CVFontSettings>
     onEdit?: CVEditCallbacks
+    /** Visual theme — all themes stay ATS-safe. Defaults to Theme 1 (the original look). */
+    theme?: CVThemeId
     // Legacy props kept for backward compat with viewCV page
     onSkillsReorder?: (newSkills: string) => void
     onBulletEdit?: (expIndex: number, bulletIndex: number, value: string) => void
     onKeywordHover?: (word: string | null) => void
 }) {
     const fs: CVFontSettings = { ...DEFAULT_FONT_SETTINGS, ...fontSettings }
+    // Theme palette. Locals shadow the module defaults so all inline color/font refs
+    // below pick up the selected theme with no other changes.
+    const th = THEME_STYLES[normalizeTheme(theme)]
+    const NAVY = th.heading
+    const SLATE = th.slate
+    const TEXT_COLOR = th.text
 
     const contactParts: { label: string; href: string | null }[] = [
         ...[data.location, data.selected_email, data.selected_phone].filter(Boolean).map(v => ({
@@ -493,10 +563,10 @@ export default function CVPreview({
     const handleBulletEdit = onEdit?.expBulletEdit ?? onBulletEdit
 
     return (
-        <div style={{ fontFamily: 'Calibri, Arial, system-ui, sans-serif', fontSize: `${fs.expBullet}pt`, color: TEXT_COLOR, backgroundColor: '#fff', padding: '48px 58px', boxSizing: 'border-box', lineHeight: '1.4' }}>
+        <div style={{ fontFamily: th.fontFamily, fontSize: `${fs.expBullet}pt`, color: TEXT_COLOR, backgroundColor: '#fff', padding: th.rootPadding, boxSizing: 'border-box', lineHeight: '1.4' }}>
 
             {/* ── Name block ── */}
-            <div>
+            <div style={{ textAlign: th.nameAlign, ...(th.nameRule ? { borderBottom: `${th.dividerWidth}px solid ${th.dividerColor}`, paddingBottom: '8px', marginBottom: '2px' } : {}) }}>
                 <div style={{ fontWeight: 700, fontSize: `${fs.applicantName}pt`, color: NAVY, letterSpacing: '0.5px' }}>
                     <InlineText value={data.applicant_name || ''} onSave={onEdit?.name}
                         style={{ fontWeight: 700, fontSize: `${fs.applicantName}pt`, color: NAVY, letterSpacing: '0.5px' }}
@@ -512,20 +582,20 @@ export default function CVPreview({
                         /* Edit mode: individual inline inputs for each contact field */
                         <span>
                             <InlineText value={data.location || ''} onSave={onEdit.location} style={{ fontSize: `${fs.contactLine}pt`, color: SLATE }} placeholder="Location" />
-                            {' | '}
+                            {th.sep}
                             <InlineText value={data.selected_email || ''} onSave={onEdit.email} style={{ fontSize: `${fs.contactLine}pt`, color: SLATE }} placeholder="Email" />
-                            {' | '}
+                            {th.sep}
                             <InlineText value={data.selected_phone || ''} onSave={onEdit.phone} style={{ fontSize: `${fs.contactLine}pt`, color: SLATE }} placeholder="Phone" />
-                            {' | '}
+                            {th.sep}
                             <InlineText value={data.linkedin || ''} onSave={onEdit.linkedin} style={{ fontSize: `${fs.contactLine}pt`, color: SLATE }} placeholder="LinkedIn URL" />
-                            {' | '}
+                            {th.sep}
                             <InlineText value={data.github || ''} onSave={onEdit.github} style={{ fontSize: `${fs.contactLine}pt`, color: SLATE }} placeholder="GitHub URL" />
                         </span>
                     ) : (
-                        /* View mode: pipe-separated, links clickable */
+                        /* View mode: separator per theme, links clickable */
                         contactParts.map((part, i) => (
                             <span key={i}>
-                                {i > 0 && ' | '}
+                                {i > 0 && th.sep}
                                 {part.href
                                     ? <a href={part.href} target="_blank" rel="noopener noreferrer" style={{ color: NAVY, textDecoration: 'underline' }}>{part.label}</a>
                                     : part.label}
@@ -538,7 +608,7 @@ export default function CVPreview({
             {/* ── Summary ── */}
             {(data.summary?.trim() || onEdit?.summary) && (
                 <>
-                    <Divider title="Summary" size={fs.sectionHeading} />
+                    <Divider title="Summary" size={fs.sectionHeading} theme={th} />
                     {onEdit?.summary
                         ? <InlineArea value={data.summary || ''} onSave={onEdit.summary}
                             style={{ fontSize: `${fs.expBullet}pt`, lineHeight: '1.4' }}
@@ -551,7 +621,7 @@ export default function CVPreview({
             {/* ── Core Skills (categorized) ── */}
             {(data.core_skills && data.core_skills.length > 0) || onEdit?.skillsCategoryAdd ? (
                 <>
-                    <Divider title="Core Skills" size={fs.sectionHeading} onAdd={onEdit?.skillsCategoryAdd} />
+                    <Divider title="Core Skills" size={fs.sectionHeading} onAdd={onEdit?.skillsCategoryAdd} theme={th} />
                     {(data.core_skills ?? []).map((group, gi) => (
                         <HoverActions key={gi} style={{ margin: gi === 0 ? 0 : '4px 0 0' }}
                             actions={onEdit?.skillsCategoryDelete ? [{ label: '×', onClick: () => onEdit.skillsCategoryDelete!(gi), color: '#e74c3c' }] : []}>
@@ -573,7 +643,7 @@ export default function CVPreview({
                 </>
             ) : data.skills?.trim() ? (
                 <>
-                    <Divider title="Skills" size={fs.sectionHeading} />
+                    <Divider title="Skills" size={fs.sectionHeading} theme={th} />
                     <p style={{ margin: 0, fontSize: `${fs.expBullet}pt` }}>
                         <SkillsLine skillsStr={data.skills ?? ''} descriptionLower={descriptionLower} keywords={keywords} onReorder={onSkillsReorder} onHover={onKeywordHover} />
                     </p>
@@ -583,7 +653,7 @@ export default function CVPreview({
             {/* ── Work Experience ── */}
             {(experiences.length > 0 || onEdit?.expAdd) && (
                 <>
-                    <Divider title="Work Experience" size={fs.sectionHeading} onAdd={onEdit?.expAdd} />
+                    <Divider title="Work Experience" size={fs.sectionHeading} onAdd={onEdit?.expAdd} theme={th} />
                     {experiences.map((exp, i) => {
                         const meta = [exp.show_job_type && exp.job_type, exp.show_job_nature && exp.job_nature].filter(Boolean).join(', ')
                         const bullets = (exp.bullets ?? []).map((b, idx) => ({ text: b, idx }))
@@ -639,7 +709,7 @@ export default function CVPreview({
                                 </div>
 
                                 {/* Bullets */}
-                                <ul style={{ margin: '4px 0 0', paddingLeft: '18px', listStyleType: 'disc' }}>
+                                <ul style={{ margin: '4px 0 0', paddingLeft: '18px', listStyleType: th.bullet }}>
                                     {bullets.map(({ text, idx }) => (
                                         <HoverActions key={idx}
                                             actions={onEdit?.expBulletDelete ? [{ label: '×', onClick: () => onEdit.expBulletDelete!(i, idx), color: '#e74c3c' }] : []}>
@@ -670,7 +740,7 @@ export default function CVPreview({
             {/* ── Education ── */}
             {(education.length > 0 || onEdit?.eduAdd) && (
                 <>
-                    <Divider title="Education" size={fs.sectionHeading} onAdd={onEdit?.eduAdd} />
+                    <Divider title="Education" size={fs.sectionHeading} onAdd={onEdit?.eduAdd} theme={th} />
                     {education.map((edu, i) => (
                         <HoverActions key={i} style={{ marginTop: i === 0 ? '4px' : '6px' }}
                             actions={onEdit?.eduDelete ? [{ label: '×', onClick: () => onEdit.eduDelete!(i), color: '#e74c3c' }] : []}>
@@ -702,7 +772,7 @@ export default function CVPreview({
             {/* ── Projects ── */}
             {(data.projects ?? []).some(p => p.title?.trim()) && (
                 <>
-                    <Divider title="Projects" size={fs.sectionHeading} onAdd={onEdit?.projAdd} />
+                    <Divider title="Projects" size={fs.sectionHeading} onAdd={onEdit?.projAdd} theme={th} />
                     {(data.projects ?? []).map((proj, i) => {
                         const dateRange = proj.ongoing
                             ? `${fmtDate(proj.start_date)} – Present`
@@ -735,7 +805,7 @@ export default function CVPreview({
                                     </div>
                                 )}
                                 {(proj.description || onEdit?.projField) && (
-                                    <ul style={{ margin: '4px 0 0', paddingLeft: '18px', listStyleType: 'disc' }}>
+                                    <ul style={{ margin: '4px 0 0', paddingLeft: '18px', listStyleType: th.bullet }}>
                                         <li style={{ fontSize: `${fs.expBullet}pt` }}>
                                             <InlineText value={proj.description ?? ''}
                                                 onSave={onEdit?.projField ? v => onEdit.projField!(i, 'description', v) : undefined}

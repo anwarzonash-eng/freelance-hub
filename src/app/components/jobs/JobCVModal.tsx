@@ -47,6 +47,8 @@ import CVPreview, {
   highlightWords,
   stripHtml,
   TOKEN_REGEX,
+  CV_THEMES,
+  type CVThemeId,
 } from "./CVPreview";
 import LLMGeneratorPopup from "../llm/LLMGeneratorPopup";
 
@@ -1358,6 +1360,7 @@ const CV_STATUS_COLORS: Record<string, string> = {
 const INIT_FORM = {
   cv_title: "",
   private_title: "",
+  theme: "theme1",
   applicant_name: "",
   headline: "",
   target_job_title: "",
@@ -1687,6 +1690,7 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
     setForm({
       cv_title: data.cv_title ?? "",
       private_title: data.private_title ?? "",
+      theme: data.theme ?? "theme1",
       applicant_name: data.applicant_name ?? "",
       headline: data.headline ?? "",
       target_job_title: data.target_job_title ?? "",
@@ -2402,6 +2406,17 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
             title="Private title — internal tag to identify this CV"
             className="shrink-0 w-44 text-[11px] border border-amber-300 bg-amber-50 rounded px-2 py-0.5 focus:outline-none focus:border-amber-500 text-amber-800 placeholder:text-amber-400"
           />
+          {/* Theme selector — all themes stay ATS-safe */}
+          <select
+            value={form.theme}
+            onChange={(e) => set("theme", e.target.value)}
+            title="CV visual theme (ATS-safe)"
+            className="shrink-0 text-[11px] border border-indigo-300 bg-indigo-50 rounded px-1.5 py-0.5 focus:outline-none focus:border-indigo-500 text-indigo-700"
+          >
+            {CV_THEMES.map((t) => (
+              <option key={t.id} value={t.id}>{t.label}</option>
+            ))}
+          </select>
         </div>
 
         {/* Applicant selector */}
@@ -3739,6 +3754,7 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
                   : undefined
               }
               fontSettings={fontSettings}
+              theme={form.theme as CVThemeId}
               onSkillsReorder={(newSkills) => set("skills", newSkills)}
               onEdit={
                 atsHighlightOn || !!hoveredKeyword ? undefined : cvEditCallbacks
@@ -3802,6 +3818,7 @@ export default function JobCVModal({ job, cv, onClose, onSaved }: Props) {
                 data={cvData}
                 highlightEnabled={atsHighlightOn}
                 fontSettings={fontSettings}
+                theme={form.theme as CVThemeId}
                 onSkillsReorder={(newSkills) => set("skills", newSkills)}
                 onEdit={
                   atsHighlightOn || !!hoveredKeyword

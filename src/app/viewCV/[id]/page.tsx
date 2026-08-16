@@ -83,7 +83,7 @@ export default function ViewCVPage() {
             </div>
 
             <div id="cv-content" style={{ maxWidth: '794px', margin: '0 auto' }}>
-                <CVPreview data={cvData} fontSettings={cv.font_settings ?? undefined} />
+                <CVPreview data={cvData} fontSettings={cv.font_settings ?? undefined} theme={cv.theme ?? undefined} />
             </div>
 
             <style dangerouslySetInnerHTML={{ __html: `
