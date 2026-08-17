@@ -430,14 +430,15 @@ export const FONT_SETTING_FIELDS: { key: keyof CVFontSettings; label: string; hi
 // All themes stay single-column, real-text and standard-font so they remain fully
 // ATS-parseable. Themes only change colors, font family and the section-heading
 // treatment — never the structure, order or content of the CV.
-export type CVThemeId = 'theme1' | 'theme2' | 'theme3'
+export type CVThemeId = 'theme1' | 'theme2' | 'theme3' | 'theme4'
 export const CV_THEMES: { id: CVThemeId; label: string }[] = [
     { id: 'theme1', label: 'Theme 1 — Classic Navy' },
     { id: 'theme2', label: 'Theme 2 — Minimal Serif' },
     { id: 'theme3', label: 'Theme 3 — Accent Teal' },
+    { id: 'theme4', label: 'Theme 4 — Corporate' },
 ]
 export function normalizeTheme(v: unknown): CVThemeId {
-    return v === 'theme2' || v === 'theme3' ? v : 'theme1'
+    return v === 'theme2' || v === 'theme3' || v === 'theme4' ? v : 'theme1'
 }
 interface ThemeStyle {
     fontFamily: string; heading: string; slate: string; text: string; link: string
@@ -474,6 +475,14 @@ const THEME_STYLES: Record<CVThemeId, ThemeStyle> = {
         dividerColor: '#0F766E', dividerWidth: 2, uppercase: true, letterSpacing: '1px',
         nameAlign: 'left', headingVariant: 'bar', headingAlign: 'left', headingBg: '#0F766E', headingText: '#ffffff',
         bullet: 'circle', sep: '  •  ', nameRule: true, rootPadding: '44px 54px',
+    },
+    // Theme 4 = corporate / executive: refined serif, charcoal headings, subtle gold
+    // accent rules, wide letter-spacing and generous margins (C-level résumé look).
+    theme4: {
+        fontFamily: 'Cambria, Georgia, "Times New Roman", Times, serif', heading: '#1F2A33', slate: '#5B6B78', text: '#20303A', link: '#1F2A33',
+        dividerColor: '#9A7B4F', dividerWidth: 1.5, uppercase: true, letterSpacing: '1.6px',
+        nameAlign: 'left', headingVariant: 'underline', headingAlign: 'left', headingBg: '#1F2A33', headingText: '#fff',
+        bullet: 'square', sep: '   |   ', nameRule: true, rootPadding: '54px 64px',
     },
 }
 
