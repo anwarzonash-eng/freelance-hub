@@ -180,6 +180,18 @@ export enum AParseAPIRoutes {
     RESTORE_TURN = 'aparse/turns/:id/restore',
 }
 
+export enum DeckGradingAPIRoutes {
+    GET_CONTRIBUTORS = 'deck-grading/contributors',
+    CREATE_CONTRIBUTOR = 'deck-grading/contributors',
+    GET_TASKS = 'deck-grading/tasks',
+    CREATE_TASK = 'deck-grading/tasks',
+    GET_TASK = 'deck-grading/tasks/:id',
+    UPDATE_TASK = 'deck-grading/tasks/:id',
+    DELETE_TASK = 'deck-grading/tasks/:id',
+    ADD_TASK_MEDIA = 'deck-grading/tasks/:id/media',
+    DELETE_TASK_MEDIA = 'deck-grading/tasks/:id/media/:mediaId',
+}
+
 export enum ProfessionalsAPIRoutes {
     GET_ALL = 'professionals',
     GET_BY_ID = 'professionals/:id',

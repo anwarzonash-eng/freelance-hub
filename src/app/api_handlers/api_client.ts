@@ -106,7 +106,9 @@ export const apiClient = async <T = any, P = any>(
         }
 
         if (!publicUrls.includes(window.location.pathname)) {
-            if (jsonResponse.userInfo && !jsonResponse.userInfo?.roles.some((route) => route === window.location.pathname)) {
+            const roles = jsonResponse.userInfo?.roles
+            const allowed = Array.isArray(roles) && (roles.includes('*') || roles.some((route) => route === window.location.pathname))
+            if (jsonResponse.userInfo && !allowed) {
                 window.location.href = '/404';
                 return null;
             }

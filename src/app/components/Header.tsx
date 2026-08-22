@@ -264,6 +264,11 @@ const navItems: NavItem[] = [
         href: "/tools/a-parse",
         icon: "AParse",
       },
+      {
+        title: "Deck Grading Tasks",
+        href: "/tools/deck-grading",
+        icon: "AParse",
+      },
     ],
   },
 ];
@@ -361,6 +366,7 @@ export function getAllNavRoles(
     { label: "Clients", value: "/clients" },
     { label: "Applicants", value: "/applicants" },
     { label: "A Parse", value: "/tools/a-parse" },
+    { label: "Deck Grading Tasks", value: "/tools/deck-grading" },
     { label: "Settings", value: "/settings" },
   ];
   // const roles: { label: string; value: string }[] = [];
