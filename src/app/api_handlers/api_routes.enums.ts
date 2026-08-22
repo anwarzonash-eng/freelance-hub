@@ -183,6 +183,7 @@ export enum AParseAPIRoutes {
 export enum DeckGradingAPIRoutes {
     GET_CONTRIBUTORS = 'deck-grading/contributors',
     CREATE_CONTRIBUTOR = 'deck-grading/contributors',
+    UPDATE_CONTRIBUTOR = 'deck-grading/contributors/:id',
     GET_TASKS = 'deck-grading/tasks',
     CREATE_TASK = 'deck-grading/tasks',
     GET_TASK = 'deck-grading/tasks/:id',

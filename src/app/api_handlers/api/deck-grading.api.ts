@@ -14,6 +14,11 @@ export async function createDeckContributor(name: string) {
     return await apiClient(DeckGradingAPIRoutes.CREATE_CONTRIBUTOR, ApiMethod.POST, { name }, undefined, undefined, true, false)
 }
 
+export async function updateDeckContributor(id: string, payload: { name?: string; is_available?: boolean }) {
+    const params: IApiParams = { path: { id } }
+    return await apiClient(DeckGradingAPIRoutes.UPDATE_CONTRIBUTOR, ApiMethod.PUT, payload, params, undefined, true, false)
+}
+
 // ── Tasks ─────────────────────────────────────────────────────────────────────
 export async function getDeckTasks(contributor: string = 'all') {
     const params: IApiParams = { query: { contributor } }

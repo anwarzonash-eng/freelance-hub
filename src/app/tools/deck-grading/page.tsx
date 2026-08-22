@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
     LayoutGrid, Plus, RefreshCw, X, Check, Trash2, Download, Link2, Clock,
-    ClipboardPaste, User, ImageIcon, ExternalLink, BookOpen,
+    ClipboardPaste, User, ImageIcon, ExternalLink, BookOpen, Users,
 } from 'lucide-react'
 
 const CLAUDE_GUIDELINES_URL = 'https://claude.ai/public/artifacts/6a5b6ad0-2c4c-402c-a433-50d0c49e0422'
@@ -17,7 +17,7 @@ function isAdminUser(): boolean {
     } catch { return false }
 }
 import {
-    getDeckContributors, createDeckContributor,
+    getDeckContributors, createDeckContributor, updateDeckContributor,
     getDeckTasks, getDeckTask, createDeckTask, updateDeckTask, deleteDeckTask,
     addDeckTaskMedia, deleteDeckTaskMedia,
 } from '@/app/api_handlers/api/deck-grading.api'
@@ -25,7 +25,7 @@ import {
 /* ------------------------------------------------------------------ *
  * Types
  * ------------------------------------------------------------------ */
-interface Contributor { id: string; name: string }
+interface Contributor { id: string; name: string; is_available?: boolean }
 interface MediaItem { id: string; name: string; dataUrl: string; _pending?: boolean; _status?: 'uploading' | 'uploaded' | 'failed' }
 interface RubricSection {
     key: string
@@ -208,7 +208,7 @@ function ContributorPicker({ contributors, value, onChange, onCreated }: {
             <select value={value || ''} onChange={e => onChange(e.target.value || null)}
                 className="text-xs border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:border-indigo-400 min-w-[160px]">
                 <option value="">— unassigned —</option>
-                {contributors.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {contributors.map(c => <option key={c.id} value={c.id}>{c.name}{c.is_available === false ? ' (away)' : ''}</option>)}
             </select>
             <button onClick={() => setAdding(true)} title="Add new contributor"
                 className="flex items-center gap-0.5 text-[11px] border border-gray-300 rounded px-1.5 py-1 text-gray-600 hover:bg-gray-50"><Plus size={12} /> New</button>
@@ -639,6 +639,23 @@ export default function DeckGradingPage() {
 
     const onContributorCreated = (c: Contributor) => setContributors(prev => prev.some(x => x.id === c.id) ? prev : [...prev, c].sort((a, b) => a.name.localeCompare(b.name)))
 
+    // Availability
+    const [showContribs, setShowContribs] = useState(false)
+    const contribsRef = useRef<HTMLDivElement>(null)
+    useEffect(() => {
+        if (!showContribs) return
+        const h = (e: MouseEvent) => { if (contribsRef.current && !contribsRef.current.contains(e.target as Node)) setShowContribs(false) }
+        document.addEventListener('mousedown', h)
+        return () => document.removeEventListener('mousedown', h)
+    }, [showContribs])
+    const availById = new Map(contributors.map(c => [c.id, c.is_available !== false]))
+    const toggleAvailability = async (c: Contributor) => {
+        const next = !(c.is_available !== false)
+        setContributors(prev => prev.map(x => x.id === c.id ? { ...x, is_available: next } : x))
+        try { await updateDeckContributor(c.id, { is_available: next }) } catch { loadContributors() }
+    }
+    const availableCount = contributors.filter(c => c.is_available !== false).length
+
     const removeTask = async (id: string) => {
         if (!admin) return
         if (!confirm('Delete this task?')) return
@@ -688,8 +705,37 @@ export default function DeckGradingPage() {
                             className="text-xs border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:border-indigo-400 text-gray-700 min-w-[160px]">
                             <option value="all">All contributors</option>
                             <option value="none">Unassigned</option>
-                            {contributors.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            {contributors.map(c => <option key={c.id} value={c.id}>{c.name}{c.is_available === false ? ' (away)' : ''}</option>)}
                         </select>
+                    </div>
+                    {/* Contributor availability */}
+                    <div className="relative" ref={contribsRef}>
+                        <button onClick={() => setShowContribs(v => !v)}
+                            title="Contributor availability"
+                            className={`flex items-center gap-1 text-xs border rounded px-2 py-1 ${showContribs ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
+                            <Users size={12} /> Availability
+                            <span className="text-[10px] text-emerald-600 font-semibold">{availableCount}</span>
+                            <span className="text-[10px] text-gray-400">/ {contributors.length}</span>
+                        </button>
+                        {showContribs && (
+                            <div className="absolute right-0 top-full mt-1 z-40 bg-white border border-gray-200 rounded-lg shadow-lg py-1 w-64 max-h-80 overflow-y-auto">
+                                <div className="px-3 py-1 text-[9px] uppercase font-semibold text-gray-400">Who&apos;s available</div>
+                                {contributors.length === 0 && <div className="px-3 py-2 text-[11px] text-gray-400">No contributors yet.</div>}
+                                {contributors.map(c => {
+                                    const avail = c.is_available !== false
+                                    return (
+                                        <div key={c.id} className={`flex items-center gap-2 px-3 py-1.5 ${avail ? '' : 'bg-gray-50'}`}>
+                                            <span className={`w-2 h-2 rounded-full shrink-0 ${avail ? 'bg-emerald-500' : 'bg-gray-300'}`} />
+                                            <span className={`flex-1 text-[11px] truncate ${avail ? 'text-gray-800' : 'text-gray-400 line-through'}`}>{c.name}</span>
+                                            <button onClick={() => toggleAvailability(c)}
+                                                className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${avail ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : 'bg-gray-100 text-gray-500 border-gray-300'}`}>
+                                                {avail ? 'Available' : 'Away'}
+                                            </button>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        )}
                     </div>
                     <a href={CLAUDE_GUIDELINES_URL} target="_blank" rel="noopener noreferrer"
                         className="flex items-center gap-1 text-xs border border-amber-300 text-amber-700 rounded px-2 py-1 hover:bg-amber-50">
@@ -742,7 +788,16 @@ export default function DeckGradingPage() {
                                         <td className="px-3 py-1.5 font-medium text-gray-800">{t.title || <span className="text-gray-300">Untitled</span>}</td>
                                         <td className="px-3 py-1.5">
                                             {t.contributor_name || contributorName(t.contributor_id)
-                                                ? <span className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-sky-50 text-sky-700 border border-sky-200"><User size={9} /> {t.contributor_name || contributorName(t.contributor_id)}</span>
+                                                ? (() => {
+                                                    const avail = t.contributor_id ? availById.get(t.contributor_id) !== false : true
+                                                    return (
+                                                        <span className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border ${avail ? 'bg-sky-50 text-sky-700 border-sky-200' : 'bg-gray-50 text-gray-400 border-gray-200'}`}
+                                                            title={avail ? 'Available' : 'Away'}>
+                                                            <span className={`w-1.5 h-1.5 rounded-full ${avail ? 'bg-emerald-500' : 'bg-gray-300'}`} />
+                                                            {t.contributor_name || contributorName(t.contributor_id)}
+                                                        </span>
+                                                    )
+                                                })()
                                                 : <span className="text-gray-300">—</span>}
                                         </td>
                                         <td className="px-3 py-1.5 text-gray-500">{t.rational?.count ?? 1}</td>
