@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
     LayoutGrid, Plus, RefreshCw, X, Check, Trash2, Download, Link2, Clock,
-    ClipboardPaste, User, ImageIcon,
+    ClipboardPaste, User, ImageIcon, ExternalLink, BookOpen,
 } from 'lucide-react'
+
+const CLAUDE_GUIDELINES_URL = 'https://claude.ai/public/artifacts/6a5b6ad0-2c4c-402c-a433-50d0c49e0422'
 import {
     getDeckContributors, createDeckContributor,
     getDeckTasks, getDeckTask, createDeckTask, updateDeckTask, deleteDeckTask,
@@ -580,6 +582,31 @@ export default function DeckGradingPage() {
         load()
     }
 
+    // Download the static guideline images (public/deck-guidelines/) as a single zip.
+    const [dlBusy, setDlBusy] = useState(false)
+    const downloadGuidelines = async () => {
+        setDlBusy(true)
+        try {
+            const res = await fetch('/deck-guidelines/manifest.json', { cache: 'no-store' })
+            if (!res.ok) throw new Error('manifest')
+            const names: string[] = await res.json()
+            if (!Array.isArray(names) || names.length === 0) {
+                alert('No images yet. Drop your pictures into public/deck-guidelines/ and list their file names in manifest.json.')
+                return
+            }
+            const files: { name: string; bytes: Uint8Array }[] = []
+            for (const name of names) {
+                const r = await fetch(`/deck-guidelines/${encodeURIComponent(name)}`, { cache: 'no-store' })
+                if (!r.ok) continue
+                files.push({ name, bytes: new Uint8Array(await r.arrayBuffer()) })
+            }
+            if (!files.length) { alert('Could not load any images listed in public/deck-guidelines/manifest.json.'); return }
+            triggerDownload(makeZip(files), 'deck-guidelines.zip')
+        } catch {
+            alert('Add a public/deck-guidelines/ folder with your images and a manifest.json listing them.')
+        } finally { setDlBusy(false) }
+    }
+
     const contributorName = (id: string | null) => (id ? contributors.find(c => c.id === id)?.name ?? null : null)
 
     return (
@@ -600,6 +627,15 @@ export default function DeckGradingPage() {
                             {contributors.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                         </select>
                     </div>
+                    <a href={CLAUDE_GUIDELINES_URL} target="_blank" rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-xs border border-amber-300 text-amber-700 rounded px-2 py-1 hover:bg-amber-50">
+                        <BookOpen size={12} /> Claude Guidelines <ExternalLink size={10} />
+                    </a>
+                    <button onClick={downloadGuidelines} disabled={dlBusy}
+                        title="Download Tasks Guidlines Pictures"
+                        className="flex items-center gap-1 text-xs border border-gray-300 rounded px-2 py-1 hover:bg-gray-50 disabled:opacity-50 text-gray-600">
+                        {dlBusy ? <RefreshCw size={11} className="animate-spin" /> : <Download size={12} />} Download Guidlines
+                    </button>
                     <button onClick={() => load()} disabled={loading}
                         className="flex items-center gap-1 text-xs border border-gray-300 rounded px-2 py-1 hover:bg-gray-50 disabled:opacity-50 text-gray-600">
                         <RefreshCw size={11} className={loading ? 'animate-spin' : ''} /> Refresh
