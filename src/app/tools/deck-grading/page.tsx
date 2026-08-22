@@ -7,6 +7,15 @@ import {
 } from 'lucide-react'
 
 const CLAUDE_GUIDELINES_URL = 'https://claude.ai/public/artifacts/6a5b6ad0-2c4c-402c-a433-50d0c49e0422'
+
+/** Admin = userRole 'admin' or a wildcard '*' in roles (localStorage). */
+function isAdminUser(): boolean {
+    try {
+        if (localStorage.getItem('userRole') === 'admin') return true
+        const roles = JSON.parse(localStorage.getItem('roles') || '[]')
+        return Array.isArray(roles) && roles.includes('*')
+    } catch { return false }
+}
 import {
     getDeckContributors, createDeckContributor,
     getDeckTasks, getDeckTask, createDeckTask, updateDeckTask, deleteDeckTask,
@@ -414,7 +423,22 @@ function TaskEditor({ task, contributors, onCreated, onSaved, onClose, onContrib
         return () => clearInterval(h)
     }, [status])
 
-    const setCount = (count: number) => setRational(r => ({ count, sections: buildSections(count, r.sections) }))
+    // Section layout + quick-jump.
+    const [layout, setLayout] = useState<'vertical' | 'horizontal'>(() => {
+        try { return (localStorage.getItem('deck_section_layout') as any) === 'horizontal' ? 'horizontal' : 'vertical' } catch { return 'vertical' }
+    })
+    useEffect(() => { try { localStorage.setItem('deck_section_layout', layout) } catch { /* ignore */ } }, [layout])
+    const [activeSec, setActiveSec] = useState(0)
+    const secRefs = useRef<(HTMLDivElement | null)[]>([])
+    const jumpTo = (i: number) => {
+        setActiveSec(i)
+        secRefs.current[i]?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+    }
+
+    const setCount = (count: number) => {
+        setRational(r => ({ count, sections: buildSections(count, r.sections) }))
+        setActiveSec(a => Math.min(a, count - 1))
+    }
     const setSection = (i: number, patch: Partial<RubricSection>) =>
         setRational(r => ({ ...r, sections: r.sections.map((s, idx) => idx === i ? { ...s, ...patch } : s) }))
 
@@ -529,11 +553,49 @@ function TaskEditor({ task, contributors, onCreated, onSaved, onClose, onContrib
                     )}
 
                     {/* Rationale sections */}
-                    <div className="space-y-3">
-                        <span className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">Rationale</span>
-                        {rational.sections.map((s, i) => (
-                            <SectionCard key={i} section={s} onChange={patch => setSection(i, patch)} />
-                        ))}
+                    <div className="space-y-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">Rationale</span>
+                            {/* Jump-to-section bar */}
+                            <div className="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5">
+                                {rational.sections.map((s, i) => (
+                                    <button key={i} type="button" onClick={() => jumpTo(i)}
+                                        className={`w-7 h-6 text-[11px] rounded-md transition-colors ${activeSec === i ? 'bg-white shadow-sm text-gray-800 font-semibold' : 'text-gray-400 hover:text-gray-600'}`}>
+                                        {s.key}
+                                    </button>
+                                ))}
+                            </div>
+                            <div className="flex-1" />
+                            {/* Layout toggle */}
+                            <div className="flex items-center gap-0.5 border border-gray-300 rounded p-0.5">
+                                {(['vertical', 'horizontal'] as const).map(l => (
+                                    <button key={l} type="button" onClick={() => setLayout(l)}
+                                        className={`text-[10px] px-2 py-0.5 rounded capitalize ${layout === l ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}>
+                                        {l}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {layout === 'horizontal' ? (
+                            <div className="flex gap-3 overflow-x-auto pb-2">
+                                {rational.sections.map((s, i) => (
+                                    <div key={i} ref={el => { secRefs.current[i] = el }}
+                                        className={`min-w-[320px] max-w-[360px] shrink-0 rounded-lg ${activeSec === i ? 'ring-2 ring-indigo-300' : ''}`}>
+                                        <SectionCard section={s} onChange={patch => setSection(i, patch)} />
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                {rational.sections.map((s, i) => (
+                                    <div key={i} ref={el => { secRefs.current[i] = el }}
+                                        className={`rounded-lg ${activeSec === i ? 'ring-2 ring-indigo-300' : ''}`}>
+                                        <SectionCard section={s} onChange={patch => setSection(i, patch)} />
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
@@ -555,6 +617,7 @@ export default function DeckGradingPage() {
     const [loading, setLoading] = useState(false)
     const [contributorFilter, setContributorFilter] = useState('all')
     const [editor, setEditor] = useState<{ task: DeckTask | null } | null>(null)
+    const [admin] = useState<boolean>(() => isAdminUser())
     useCountdownTick() // keep the list's remaining-time column ticking
 
     const load = useCallback(async () => {
@@ -577,6 +640,7 @@ export default function DeckGradingPage() {
     const onContributorCreated = (c: Contributor) => setContributors(prev => prev.some(x => x.id === c.id) ? prev : [...prev, c].sort((a, b) => a.name.localeCompare(b.name)))
 
     const removeTask = async (id: string) => {
+        if (!admin) return
         if (!confirm('Delete this task?')) return
         await deleteDeckTask(id)
         load()
@@ -696,8 +760,10 @@ export default function DeckGradingPage() {
                                                     : <span className="text-gray-300">—</span>}
                                         </td>
                                         <td className="px-3 py-1.5">
-                                            <button onClick={e => { e.stopPropagation(); removeTask(t.id) }} title="Delete"
-                                                className="p-0.5 text-red-300 hover:text-red-600 hover:bg-red-50 rounded"><Trash2 size={12} /></button>
+                                            {admin && (
+                                                <button onClick={e => { e.stopPropagation(); removeTask(t.id) }} title="Delete"
+                                                    className="p-0.5 text-red-300 hover:text-red-600 hover:bg-red-50 rounded"><Trash2 size={12} /></button>
+                                            )}
                                         </td>
                                     </tr>
                                 )
