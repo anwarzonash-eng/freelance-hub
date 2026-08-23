@@ -551,9 +551,10 @@ function TaskEditor({ task, contributors, onCreated, onSaved, onClose, onContrib
                     ) : (
                         <MediaBox taskId={savedId} media={media} onChange={setMedia} />
                     )}
+                    </div>
 
-                    {/* Rationale sections */}
-                    <div className="space-y-2">
+                    {/* Rationale sections — full width (uses all available horizontal space) */}
+                    <div className="space-y-2 mt-4">
                         <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">Rationale</span>
                             {/* Jump-to-section bar */}
@@ -599,7 +600,6 @@ function TaskEditor({ task, contributors, onCreated, onSaved, onClose, onContrib
                     </div>
                 </div>
             </div>
-        </div>
     )
 }
 
