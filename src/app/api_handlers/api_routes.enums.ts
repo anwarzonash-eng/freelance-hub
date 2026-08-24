@@ -191,6 +191,8 @@ export enum DeckGradingAPIRoutes {
     DELETE_TASK = 'deck-grading/tasks/:id',
     ADD_TASK_MEDIA = 'deck-grading/tasks/:id/media',
     DELETE_TASK_MEDIA = 'deck-grading/tasks/:id/media/:mediaId',
+    ADD_SECTION_MEDIA = 'deck-grading/tasks/:id/section-media/:key',
+    DELETE_SECTION_MEDIA = 'deck-grading/tasks/:id/section-media/:key/:mediaId',
 }
 
 export enum ProfessionalsAPIRoutes {

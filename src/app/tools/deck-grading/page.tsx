@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
     LayoutGrid, Plus, RefreshCw, X, Check, Trash2, Download, Link2, Clock,
-    ClipboardPaste, User, ImageIcon, ExternalLink, BookOpen, Users,
+    ClipboardPaste, User, ImageIcon, ExternalLink, BookOpen, Users, Copy, Eye, Pencil,
 } from 'lucide-react'
 
 const CLAUDE_GUIDELINES_URL = 'https://claude.ai/public/artifacts/6a5b6ad0-2c4c-402c-a433-50d0c49e0422'
@@ -19,7 +19,7 @@ function isAdminUser(): boolean {
 import {
     getDeckContributors, createDeckContributor, updateDeckContributor,
     getDeckTasks, getDeckTask, createDeckTask, updateDeckTask, deleteDeckTask,
-    addDeckTaskMedia, deleteDeckTaskMedia,
+    addDeckTaskMedia, deleteDeckTaskMedia, addDeckSectionMedia, deleteDeckSectionMedia,
 } from '@/app/api_handlers/api/deck-grading.api'
 
 /* ------------------------------------------------------------------ *
@@ -41,6 +41,7 @@ interface DeckTask {
     contributor_id: string | null
     contributor_name?: string | null
     media?: MediaItem[]
+    section_media?: Record<string, MediaItem[]>
     media_count?: number
     rational: Rational
     status: 'claim' | 'submitted'
@@ -217,47 +218,75 @@ function ContributorPicker({ contributors, value, onChange, onCreated }: {
 }
 
 /* ------------------------------------------------------------------ *
- * Media paste + download
+ * Copy an image (dataUrl) to the clipboard as PNG.
  * ------------------------------------------------------------------ */
-function MediaBox({ taskId, media, onChange }: { taskId: string | null; media: MediaItem[]; onChange: (m: MediaItem[]) => void }) {
+async function copyImageToClipboard(dataUrl: string): Promise<boolean> {
+    try {
+        if (typeof ClipboardItem === 'undefined' || !navigator.clipboard?.write) return false
+        const img = document.createElement('img')
+        await new Promise<void>((res, rej) => { img.onload = () => res(); img.onerror = rej; img.src = dataUrl })
+        const canvas = document.createElement('canvas')
+        canvas.width = img.naturalWidth; canvas.height = img.naturalHeight
+        const ctx = canvas.getContext('2d'); if (!ctx) return false
+        ctx.drawImage(img, 0, 0)
+        const blob: Blob | null = await new Promise(res => canvas.toBlob(b => res(b), 'image/png'))
+        if (!blob) return false
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+        return true
+    } catch { return false }
+}
+
+function safeName(m: MediaItem, idx: number): string {
+    const ext = extFromDataUrl(m.dataUrl)
+    const base = (m.name || '').replace(/\.[a-z0-9]+$/i, '').replace(/[^\w-]+/g, '_').slice(0, 40) || `image_${idx + 1}`
+    return `${String(idx + 1).padStart(2, '0')}_${base}.${ext}`
+}
+
+/* ------------------------------------------------------------------ *
+ * Reusable image gallery: paste-to-upload (one request per image),
+ * per-image download/copy/remove, and "download all" as a zip.
+ * `namePrefix` names downloaded files (e.g. section "A" → A-01.png).
+ * `readOnly` hides upload/remove and keeps download/copy only.
+ * ------------------------------------------------------------------ */
+function MediaGallery({ label, media, onChange, taskId, readOnly, upload, remove, namePrefix }: {
+    label: string
+    media: MediaItem[]
+    onChange: (m: MediaItem[]) => void
+    taskId: string | null
+    readOnly?: boolean
+    upload: (item: { name: string; dataUrl: string }) => Promise<any>
+    remove: (id: string) => Promise<any>
+    namePrefix?: string
+}) {
     const [active, setActive] = useState(false)
-    // Keep a ref so async FileReader / upload callbacks always work off the latest list.
+    const [copiedId, setCopiedId] = useState<string | null>(null)
+    const [lightbox, setLightbox] = useState<string | null>(null)
     const mediaRef = useRef(media); mediaRef.current = media
     const set = (m: MediaItem[]) => { mediaRef.current = m; onChange(m) }
-
     const patch = (id: string, p: Partial<MediaItem>) => set(mediaRef.current.map(m => m.id === id ? { ...m, ...p } : m))
+
     const uploadItem = (tmpId: string, name: string, dataUrl: string) => {
         if (!taskId) return
         patch(tmpId, { _status: 'uploading' })
-        addDeckTaskMedia(taskId, { name, dataUrl }).then((res: any) => {
+        upload({ name, dataUrl }).then((res: any) => {
             const saved = res?.data ?? res
             if (saved?.id) {
-                // Swap the temp entry for the saved one; flash "uploaded" then clear.
                 set(mediaRef.current.map(m => m.id === tmpId ? { ...saved, _status: 'uploaded' } : m))
                 const newId = saved.id
                 setTimeout(() => patch(newId, { _status: undefined }), 1500)
-            } else {
-                patch(tmpId, { _status: 'failed' })
-            }
+            } else patch(tmpId, { _status: 'failed' })
         }).catch(() => patch(tmpId, { _status: 'failed' }))
     }
     const readFiles = (files: FileList | File[]) => {
-        const imgs = Array.from(files).filter(f => f.type.startsWith('image/'))
-        imgs.forEach(file => {
+        Array.from(files).filter(f => f.type.startsWith('image/')).forEach(file => {
             const reader = new FileReader()
             reader.onload = () => {
                 const dataUrl = String(reader.result || '')
                 if (!dataUrl.startsWith('data:image/')) return
                 const name = file.name || `image.${extFromDataUrl(dataUrl)}`
                 const id = `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-                if (taskId) {
-                    // Task exists → append locally, then upload this one image (its own request).
-                    set([...mediaRef.current, { id, name, dataUrl, _status: 'uploading' }])
-                    uploadItem(id, name, dataUrl)
-                } else {
-                    // No task yet → hold locally; uploaded one-by-one after the first save.
-                    set([...mediaRef.current, { id, name, dataUrl, _pending: true }])
-                }
+                if (taskId) { set([...mediaRef.current, { id, name, dataUrl, _status: 'uploading' }]); uploadItem(id, name, dataUrl) }
+                else set([...mediaRef.current, { id, name, dataUrl, _pending: true }])
             }
             reader.readAsDataURL(file)
         })
@@ -271,45 +300,48 @@ function MediaBox({ taskId, media, onChange }: { taskId: string | null; media: M
         if (files.length) { e.preventDefault(); readFiles(files) }
     }
     const removeAt = (item: MediaItem) => {
-        // Delete from the server only for items that actually exist there — i.e. saved
-        // (no status, or the transient "uploaded"). Skip pending / uploading / failed temps.
         const savedOnServer = taskId && !item._pending && item._status !== 'uploading' && item._status !== 'failed'
-        if (savedOnServer) deleteDeckTaskMedia(taskId!, item.id).catch(() => { })
+        if (savedOnServer) remove(item.id).catch(() => { })
         set(media.filter(m => m.id !== item.id))
     }
-    const downloadOne = (m: MediaItem, idx: number) => {
-        triggerDownload(new Blob([dataUrlToBytes(m.dataUrl) as BlobPart], { type: 'application/octet-stream' }), safeName(m, idx))
-    }
+    const fileName = (m: MediaItem, i: number) => namePrefix
+        ? `${namePrefix}-${String(i + 1).padStart(2, '0')}.${extFromDataUrl(m.dataUrl)}`
+        : safeName(m, i)
+    const downloadOne = (m: MediaItem, i: number) =>
+        triggerDownload(new Blob([dataUrlToBytes(m.dataUrl) as BlobPart], { type: 'application/octet-stream' }), fileName(m, i))
     const downloadAll = () => {
         if (!media.length) return
-        const files = media.map((m, i) => ({ name: safeName(m, i), bytes: dataUrlToBytes(m.dataUrl) }))
-        triggerDownload(makeZip(files), `deck-media-${Date.now()}.zip`)
+        const files = media.map((m, i) => ({ name: fileName(m, i), bytes: dataUrlToBytes(m.dataUrl) }))
+        triggerDownload(makeZip(files), namePrefix ? `section-${namePrefix}-images.zip` : `deck-media-${Date.now()}.zip`)
     }
+    const copyOne = async (m: MediaItem) => { if (await copyImageToClipboard(m.dataUrl)) { setCopiedId(m.id); setTimeout(() => setCopiedId(c => c === m.id ? null : c), 1200) } else alert('Copy image not supported in this browser.') }
+
     return (
         <div>
             <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Media ({media.length})</span>
+                <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">{label} ({media.length})</span>
                 <button type="button" onClick={downloadAll} disabled={!media.length}
                     className="flex items-center gap-1 text-[11px] border border-gray-300 rounded px-2 py-0.5 text-gray-600 hover:bg-gray-50 disabled:opacity-40">
                     <Download size={12} /> Download all (zip)
                 </button>
             </div>
-            <div tabIndex={0} onPaste={onPaste}
-                onFocus={() => setActive(true)} onBlur={() => setActive(false)}
-                className={`rounded border-2 border-dashed px-3 py-3 text-center outline-none transition-colors ${active ? 'border-indigo-400 bg-indigo-50/40' : 'border-gray-300 bg-gray-50'}`}>
-                <div className="flex items-center justify-center gap-1.5 text-[11px] text-gray-500">
-                    <ClipboardPaste size={13} /> Click here, then press <kbd className="px-1 border rounded bg-white">Ctrl</kbd>+<kbd className="px-1 border rounded bg-white">V</kbd> to paste images
+            {!readOnly && (
+                <div tabIndex={0} onPaste={onPaste}
+                    onFocus={() => setActive(true)} onBlur={() => setActive(false)}
+                    className={`rounded border-2 border-dashed px-3 py-2.5 text-center outline-none transition-colors ${active ? 'border-indigo-400 bg-indigo-50/40' : 'border-gray-300 bg-gray-50'}`}>
+                    <div className="flex items-center justify-center gap-1.5 text-[11px] text-gray-500">
+                        <ClipboardPaste size={13} /> Click here, then press <kbd className="px-1 border rounded bg-white">Ctrl</kbd>+<kbd className="px-1 border rounded bg-white">V</kbd> to paste images
+                    </div>
+                    {!taskId && <div className="text-[10px] text-gray-400 mt-1">Images upload after the task is first saved.</div>}
                 </div>
-                {!taskId && (
-                    <div className="text-[10px] text-gray-400 mt-1">Images upload one-by-one after the task is first saved.</div>
-                )}
-            </div>
-            {media.length > 0 && (
-                <div className="grid grid-cols-4 gap-2 mt-2">
+            )}
+            {media.length > 0 ? (
+                <div className={readOnly ? 'flex flex-col gap-3 mt-2' : 'grid grid-cols-4 gap-2 mt-2'}>
                     {media.map((m, i) => (
                         <div key={m.id} className="relative group border border-gray-200 rounded overflow-hidden bg-white">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={m.dataUrl} alt={m.name} className="w-full h-20 object-cover" />
+                            <img src={m.dataUrl} alt={m.name} onClick={() => setLightbox(m.dataUrl)}
+                                className={`cursor-zoom-in ${readOnly ? 'w-full max-h-[320px] object-contain bg-gray-50' : 'w-full h-20 object-cover'}`} />
                             {(m._pending || m._status) && (
                                 <div className={`absolute inset-0 flex flex-col items-center justify-center gap-1 text-[9px] font-medium ${m._status === 'failed' ? 'bg-red-50/80 text-red-600' : m._status === 'uploaded' ? 'bg-emerald-50/70 text-emerald-700' : 'bg-white/70 text-gray-600'}`}>
                                     {m._status === 'uploading' && <span className="flex items-center gap-1"><RefreshCw size={10} className="animate-spin" /> uploading…</span>}
@@ -321,29 +353,47 @@ function MediaBox({ taskId, media, onChange }: { taskId: string | null; media: M
                                     {m._pending && !m._status && <span>pending save</span>}
                                 </div>
                             )}
-                            <div className="absolute top-0.5 right-0.5 flex gap-0.5 opacity-0 group-hover:opacity-100">
-                                <button type="button" onClick={() => downloadOne(m, i)} title="Download"
+                            <div className={`absolute top-1 right-1 flex gap-0.5 ${readOnly ? '' : 'opacity-0 group-hover:opacity-100'}`}>
+                                <button type="button" onClick={e => { e.stopPropagation(); copyOne(m) }} title="Copy image"
+                                    className="p-0.5 rounded bg-white/90 border border-gray-200 text-gray-500 hover:text-indigo-600">{copiedId === m.id ? <Check size={11} className="text-green-500" /> : <Copy size={11} />}</button>
+                                <button type="button" onClick={e => { e.stopPropagation(); downloadOne(m, i) }} title="Download"
                                     className="p-0.5 rounded bg-white/90 border border-gray-200 text-gray-500 hover:text-indigo-600"><Download size={11} /></button>
-                                <button type="button" onClick={() => removeAt(m)} title="Remove"
-                                    className="p-0.5 rounded bg-white/90 border border-gray-200 text-red-400 hover:text-red-600"><X size={11} /></button>
+                                {!readOnly && (
+                                    <button type="button" onClick={e => { e.stopPropagation(); removeAt(m) }} title="Remove"
+                                        className="p-0.5 rounded bg-white/90 border border-gray-200 text-red-400 hover:text-red-600"><X size={11} /></button>
+                                )}
                             </div>
                         </div>
                     ))}
+                </div>
+            ) : readOnly ? <p className="text-[11px] text-gray-300 mt-1">No images.</p> : null}
+
+            {/* Full-screen lightbox */}
+            {lightbox && (
+                <div className="fixed inset-0 z-[10000] bg-black/85 flex items-center justify-center p-4"
+                    onClick={() => setLightbox(null)}>
+                    <button type="button" onClick={() => setLightbox(null)} title="Close"
+                        className="absolute top-3 right-3 p-1.5 rounded-full bg-white/90 text-gray-700 hover:bg-white"><X size={18} /></button>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={lightbox} alt="" onClick={e => e.stopPropagation()}
+                        className="max-w-full max-h-full object-contain rounded shadow-2xl" />
                 </div>
             )}
         </div>
     )
 }
-function safeName(m: MediaItem, idx: number): string {
-    const ext = extFromDataUrl(m.dataUrl)
-    const base = (m.name || '').replace(/\.[a-z0-9]+$/i, '').replace(/[^\w-]+/g, '_').slice(0, 40) || `image_${idx + 1}`
-    return `${String(idx + 1).padStart(2, '0')}_${base}.${ext}`
-}
 
 /* ------------------------------------------------------------------ *
  * One rubric section (matches the grading form layout)
  * ------------------------------------------------------------------ */
-function SectionCard({ section, onChange }: { section: RubricSection; onChange: (patch: Partial<RubricSection>) => void }) {
+function SectionCard({ section, onChange, readOnly, taskId, media, onMediaChange }: {
+    section: RubricSection
+    onChange: (patch: Partial<RubricSection>) => void
+    readOnly?: boolean
+    taskId: string | null
+    media: MediaItem[]
+    onMediaChange: (m: MediaItem[]) => void
+}) {
     return (
         <div className="border border-gray-200 rounded-lg p-3 bg-white space-y-3">
             <div className="text-[11px] font-bold text-indigo-700">Section {section.key}</div>
@@ -352,8 +402,8 @@ function SectionCard({ section, onChange }: { section: RubricSection; onChange: 
                 <p className="text-[11px] font-medium text-gray-700 mb-1">Could this presentation reasonably be created as part of someone&apos;s job or professional workflow? <span className="text-red-500">*</span></p>
                 <div className="flex gap-2">
                     {[{ v: 'yes', l: 'Yes - professional setting' }, { v: 'no', l: 'No - personal setting' }].map(o => (
-                        <button key={o.v} type="button" onClick={() => onChange({ professionalSetting: o.v as any })}
-                            className={`text-[11px] px-2.5 py-1 rounded border ${section.professionalSetting === o.v ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
+                        <button key={o.v} type="button" disabled={readOnly} onClick={() => onChange({ professionalSetting: o.v as any })}
+                            className={`text-[11px] px-2.5 py-1 rounded border ${section.professionalSetting === o.v ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'} ${readOnly ? 'cursor-default' : ''} ${readOnly && section.professionalSetting !== o.v ? 'opacity-40' : ''}`}>
                             {o.l}
                         </button>
                     ))}
@@ -364,8 +414,8 @@ function SectionCard({ section, onChange }: { section: RubricSection; onChange: 
                 <p className="text-[11px] font-medium text-gray-700 mb-1">How would you score the slide deck&apos;s overall visual/aesthetic quality? <span className="text-red-500">*</span></p>
                 <div className="flex gap-1">
                     {[1, 2, 3, 4, 5, 6, 7].map(n => (
-                        <button key={n} type="button" onClick={() => onChange({ visualScore: section.visualScore === n ? null : n })}
-                            className={`w-8 py-1 text-[11px] rounded border ${section.visualScore === n ? 'bg-indigo-600 text-white border-indigo-600 font-bold' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
+                        <button key={n} type="button" disabled={readOnly} onClick={() => onChange({ visualScore: section.visualScore === n ? null : n })}
+                            className={`w-8 py-1 text-[11px] rounded border ${section.visualScore === n ? 'bg-indigo-600 text-white border-indigo-600 font-bold' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'} ${readOnly ? 'cursor-default' : ''} ${readOnly && section.visualScore !== n ? 'opacity-40' : ''}`}>
                             {n}
                         </button>
                     ))}
@@ -374,9 +424,26 @@ function SectionCard({ section, onChange }: { section: RubricSection; onChange: 
 
             <div>
                 <p className="text-[11px] font-medium text-gray-700 mb-1">Briefly describe your rationale. Why did you give this score?</p>
-                <textarea value={section.visualReason} onChange={e => onChange({ visualReason: e.target.value })}
-                    placeholder="Visual quality reason"
-                    className="w-full h-24 text-[11px] border border-gray-300 rounded px-2 py-1.5 resize-y focus:outline-none focus:border-indigo-400" />
+                {readOnly
+                    ? <p className="w-full min-h-[1.5rem] text-[11px] whitespace-pre-wrap text-gray-700 bg-gray-50 border border-gray-200 rounded px-2 py-1.5">{section.visualReason || <span className="text-gray-300">—</span>}</p>
+                    : <textarea value={section.visualReason} onChange={e => onChange({ visualReason: e.target.value })}
+                        placeholder="Visual quality reason"
+                        className="w-full h-24 text-[11px] border border-gray-300 rounded px-2 py-1.5 resize-y focus:outline-none focus:border-indigo-400" />
+                }
+            </div>
+
+            {/* Per-section pictures */}
+            <div className="border-t border-gray-100 pt-2">
+                <MediaGallery
+                    label={`Section ${section.key} pictures`}
+                    media={media}
+                    onChange={onMediaChange}
+                    taskId={taskId}
+                    readOnly={readOnly}
+                    namePrefix={section.key}
+                    upload={(item) => addDeckSectionMedia(taskId!, section.key, item)}
+                    remove={(mid) => deleteDeckSectionMedia(taskId!, section.key, mid)}
+                />
             </div>
         </div>
     )
@@ -404,13 +471,23 @@ function TaskEditor({ task, contributors, onCreated, onSaved, onClose, onContrib
     const [startedAt, setStartedAt] = useState<string | null>(task?.started_at ?? null)
     const [saving, setSaving] = useState(false)
     const [loadingMedia, setLoadingMedia] = useState(!!task && task.media === undefined)
+    // Per-section pictures, keyed by section letter.
+    const [sectionMedia, setSectionMedia] = useState<Record<string, MediaItem[]>>(() => (task?.section_media && typeof task.section_media === 'object') ? task.section_media : {})
+    const sectionMediaRef = useRef(sectionMedia); sectionMediaRef.current = sectionMedia
+    const setSectionMediaFor = (key: string, items: MediaItem[]) => setSectionMedia(prev => ({ ...prev, [key]: items }))
+    // Existing tasks open in read-only "view" mode by default; new tasks start editable.
+    const [viewMode, setViewMode] = useState<boolean>(!!task?.id)
 
     // Full task (incl. media) is loaded lazily when opening an existing task.
     useEffect(() => {
         if (task && task.media === undefined) {
             getDeckTask(task.id).then((res: any) => {
                 const full = res?.data ?? res
-                if (full) { setMedia(Array.isArray(full.media) ? full.media : []); setRational(normalizeRational(full.rational)); setStartedAt(full.started_at ?? null) }
+                if (full) {
+                    setMedia(Array.isArray(full.media) ? full.media : [])
+                    setSectionMedia(full.section_media && typeof full.section_media === 'object' ? full.section_media : {})
+                    setRational(normalizeRational(full.rational)); setStartedAt(full.started_at ?? null)
+                }
             }).finally(() => setLoadingMedia(false))
         }
     }, [task])
@@ -473,6 +550,21 @@ function TaskEditor({ task, contributors, onCreated, onSaved, onClose, onContrib
                         } catch { /* skip failed upload */ }
                     }
                     setMedia(prev => prev.filter(m => !m._pending).concat(saved))
+                    // Flush any per-section images pasted before first save.
+                    const sm = sectionMediaRef.current
+                    for (const [key, items] of Object.entries(sm)) {
+                        const pend = items.filter(m => m._pending)
+                        if (!pend.length) continue
+                        const savedItems: MediaItem[] = []
+                        for (const m of pend) {
+                            try {
+                                const r: any = await addDeckSectionMedia(created.id, key, { name: m.name, dataUrl: m.dataUrl })
+                                const item = r?.data ?? r
+                                if (item?.id) savedItems.push(item)
+                            } catch { /* skip */ }
+                        }
+                        setSectionMedia(prev => ({ ...prev, [key]: (prev[key] || []).filter(m => !m._pending).concat(savedItems) }))
+                    }
                 }
             }
             onSaved()
@@ -486,8 +578,18 @@ function TaskEditor({ task, contributors, onCreated, onSaved, onClose, onContrib
             {/* Header */}
             <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-200 bg-gray-50 shrink-0">
                 <LayoutGrid size={15} className="text-indigo-500 shrink-0" />
-                <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Task title…"
-                    className="text-sm font-semibold text-gray-800 border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-indigo-400 w-72" />
+                {viewMode
+                    ? <span className="text-sm font-semibold text-gray-800 truncate max-w-[320px]">{title || 'Untitled task'}</span>
+                    : <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Task title…"
+                        className="text-sm font-semibold text-gray-800 border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-indigo-400 w-72" />
+                }
+                {/* View / Edit toggle */}
+                <div className="flex items-center gap-0.5 border border-gray-300 rounded p-0.5 shrink-0">
+                    <button onClick={() => setViewMode(true)} title="View mode (read-only)"
+                        className={`flex items-center gap-1 text-[11px] px-2 py-0.5 rounded ${viewMode ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}><Eye size={12} /> View</button>
+                    <button onClick={() => setViewMode(false)} title="Edit mode"
+                        className={`flex items-center gap-1 text-[11px] px-2 py-0.5 rounded ${!viewMode ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}><Pencil size={12} /> Edit</button>
+                </div>
                 {/* Countdown */}
                 {status === 'submitted' ? (
                     <span className="text-[11px] font-medium px-2 py-0.5 rounded border bg-emerald-100 text-emerald-700 border-emerald-300">Submitted</span>
@@ -500,10 +602,12 @@ function TaskEditor({ task, contributors, onCreated, onSaved, onClose, onContrib
                 ) : null}
                 <div className="flex-1" />
                 <span className="text-[10px] text-gray-400">{saving ? 'Saving…' : ''}</span>
-                <button onClick={save} disabled={saving}
-                    className="flex items-center gap-1 text-[12px] bg-emerald-600 text-white rounded px-3 py-1.5 hover:bg-emerald-700 disabled:opacity-40">
-                    <Check size={13} /> Save
-                </button>
+                {!viewMode && (
+                    <button onClick={save} disabled={saving}
+                        className="flex items-center gap-1 text-[12px] bg-emerald-600 text-white rounded px-3 py-1.5 hover:bg-emerald-700 disabled:opacity-40">
+                        <Check size={13} /> Save
+                    </button>
+                )}
                 <button onClick={onClose} className="text-gray-400 hover:text-gray-700 ml-1"><X size={16} /></button>
             </div>
 
@@ -514,12 +618,14 @@ function TaskEditor({ task, contributors, onCreated, onSaved, onClose, onContrib
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <label className="flex flex-col gap-1">
                             <span className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">Contributor</span>
-                            <ContributorPicker contributors={contributors} value={contributorId} onChange={setContributorId} onCreated={onContributorCreated} />
+                            {viewMode
+                                ? <span className="text-xs text-gray-700 border border-gray-200 bg-gray-50 rounded px-2 py-1">{contributors.find(c => c.id === contributorId)?.name || '—'}</span>
+                                : <ContributorPicker contributors={contributors} value={contributorId} onChange={setContributorId} onCreated={onContributorCreated} />}
                         </label>
                         <label className="flex flex-col gap-1">
                             <span className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">Status</span>
-                            <select value={status} onChange={e => setStatus(e.target.value as any)}
-                                className="text-xs border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:border-indigo-400 w-40">
+                            <select value={status} disabled={viewMode} onChange={e => setStatus(e.target.value as any)}
+                                className="text-xs border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:border-indigo-400 w-40 disabled:bg-gray-50 disabled:text-gray-600">
                                 {STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                             </select>
                         </label>
@@ -527,19 +633,21 @@ function TaskEditor({ task, contributors, onCreated, onSaved, onClose, onContrib
                             <span className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">Link</span>
                             <div className="flex items-center gap-1.5">
                                 <Link2 size={13} className="text-gray-400 shrink-0" />
-                                <input value={link} onChange={e => setLink(e.target.value)} placeholder="https://…"
-                                    className="flex-1 text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-indigo-400" />
+                                {viewMode
+                                    ? (link ? <a href={link} target="_blank" rel="noopener noreferrer" className="flex-1 text-xs text-indigo-600 hover:underline truncate">{link}</a> : <span className="flex-1 text-xs text-gray-300">—</span>)
+                                    : <input value={link} onChange={e => setLink(e.target.value)} placeholder="https://…"
+                                        className="flex-1 text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-indigo-400" />}
                             </div>
                         </label>
                         <label className="flex flex-col gap-1">
                             <span className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">Time to complete (mins)</span>
-                            <input type="number" min={1} value={mins} onChange={e => setMins(e.target.value)} placeholder="e.g. 30"
-                                className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-indigo-400 w-40" />
+                            <input type="number" min={1} value={mins} disabled={viewMode} onChange={e => setMins(e.target.value)} placeholder="e.g. 30"
+                                className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-indigo-400 w-40 disabled:bg-gray-50 disabled:text-gray-600" />
                         </label>
                         <label className="flex flex-col gap-1">
                             <span className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">Rationale sections</span>
-                            <select value={rational.count} onChange={e => setCount(Number(e.target.value))}
-                                className="text-xs border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:border-indigo-400 w-40">
+                            <select value={rational.count} disabled={viewMode} onChange={e => setCount(Number(e.target.value))}
+                                className="text-xs border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:border-indigo-400 w-40 disabled:bg-gray-50 disabled:text-gray-600">
                                 {Array.from({ length: 12 }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n} section{n > 1 ? 's' : ''}</option>)}
                             </select>
                         </label>
@@ -549,7 +657,8 @@ function TaskEditor({ task, contributors, onCreated, onSaved, onClose, onContrib
                     {loadingMedia ? (
                         <div className="flex items-center gap-2 text-gray-400 text-xs py-2"><RefreshCw size={12} className="animate-spin" /> Loading media…</div>
                     ) : (
-                        <MediaBox taskId={savedId} media={media} onChange={setMedia} />
+                        <MediaGallery label="Task media" media={media} onChange={setMedia} taskId={savedId} readOnly={viewMode}
+                            upload={(item) => addDeckTaskMedia(savedId!, item)} remove={(id) => deleteDeckTaskMedia(savedId!, id)} />
                     )}
                     </div>
 
@@ -583,7 +692,8 @@ function TaskEditor({ task, contributors, onCreated, onSaved, onClose, onContrib
                                 {rational.sections.map((s, i) => (
                                     <div key={i} ref={el => { secRefs.current[i] = el }}
                                         className={`min-w-[320px] max-w-[360px] shrink-0 rounded-lg ${activeSec === i ? 'ring-2 ring-indigo-300' : ''}`}>
-                                        <SectionCard section={s} onChange={patch => setSection(i, patch)} />
+                                        <SectionCard section={s} onChange={patch => setSection(i, patch)} readOnly={viewMode}
+                                            taskId={savedId} media={sectionMedia[s.key] || []} onMediaChange={m => setSectionMediaFor(s.key, m)} />
                                     </div>
                                 ))}
                             </div>
@@ -592,7 +702,8 @@ function TaskEditor({ task, contributors, onCreated, onSaved, onClose, onContrib
                                 {rational.sections.map((s, i) => (
                                     <div key={i} ref={el => { secRefs.current[i] = el }}
                                         className={`rounded-lg ${activeSec === i ? 'ring-2 ring-indigo-300' : ''}`}>
-                                        <SectionCard section={s} onChange={patch => setSection(i, patch)} />
+                                        <SectionCard section={s} onChange={patch => setSection(i, patch)} readOnly={viewMode}
+                                            taskId={savedId} media={sectionMedia[s.key] || []} onMediaChange={m => setSectionMediaFor(s.key, m)} />
                                     </div>
                                 ))}
                             </div>

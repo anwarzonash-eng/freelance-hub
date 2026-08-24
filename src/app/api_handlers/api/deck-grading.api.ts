@@ -54,3 +54,14 @@ export async function deleteDeckTaskMedia(id: string, mediaId: string) {
     const params: IApiParams = { path: { id, mediaId } }
     return await apiClient(DeckGradingAPIRoutes.DELETE_TASK_MEDIA, ApiMethod.DELETE, undefined, params, undefined, true, false)
 }
+
+// ── Per-section media ───────────────────────────────────────────────────────────
+export async function addDeckSectionMedia(id: string, key: string, item: { name: string; dataUrl: string }) {
+    const params: IApiParams = { path: { id, key } }
+    return await apiClient(DeckGradingAPIRoutes.ADD_SECTION_MEDIA, ApiMethod.POST, item, params, undefined, true, false)
+}
+
+export async function deleteDeckSectionMedia(id: string, key: string, mediaId: string) {
+    const params: IApiParams = { path: { id, key, mediaId } }
+    return await apiClient(DeckGradingAPIRoutes.DELETE_SECTION_MEDIA, ApiMethod.DELETE, undefined, params, undefined, true, false)
+}
