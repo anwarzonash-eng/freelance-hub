@@ -35,6 +35,7 @@ import ContextMenu, { ContextMenuItem } from '@/app/components/jobs/ContextMenu'
  * ------------------------------------------------------------------ */
 
 type Kind = 'bash' | 'result' | 'text' | 'code_diff'
+export type TranscriptVersion = 1 | 2
 
 export interface ParsedItem {
     num: number
@@ -45,6 +46,18 @@ export interface ParsedItem {
     command?: string     // extracted bash command
     diff?: string        // extracted code_diff body
     tokensRemaining?: string // "Tokens Remaining: total …" value for this step (if present)
+    // ── V2 (function_calls) fields — populated only by parseTranscriptV2 ──
+    role?: 'description' | 'execution' | 'result' // first-level node type in V2
+    segIndex?: number    // which description-block (segment) this leaf belongs to
+    tool?: string        // tool name from <invoke name="…"> (execution nodes)
+    resultKind?: 'output' | 'error' | 'both' | 'text' | 'toolran' | 'empty'
+    hasError?: boolean   // result carried an <error> (used for red highlighting)
+    errorText?: string   // just the <error> portion, for the error banner
+}
+
+/** Version dispatcher — V2 parses the new <function_calls>/<function_results> shape. */
+function parseAny(text: string, version: TranscriptVersion = 1): ParsedItem[] {
+    return version === 2 ? parseTranscriptV2(text) : parseTranscript(text)
 }
 
 function stripTokenLines(text: string): string {
@@ -67,15 +80,25 @@ function extractTokensRemaining(text: string): string | undefined {
     return undefined
 }
 
+/** V2: the LAST "<total_tokens>N … left</total_tokens>" figure in a chunk of text. */
+function extractTotalTokensTag(text: string): string | undefined {
+    const re = /<(?:antml:)?total_tokens>\s*([\d][\d,]*)\b/gi
+    let m: RegExpExecArray | null
+    let last: string | undefined
+    while ((m = re.exec(text)) !== null) last = m[1]
+    return last
+}
+
 /** The most recent "Tokens Remaining" figure in a run (last step that reports one). */
 function latestTokens(items: ParsedItem[]): string {
     for (let i = items.length - 1; i >= 0; i--) if (items[i].tokensRemaining) return items[i].tokensRemaining!
     return ''
 }
 
-/** Number of steps in a run — the count of numbered (n) turns, matching what the
- *  model panel shows when the turn is opened. */
-function countModelSteps(text: string): number {
+/** Number of steps in a run — matches what the model panel shows when opened.
+ *  V1: total numbered (n) turns. V2: number of executions (tool calls). */
+function countModelSteps(text: string, version: TranscriptVersion = 1): number {
+    if (version === 2) return parseTranscriptV2(text || '').filter(i => i.role === 'execution').length
     return parseTranscript(text || '').length
 }
 
@@ -161,18 +184,196 @@ function parseTranscript(text: string): ParsedItem[] {
 }
 
 /* ------------------------------------------------------------------ *
+ * V2 parser — the new <function_calls> / <function_results> transcript.
+ * ------------------------------------------------------------------ *
+ * Shape (per your report):
+ *   Assistant:
+ *     <description prose>
+ *       <function_calls><invoke name="tool"><parameter …/></invoke></function_calls>
+ *       <function_results>… (may hold <output>/<error>/<system>) </function_results>
+ *       … (more call/result pairs)
+ *     <description prose>            ← starts a NEW segment
+ *   Human:   (trailing, marks the end)
+ *
+ * Emitted as a FLAT ParsedItem[] (leaves in reading order) so the existing
+ * search / remarks / detail / download machinery keeps working, but each leaf
+ * carries role + segIndex so the UI can render the description→exec/result tree.
+ * ------------------------------------------------------------------ */
+type V2Step = { call: { tool: string; command: string; raw: string } | null; result: V2Result | null; tokens?: string }
+type V2Result = { kind: NonNullable<ParsedItem['resultKind']>; text: string; hasError: boolean; errorText: string }
+type V2Segment = { description: string; steps: V2Step[]; tokens?: string }
+
+/** Anchor the region between the first "Assistant:" and a trailing "Human:". */
+function sliceAssistantRegion(text: string): string {
+    let start = 0
+    const a = text.search(/(^|\n)\s*Assistant:/)
+    if (a >= 0) {
+        const m = /(^|\n)\s*Assistant:/.exec(text.slice(a))
+        start = a + (m ? m[0].length : 0)
+    }
+    let region = text.slice(start)
+    const h = region.search(/\n\s*Human:\s*$/)
+    if (h >= 0) region = region.slice(0, h)
+    else { const h2 = region.lastIndexOf('\nHuman:'); if (h2 >= 0) region = region.slice(0, h2) }
+    return region
+}
+
+function parseInvokes(body: string): { tool: string; command: string; raw: string }[] {
+    const out: { tool: string; command: string; raw: string }[] = []
+    const invRe = /<(?:antml:)?invoke\s+name="([^"]+)">([\s\S]*?)<\/(?:antml:)?invoke>/gi
+    let m: RegExpExecArray | null
+    while ((m = invRe.exec(body)) !== null) {
+        const tool = m[1]
+        const inner = m[2]
+        const params: { name: string; value: string }[] = []
+        const pRe = /<(?:antml:)?parameter\s+name="([^"]+)">([\s\S]*?)<\/(?:antml:)?parameter>/gi
+        let p: RegExpExecArray | null
+        while ((p = pRe.exec(inner)) !== null) params.push({ name: p[1], value: p[2] })
+        const cmd = params.find(x => x.name === 'command')
+        const command = cmd
+            ? cmd.value.trim()
+            : params.map(x => `${x.name}:\n${x.value}`).join('\n\n').trim()
+        out.push({ tool, command, raw: inner.trim() })
+    }
+    // A malformed block with no <invoke> still counts as one execution.
+    if (!out.length && body.trim()) out.push({ tool: 'tool', command: body.trim(), raw: body.trim() })
+    return out
+}
+
+function parseResultBody(body: string): V2Result {
+    const err = /<(?:antml:)?error>([\s\S]*?)<\/(?:antml:)?error>/i.exec(body)
+    const out = /<(?:antml:)?output>([\s\S]*?)<\/(?:antml:)?output>/i.exec(body)
+    const sys = /<(?:antml:)?system>([\s\S]*?)<\/(?:antml:)?system>/i.exec(body)
+    const errorText = err ? err[1].trim() : ''
+    const outputText = out ? out[1].trim() : ''
+    if (err && out) return { kind: 'both', text: `${outputText}\n\n[ERROR]\n${errorText}`, hasError: true, errorText }
+    if (err) return { kind: 'error', text: errorText, hasError: true, errorText }
+    if (out) return { kind: 'output', text: outputText, hasError: false, errorText: '' }
+    if (sys) return { kind: 'toolran', text: sys[1].trim(), hasError: false, errorText: '' }
+    const t = body.trim()
+    if (!t) return { kind: 'empty', text: '', hasError: false, errorText: '' }
+    return { kind: 'text', text: t, hasError: false, errorText: '' }
+}
+
+function parseTranscriptV2(text: string): ParsedItem[] {
+    if (!text || !text.trim()) return []
+    const region = sliceAssistantRegion(text)
+
+    // Ordered scan of the three block kinds; everything else is prose.
+    // Tags may carry the authored "antml:" namespace prefix (real transcripts) or be plain.
+    const blockRe = /<(?:antml:)?function_calls>([\s\S]*?)<\/(?:antml:)?function_calls>|<(?:antml:)?function_results>([\s\S]*?)<\/(?:antml:)?function_results>|<(?:antml:)?system>([\s\S]*?)<\/(?:antml:)?system>/gi
+    type Tok = { type: 'prose'; text: string } | { type: 'call'; body: string } | { type: 'result'; body: string } | { type: 'system'; body: string }
+    const toks: Tok[] = []
+    let last = 0
+    let m: RegExpExecArray | null
+    while ((m = blockRe.exec(region)) !== null) {
+        const prose = region.slice(last, m.index)
+        if (prose.trim()) toks.push({ type: 'prose', text: prose })
+        if (m[1] !== undefined) toks.push({ type: 'call', body: m[1] })
+        else if (m[2] !== undefined) toks.push({ type: 'result', body: m[2] })
+        else toks.push({ type: 'system', body: m[3] ?? '' })
+        last = m.index + m[0].length
+    }
+    const tailProse = region.slice(last)
+    if (tailProse.trim()) toks.push({ type: 'prose', text: tailProse })
+
+    // Build description-segments from the token stream.
+    const segs: V2Segment[] = []
+    let cur: V2Segment | null = null
+    const newSeg = (desc: string) => { cur = { description: desc.trim(), steps: [] }; segs.push(cur) }
+    for (const t of toks) {
+        if (t.type === 'prose') {
+            if (!cur || cur.steps.length > 0) newSeg(t.text)
+            else cur.description = (cur.description ? cur.description + '\n\n' : '') + t.text.trim()
+        } else if (t.type === 'call') {
+            if (!cur) newSeg('')
+            for (const inv of parseInvokes(t.body)) cur!.steps.push({ call: inv, result: null })
+        } else if (t.type === 'result') {
+            if (!cur) newSeg('')
+            const res = parseResultBody(t.body)
+            const open = [...cur!.steps].reverse().find(s => s.result === null)
+            if (open) open.result = res
+            else cur!.steps.push({ call: null, result: res })
+        } else { // system → carries the <total_tokens> figure for the preceding step
+            const tk = extractTotalTokensTag(t.body)
+            if (tk) { if (cur && cur.steps.length) cur.steps[cur.steps.length - 1].tokens = tk; else if (cur) cur.tokens = tk }
+        }
+    }
+
+    // Flatten to leaves with sequential numbering.
+    const items: ParsedItem[] = []
+    let num = 1
+    segs.forEach((seg, si) => {
+        if (seg.description.trim()) {
+            // Description is untagged narration only — tokens live on the call steps, not here.
+            items.push({ num: num++, role: 'description', label: 'Function Assist', kind: 'text', content: seg.description.trim(), segIndex: si })
+        }
+        seg.steps.forEach(st => {
+            if (st.call) {
+                items.push({ num: num++, role: 'execution', label: 'Function Assist', kind: 'bash', tool: st.call.tool, command: st.call.command, content: st.call.command, prose: '', segIndex: si, tokensRemaining: st.tokens })
+            }
+            if (st.result) {
+                // Only carry the token figure on the result when there was no call to hang it on.
+                items.push({ num: num++, role: 'result', label: 'Function Result', kind: 'result', content: st.result.text, resultKind: st.result.kind, hasError: st.result.hasError, errorText: st.result.errorText, segIndex: si, tokensRemaining: st.call ? undefined : st.tokens })
+            }
+        })
+    })
+    return items
+}
+
+/** Group a flat V2 item list back into its description-segments for nested rendering. */
+function groupV2(items: ParsedItem[]): { seg: number; description: ParsedItem | null; children: ParsedItem[] }[] {
+    const groups: { seg: number; description: ParsedItem | null; children: ParsedItem[] }[] = []
+    const bySeg = new Map<number, { seg: number; description: ParsedItem | null; children: ParsedItem[] }>()
+    for (const it of items) {
+        const si = it.segIndex ?? 0
+        let g = bySeg.get(si)
+        if (!g) { g = { seg: si, description: null, children: [] }; bySeg.set(si, g); groups.push(g) }
+        if (it.role === 'description') g.description = it
+        else g.children.push(it)
+    }
+    return groups
+}
+
+/* ------------------------------------------------------------------ *
  * Evaluation prompt for ChatGPT
  * ------------------------------------------------------------------ *
  * Builds a prompt that asks ChatGPT to explain each numbered turn in
  * 1-2 lines and return a JSON object keyed by turn number, which is
  * pasted back here and bound to each turn.
  * ------------------------------------------------------------------ */
-function buildEvalPrompt(items: ParsedItem[], originalPrompt: string): string {
-    const header = `You are reviewing the transcript of an AI coding agent that executed a long, multi-step task. The run is split into numbered turns like (2), (3), (4)… Turns alternate between the agent taking an action ("Function Assist") and the resulting tool/function output ("Function Result").
+const isV2Items = (items: ParsedItem[]) => items.some(i => i.role)
 
-Some turns are one of these special sections:
-- A "bash" section: a shell command the agent ran.
-- A "code_diff" section: a code change the agent made, in a git-style diff. Lines starting with "--" are REMOVED code, lines starting with "++" are ADDED code, and all other lines are unchanged context. When explaining a code_diff turn, summarise what the edit does (what was added/removed and why).
+const V1_FORMAT_NOTE = 'The run is split into numbered turns like (2), (3), (4)… Turns alternate between the agent taking an action ("Function Assist") and the resulting tool/function output ("Function Result"). Some turns are "bash" sections (a shell command the agent ran) or "code_diff" sections (a git-style diff where lines starting with "--" are REMOVED and "++" are ADDED).'
+
+const V2_FORMAT_NOTE = 'The run is a sequence of DESCRIPTION blocks — the agent\'s own narration/instructions. Under each description are one or more EXECUTION steps (a tool/function call the agent made, shown inside <function_calls>, e.g. a shell command via bash), each immediately followed by its RESULT (<function_results>). A RESULT may contain command output, an error (marked [ERROR]), or both. Errors are called out explicitly — treat them as failures the agent then had to handle. Each node below is numbered like (2), (3), (4)… in reading order.'
+
+/** One-line-per-node serialization of a leaf (works for V1 and V2). */
+function serializeLeaf(it: ParsedItem): string {
+    if (it.role === 'description') return `(${it.num}) [DESCRIPTION]\n${it.content || '(empty)'}`
+    if (it.role === 'execution') return `(${it.num}) [EXECUTION ${it.tool || 'tool'}]\n${it.command || '(empty)'}`
+    if (it.role === 'result') return `(${it.num}) [RESULT ${it.hasError ? 'ERROR' : (it.resultKind || 'output')}]\n${it.content || '(empty)'}`
+    const tag = it.kind === 'bash' ? ' bash' : it.kind === 'code_diff' ? ' code_diff' : ''
+    const c = it.kind === 'bash'
+        ? [it.prose, it.command].filter(Boolean).join('\n')
+        : it.kind === 'code_diff'
+            ? [it.prose, it.diff].filter(Boolean).join('\n')
+            : it.content
+    return `(${it.num}) [${it.label}${tag}]\n${c || '(empty)'}`
+}
+
+function buildEvalPrompt(items: ParsedItem[], originalPrompt: string): string {
+    const v2 = isV2Items(items)
+    const header = v2
+        ? `You are reviewing the transcript of an AI coding agent that executed a long, multi-step task. ${V2_FORMAT_NOTE}
+
+For EACH numbered node below — whether it is a DESCRIPTION, an EXECUTION, or a RESULT — write a concise explanation (NO MORE than 1-2 lines) of what that node is doing or showing. For an EXECUTION, say what the command/tool call does; for a RESULT, say what came back and explicitly note if it errored.
+
+Return ONLY a raw JSON object — no markdown code fences, no commentary before or after. Keys are the node numbers as strings; values are your explanations. Example:
+{"1": "Narration: plans to check the sandbox toolchain before scaffolding.", "2": "Runs version checks for python/node and pings the package registry.", "3": "Result: shows the tool versions; registry reachable.", "4": "Result: ERROR — mkdir denied on /work (permission), so the path is unusable."}`
+        : `You are reviewing the transcript of an AI coding agent that executed a long, multi-step task. ${V1_FORMAT_NOTE}
+
+When explaining a code_diff turn, summarise what the edit does (what was added/removed and why).
 
 For EACH numbered turn below, write a concise explanation (NO MORE than 1-2 lines) of what that turn is doing or showing.
 
@@ -183,26 +384,14 @@ Return ONLY a raw JSON object — no markdown code fences, no commentary before 
         ? `\n\nOriginal task prompt given to the agent:\n"""\n${originalPrompt.trim()}\n"""`
         : ''
 
-    const body = items.map(it => {
-        const c = it.kind === 'bash'
-            ? [it.prose, it.command].filter(Boolean).join('\n')
-            : it.kind === 'code_diff'
-                ? [it.prose, it.diff].filter(Boolean).join('\n')
-                : it.content
-        const tag = it.kind === 'bash' ? ' bash' : it.kind === 'code_diff' ? ' code_diff' : ''
-        return `(${it.num}) [${it.label}${tag}]\n${c || '(empty)'}`
-    }).join('\n\n')
-
+    const body = items.map(serializeLeaf).join('\n\n')
     return `${header}${promptCtx}\n\nTranscript:\n${body}`
 }
 
 /** Plain-text rendering of the parsed turns — used for copy + as the transcript inside prompts. */
 function formatTranscript(items: ParsedItem[]): string {
     if (!items.length) return '(empty)'
-    return items.map(it => {
-        const tag = it.kind === 'bash' ? ' [bash]' : it.kind === 'code_diff' ? ' [code_diff]' : ''
-        return `(${it.num}) ${it.label}${tag}\n${'-'.repeat(40)}\n${it.content || '(empty)'}\n`
-    }).join('\n')
+    return items.map(it => `${serializeLeaf(it).split('\n')[0]}\n${'-'.repeat(40)}\n${(it.role === 'execution' ? it.command : it.content) || '(empty)'}\n`).join('\n')
 }
 
 function promptContext(originalPrompt: string): string {
@@ -219,7 +408,7 @@ const MD_INLINE_INSTRUCTION =
 /** Copy-only: condense one model's run into high-level summary steps. */
 function buildSummaryPrompt(items: ParsedItem[], originalPrompt: string): string {
     const lines = [
-        'You are reviewing the transcript of an AI coding agent that executed a long, multi-step task. The run is a sequence of numbered turns like (2), (3), (4)… Turns alternate between the agent taking an action ("Function Assist") and the tool/function output it got back ("Function Result"). Some turns are `bash` sections (a shell command) or `code_diff` sections (a git-style diff where lines starting with "--" are removed and "++" are added).',
+        `You are reviewing the transcript of an AI coding agent that executed a long, multi-step task. ${isV2Items(items) ? V2_FORMAT_NOTE : V1_FORMAT_NOTE}`,
         '',
         'I do NOT want a turn-by-turn retelling. Summarize the run into a short, ordered list of high-level steps — what the model actually set out to do and did, not every command. Rules:',
         '',
@@ -242,10 +431,11 @@ function buildSummaryPrompt(items: ParsedItem[], originalPrompt: string): string
 
 /** Copy-only: compare the two models' runs (similarities, differences, verdict). */
 function buildComparePrompt(itemsA: ParsedItem[], itemsB: ParsedItem[], originalPrompt: string): string {
+    const v2 = isV2Items(itemsA) || isV2Items(itemsB)
     const lines = [
-        'You are comparing two AI coding agents (Model A and Model B) that were given the SAME task and each produced its own run. Each run is a sequence of numbered turns like (2), (3), (4)… alternating between the agent\'s action ("Function Assist") and the tool output ("Function Result"). Some turns are `bash` sections (shell commands) or `code_diff` sections (git-style diffs where "--" = removed, "++" = added).',
+        `You are comparing two AI coding agents (Model A and Model B) that were given the SAME task and each produced its own run. ${v2 ? V2_FORMAT_NOTE : V1_FORMAT_NOTE}`,
         '',
-        'Compare the two runs at the level of WHAT each model was trying to accomplish, not individual commands. I want to see where they behaved similarly and where they diverged.',
+        'Compare the two runs at the level of WHAT each model was trying to accomplish, not individual commands. I want to see where they behaved similarly and where they diverged. When one run hit an [ERROR] and the other did not, call that out.',
         '',
         MD_INLINE_INSTRUCTION,
         '',
@@ -593,7 +783,7 @@ function DetailBody({ item, term, refTexts }: { item: ParsedItem; term: string; 
                 <div className="border border-gray-200 rounded overflow-hidden">
                     <div className="flex items-center justify-between px-2 py-1 bg-gray-100 border-b border-gray-200">
                         <span className="flex items-center gap-1 text-[10px] font-mono text-gray-500">
-                            <TerminalSquare size={11} /> bash
+                            <TerminalSquare size={11} /> {item.tool || 'bash'}
                         </span>
                         <CopyBtn text={item.command ?? ''} className="text-gray-400 hover:text-gray-700 hover:bg-gray-200" />
                     </div>
@@ -606,16 +796,23 @@ function DetailBody({ item, term, refTexts }: { item: ParsedItem; term: string; 
     if (item.kind === 'result') {
         const lines = item.content ? item.content.split('\n') : []
         return (
-            <div className="rounded overflow-hidden border border-gray-800">
-                <pre className="text-[10px] leading-relaxed bg-[#1e1e1e] text-gray-100 px-0 py-1.5 overflow-x-auto font-mono">
-                    {lines.length ? lines.map((l, i) => (
-                        <div key={i} className="flex px-2">
-                            <span className="text-gray-600 select-none w-7 shrink-0 text-right pr-2">{i + 1}</span>
-                            <span className="whitespace-pre-wrap break-all"
-                                dangerouslySetInnerHTML={{ __html: highlightTermsText(l || ' ', terms) }} />
-                        </div>
-                    )) : <div className="px-3 text-gray-500 italic">empty</div>}
-                </pre>
+            <div className="space-y-1.5">
+                {item.hasError && (
+                    <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-red-50 border border-red-300 text-red-700 text-[10px] font-semibold">
+                        <X size={11} className="shrink-0" /> ERROR{item.resultKind === 'both' ? ' (with output)' : ''}
+                    </div>
+                )}
+                <div className={`rounded overflow-hidden border ${item.hasError ? 'border-red-400 ring-1 ring-red-200' : 'border-gray-800'}`}>
+                    <pre className="text-[10px] leading-relaxed bg-[#1e1e1e] text-gray-100 px-0 py-1.5 overflow-x-auto font-mono">
+                        {lines.length ? lines.map((l, i) => (
+                            <div key={i} className={`flex px-2 ${/\[ERROR\]/.test(l) ? 'text-red-400 font-semibold' : ''}`}>
+                                <span className="text-gray-600 select-none w-7 shrink-0 text-right pr-2">{i + 1}</span>
+                                <span className="whitespace-pre-wrap break-all"
+                                    dangerouslySetInnerHTML={{ __html: highlightTermsText(l || ' ', terms) }} />
+                            </div>
+                        )) : <div className="px-3 text-gray-500 italic">{item.resultKind === 'toolran' ? 'Tool ran without output' : 'empty'}</div>}
+                    </pre>
+                </div>
             </div>
         )
     }
@@ -688,14 +885,21 @@ function TranscriptRow({
                 {isAssist
                     ? <Bot size={11} className="text-blue-500 shrink-0" />
                     : <User size={11} className="text-teal-500 shrink-0" />}
-                <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${isAssist ? 'bg-blue-100 text-blue-700' : 'bg-teal-100 text-teal-700'}`}>
-                    {item.label}
-                </span>
+                {item.role === 'description'
+                    ? <span className="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 bg-indigo-100 text-indigo-700">Description</span>
+                    : item.role === 'execution'
+                        ? <span className="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 bg-blue-100 text-blue-700">Execution</span>
+                        : item.role === 'result'
+                            ? <span className="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 bg-teal-100 text-teal-700">Result</span>
+                            : <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${isAssist ? 'bg-blue-100 text-blue-700' : 'bg-teal-100 text-teal-700'}`}>{item.label}</span>}
                 {item.kind === 'bash' && (
-                    <span className="text-[9px] px-1 py-0.5 rounded bg-gray-800 text-gray-100 font-mono shrink-0">bash</span>
+                    <span className="text-[9px] px-1 py-0.5 rounded bg-gray-800 text-gray-100 font-mono shrink-0">{item.tool || 'bash'}</span>
                 )}
                 {item.kind === 'code_diff' && (
                     <span className="text-[9px] px-1 py-0.5 rounded bg-purple-700 text-white font-mono shrink-0 flex items-center gap-0.5"><FileDiff size={9} /> diff</span>
+                )}
+                {item.hasError && (
+                    <span title="This result contained an error" className="text-[9px] px-1 py-0.5 rounded bg-red-100 text-red-700 border border-red-300 font-semibold shrink-0 flex items-center gap-0.5"><X size={9} /> ERROR</span>
                 )}
                 {item.tokensRemaining && (
                     <span title={`Tokens remaining at this step: ${item.tokensRemaining}`}
@@ -736,7 +940,7 @@ function TranscriptRow({
  * One model panel (reused for Model A and Model B)
  * ------------------------------------------------------------------ */
 function ModelPanel({
-    modelKey, title, input, remarks, onInputChange, onRemarksChange, sharedPrompt, turnTitle, readOnly, reveal, savedSummary, onSaveSummary,
+    modelKey, title, input, remarks, onInputChange, onRemarksChange, sharedPrompt, turnTitle, readOnly, reveal, savedSummary, onSaveSummary, version = 1,
 }: {
     modelKey: 'a' | 'b'
     title: string
@@ -750,6 +954,7 @@ function ModelPanel({
     reveal?: { turnNum: number; text: string; nonce: number } | null
     savedSummary?: string
     onSaveSummary?: (text: string) => void
+    version?: TranscriptVersion
 }) {
     // UI-only preferences persist globally; turn DATA (input/remarks) comes from props.
     const SHOWINPUT_LS_KEY = `aparse_model_${modelKey}_showinput`
@@ -815,7 +1020,16 @@ function ModelPanel({
         return () => document.removeEventListener('mousedown', handler)
     }, [showDownloadMenu])
 
-    const items = useMemo(() => parseTranscript(input), [input])
+    const items = useMemo(() => parseAny(input, version), [input, version])
+    const isV2 = version === 2
+    // Level-1 (description segment) open/close state for the V2 nested view.
+    const [openSegs, setOpenSegs] = useState<Set<number>>(new Set())
+    // Default every description-segment to open when a V2 transcript (re)parses.
+    useEffect(() => {
+        if (!isV2) return
+        setOpenSegs(new Set(groupV2(items).map(g => g.seg)))
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isV2, items.length])
 
     // Turn search — keep original indices so open/remark bindings stay stable.
     const kw = search.trim().toLowerCase()
@@ -853,6 +1067,7 @@ function ModelPanel({
         if (idx === -1) return
         setSearch('')
         setOpenSet(prev => new Set(prev).add(idx))
+        if (isV2 && items[idx].segIndex != null) setOpenSegs(prev => new Set(prev).add(items[idx].segIndex!))
         setDetailIdx(idx)
         setDetailSearch(reveal.text)
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -935,8 +1150,10 @@ function ModelPanel({
         })
     }, [])
 
-    const expandAll = () => setOpenSet(new Set(items.map((_, i) => i)))
-    const collapseAll = () => setOpenSet(new Set())
+    const segCount = isV2 ? groupV2(items).length : 0
+    const expandAll = () => { setOpenSet(new Set(items.map((_, i) => i))); if (isV2) setOpenSegs(new Set(Array.from({ length: segCount }, (_, i) => i))) }
+    const collapseAll = () => { setOpenSet(new Set()); setOpenSegs(new Set()) }
+    const toggleSeg = useCallback((seg: number) => setOpenSegs(prev => { const s = new Set(prev); s.has(seg) ? s.delete(seg) : s.add(seg); return s }), [])
 
     // Full file content (header + turns) shared by Download and Copy.
     const buildFileContent = () => {
@@ -955,32 +1172,50 @@ function ModelPanel({
             '',
             'FORMAT',
             '------',
-            'The run is a sequence of numbered turns. Each turn is written as:',
-            '',
-            '    (N) <Label>[ bash]',
-            '    ----------------------------------------',
-            '    <raw turn content>',
-            '',
-            'Where:',
-            '  • (N)             = the turn number, in the original increasing order.',
-            '  • <Label>         = "Function Assist" (the agent taking an action) or',
-            '                      "Function Result" (the tool/function output it got back).',
-            '                      Turns alternate: Assist, Result, Assist, Result, …',
-            '  • [bash]          = present when the Assist turn ran a shell command.',
-            '  • [code_diff]     = present when the Assist turn made a code change. Lines',
-            '                      starting with "--" are removed, "++" are added.',
-            '  • <raw content>   = the turn text exactly as captured (commands, terminal',
-            '                      output, or the agent\'s prose), with the per-turn',
-            '                      "Tokens Remaining" lines removed.',
-            '',
-            `TURNS: ${items.length} (${assistCount} assist / ${resultCount} result)`,
+            ...(isV2
+                ? [
+                    'The run is a sequence of numbered nodes. Each node is written as:',
+                    '',
+                    '    (N) [DESCRIPTION | EXECUTION <tool> | RESULT <output|error|both>]',
+                    '    ----------------------------------------',
+                    '    <raw node content>',
+                    '',
+                    'Where:',
+                    '  • DESCRIPTION = the agent\'s own narration / instructions.',
+                    '  • EXECUTION   = a tool/function call (e.g. a bash command) the agent made.',
+                    '  • RESULT      = the tool output that came back; may include an [ERROR].',
+                    '  • Errors are marked inline as [ERROR]; treat them as failures the agent handled.',
+                    '',
+                    `NODES: ${items.length} (${items.filter(i => i.role === 'description').length} description / ${items.filter(i => i.role === 'execution').length} execution / ${items.filter(i => i.role === 'result').length} result)`,
+                ]
+                : [
+                    'The run is a sequence of numbered turns. Each turn is written as:',
+                    '',
+                    '    (N) <Label>[ bash]',
+                    '    ----------------------------------------',
+                    '    <raw turn content>',
+                    '',
+                    'Where:',
+                    '  • (N)             = the turn number, in the original increasing order.',
+                    '  • <Label>         = "Function Assist" (the agent taking an action) or',
+                    '                      "Function Result" (the tool/function output it got back).',
+                    '                      Turns alternate: Assist, Result, Assist, Result, …',
+                    '  • [bash]          = present when the Assist turn ran a shell command.',
+                    '  • [code_diff]     = present when the Assist turn made a code change. Lines',
+                    '                      starting with "--" are removed, "++" are added.',
+                    '  • <raw content>   = the turn text exactly as captured (commands, terminal',
+                    '                      output, or the agent\'s prose), with the per-turn',
+                    '                      "Tokens Remaining" lines removed.',
+                    '',
+                    `TURNS: ${items.length} (${assistCount} assist / ${resultCount} result)`,
+                ]),
             sep,
             '',
             '',
         ].join('\n')
 
         return items.length
-            ? header + items.map(it => `(${it.num}) ${it.label}${it.kind === 'bash' ? ' [bash]' : it.kind === 'code_diff' ? ' [code_diff]' : ''}\n${'-'.repeat(40)}\n${it.content}\n`).join('\n')
+            ? header + items.map(it => `${serializeLeaf(it).split('\n')[0]}\n${'-'.repeat(40)}\n${(it.role === 'execution' ? it.command : it.content) || ''}\n`).join('\n')
             : input
     }
 
@@ -1018,7 +1253,10 @@ function ModelPanel({
                 <div className="flex items-center gap-2 min-w-0">
                     <span className="text-xs font-semibold text-gray-800">{title}</span>
                     <span className="text-[10px] text-gray-400">
-                        {items.length} segments · {assistCount} assist / {resultCount} result
+                        {isV2
+                            ? <>{segCount} desc · {items.filter(i => i.role === 'execution').length} exec / {items.filter(i => i.role === 'result').length} result</>
+                            : <>{items.length} segments · {assistCount} assist / {resultCount} result</>}
+                        {isV2 && items.some(i => i.hasError) && <span className="text-red-600"> · {items.filter(i => i.hasError).length} error{items.filter(i => i.hasError).length !== 1 ? 's' : ''}</span>}
                         {remarkCount > 0 && <span className="text-amber-600"> · {remarkCount} remarks</span>}
                     </span>
                 </div>
@@ -1067,7 +1305,7 @@ function ModelPanel({
                         value={input}
                         onChange={e => setInput(e.target.value)}
                         readOnly={readOnly}
-                        placeholder="Paste transcript — markers like (2), (3), (4)… each on their own line…"
+                        placeholder={version === 2 ? 'Paste a V2 transcript — Assistant: … <function_calls>/<function_results> …' : 'Paste transcript — markers like (2), (3), (4)… each on their own line…'}
                         spellCheck={false}
                         className="w-full h-28 border border-gray-300 rounded px-2 py-1.5 text-[11px] font-mono leading-relaxed resize-y focus:outline-none focus:border-blue-400 read-only:bg-gray-50 read-only:text-gray-500"
                     />
@@ -1103,6 +1341,65 @@ function ModelPanel({
                     <div className="flex items-center justify-center gap-2 py-10 text-gray-300 text-xs">
                         <Search size={13} /> No turns match “{search}”.
                     </div>
+                ) : isV2 ? (
+                    // ── V2 nested view: description (level 1) → exec/result (level 2) ──
+                    (() => {
+                        const map = new Map<number, { seg: number; desc?: { it: ParsedItem; idx: number }; children: { it: ParsedItem; idx: number }[] }>()
+                        const order: number[] = []
+                        for (const d of displayItems) {
+                            const si = d.it.segIndex ?? 0
+                            let g = map.get(si)
+                            if (!g) { g = { seg: si, children: [] }; map.set(si, g); order.push(si) }
+                            if (d.it.role === 'description') g.desc = d; else g.children.push(d)
+                        }
+                        return order.map((si, gi) => {
+                            const g = map.get(si)!
+                            const segOpen = openSegs.has(si)
+                            const stepCount = g.children.filter(c => c.it.role === 'execution').length
+                            const segErr = g.children.some(c => c.it.hasError)
+                            const descIt = g.desc?.it
+                            const descRemark = descIt ? remarks[String(descIt.num)] : undefined
+                            const preview = (descIt?.content || '').replace(/\s+/g, ' ').trim().slice(0, 160)
+                            return (
+                                <div key={si} className="border-b border-gray-100 last:border-0">
+                                    {/* Level 1 — description header */}
+                                    <div className={`flex items-center gap-1.5 px-2 py-1.5 cursor-pointer select-none ${detailIdx === (g.desc?.idx ?? -1) ? 'bg-indigo-100' : 'bg-indigo-50/40 hover:bg-indigo-50'}`}
+                                        onClick={() => { if (g.desc) setDetailIdx(g.desc.idx); else toggleSeg(si) }}>
+                                        <button onClick={e => { e.stopPropagation(); toggleSeg(si) }} title={segOpen ? 'Collapse steps' : 'Expand steps'}
+                                            className="shrink-0 text-gray-400 hover:text-gray-700 hover:bg-indigo-100 rounded">
+                                            {segOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                                        </button>
+                                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-semibold shrink-0">Desc {gi + 1}</span>
+                                        <span className="text-[11px] text-gray-700 truncate flex-1 min-w-0">{preview || <span className="text-gray-400 italic">(opens with a tool call)</span>}</span>
+                                        {stepCount > 0 && <span className="text-[9px] text-gray-400 shrink-0">{stepCount} step{stepCount !== 1 ? 's' : ''}</span>}
+                                        {segErr && <span className="text-[9px] px-1 py-0.5 rounded bg-red-100 text-red-700 border border-red-300 font-semibold shrink-0 flex items-center gap-0.5"><X size={9} /> ERROR</span>}
+                                        {descRemark && <Sparkles size={10} className="text-amber-500 shrink-0" />}
+                                        {g.desc && <button onClick={e => { e.stopPropagation(); setDetailIdx(g.desc!.idx) }} title="View description detail"
+                                            className={`p-0.5 rounded shrink-0 ${detailIdx === g.desc.idx ? 'text-indigo-600 bg-indigo-100' : 'text-gray-300 hover:text-indigo-600 hover:bg-indigo-50'}`}><PanelRight size={11} /></button>}
+                                    </div>
+                                    {/* Level 2 — nested exec/result rows */}
+                                    {segOpen && (
+                                        <div className="pl-3 ml-2.5 border-l-2 border-indigo-100">
+                                            {g.children.map(({ it, idx }) => (
+                                                <TranscriptRow
+                                                    key={idx}
+                                                    dataIdx={idx}
+                                                    item={it}
+                                                    open={openSet.has(idx)}
+                                                    onToggle={() => toggle(idx)}
+                                                    remark={remarks[String(it.num)]}
+                                                    highlight={search}
+                                                    onOpenDetail={() => setDetailIdx(idx)}
+                                                    detailActive={detailIdx === idx}
+                                                />
+                                            ))}
+                                            {g.children.length === 0 && <div className="px-3 py-1.5 text-[10px] text-gray-300 italic">no steps</div>}
+                                        </div>
+                                    )}
+                                </div>
+                            )
+                        })
+                    })()
                 ) : (
                     displayItems.map(({ it, idx }) => (
                         <TranscriptRow
@@ -1139,7 +1436,9 @@ function ModelPanel({
                                 <PanelRight size={12} className="text-indigo-500 shrink-0" />
                                 <div className="min-w-0 flex-1">
                                     <p className="text-[11px] font-semibold text-gray-700 truncate">
-                                        Turn ({it.num}) · {it.label}{it.kind === 'bash' ? ' · bash' : it.kind === 'code_diff' ? ' · code_diff' : ''}
+                                        {it.role
+                                            ? `(${it.num}) · ${it.role === 'description' ? 'Description' : it.role === 'execution' ? `Execution · ${it.tool || 'tool'}` : `Result${it.hasError ? ' · ERROR' : ''}`}`
+                                            : `Turn (${it.num}) · ${it.label}${it.kind === 'bash' ? ' · bash' : it.kind === 'code_diff' ? ' · code_diff' : ''}`}
                                     </p>
                                     <p className="text-[9px] text-gray-400">Detail view</p>
                                 </div>
@@ -2159,6 +2458,7 @@ function AParseEditor({ turn, jobName, turns, onSwitchTurn, onClose }: { turn: a
     const [tokensLeft, setTokensLeft] = useState<string>(turn.tokens_left || '')
     const [tokensA, setTokensA] = useState<string>(turn.tokens_a || '')
     const [tokensB, setTokensB] = useState<string>(turn.tokens_b || '')
+    const [txVersion, setTxVersion] = useState<TranscriptVersion>(turn.transcript_version === 2 ? 2 : 1)
     const [aInput, setAInput] = useState<string>(turn.model_a_input || '')
     const [bInput, setBInput] = useState<string>(turn.model_b_input || '')
     const [aRemarks, setARemarks] = useState<Record<string, string>>(turn.model_a_remarks || {})
@@ -2228,8 +2528,8 @@ function AParseEditor({ turn, jobName, turns, onSwitchTurn, onClose }: { turn: a
     }
 
     // Does a reference's [text] actually exist in the target turn? (whitespace-insensitive)
-    const itemsA = useMemo(() => parseTranscript(aInput), [aInput])
-    const itemsB = useMemo(() => parseTranscript(bInput), [bInput])
+    const itemsA = useMemo(() => parseAny(aInput, txVersion), [aInput, txVersion])
+    const itemsB = useMemo(() => parseAny(bInput, txVersion), [bInput, txVersion])
     // Latest "Tokens Remaining" in each pasted transcript (the last step that shows one).
     const latestA = useMemo(() => latestTokens(itemsA), [itemsA])
     const latestB = useMemo(() => latestTokens(itemsB), [itemsB])
@@ -2289,8 +2589,8 @@ function AParseEditor({ turn, jobName, turns, onSwitchTurn, onClose }: { turn: a
     }
 
     const comparePrompt = useMemo(
-        () => buildComparePrompt(parseTranscript(aInput), parseTranscript(bInput), prompt),
-        [aInput, bInput, prompt, showCompare],
+        () => buildComparePrompt(parseAny(aInput, txVersion), parseAny(bInput, txVersion), prompt),
+        [aInput, bInput, prompt, showCompare, txVersion],
     )
     const canCompare = aInput.trim().length > 0 && bInput.trim().length > 0
 
@@ -2303,7 +2603,7 @@ function AParseEditor({ turn, jobName, turns, onSwitchTurn, onClose }: { turn: a
     const first = useRef(true)
     const dirtyRef = useRef(false)
     const latestRef = useRef<any>(null)
-    latestRef.current = { prompt, tokens_left: tokensLeft, tokens_a: tokensA, tokens_b: tokensB, model_a_input: aInput, model_b_input: bInput, model_a_remarks: aRemarks, model_b_remarks: bRemarks, answers }
+    latestRef.current = { prompt, tokens_left: tokensLeft, tokens_a: tokensA, tokens_b: tokensB, model_a_input: aInput, model_b_input: bInput, model_a_remarks: aRemarks, model_b_remarks: bRemarks, answers, transcript_version: txVersion }
     useEffect(() => {
         if (first.current) { first.current = false; return }
         dirtyRef.current = true
@@ -2315,7 +2615,7 @@ function AParseEditor({ turn, jobName, turns, onSwitchTurn, onClose }: { turn: a
             } catch { setSaveStatus('idle') }
         }, 700)
         return () => clearTimeout(t)
-    }, [prompt, tokensLeft, tokensA, tokensB, aInput, bInput, aRemarks, bRemarks, answers, turn.id])
+    }, [prompt, tokensLeft, tokensA, tokensB, aInput, bInput, aRemarks, bRemarks, answers, txVersion, turn.id])
 
     // Flush any pending edits when the editor unmounts or the turn is switched.
     useEffect(() => () => {
@@ -2348,6 +2648,25 @@ function AParseEditor({ turn, jobName, turns, onSwitchTurn, onClose }: { turn: a
                         ) : (
                             <h1 className="text-sm font-semibold text-gray-800 truncate">{turn.title}</h1>
                         )}
+                        {/* Transcript format version */}
+                        <div className="flex items-center gap-1 shrink-0" title="Transcript format — V2 parses the new <function_calls>/<function_results> shape">
+                            <span className="text-[10px] text-gray-400">format</span>
+                            {readOnly ? (
+                                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${txVersion === 2 ? 'bg-indigo-50 text-indigo-700 border-indigo-300' : 'bg-gray-50 text-gray-600 border-gray-300'}`}>
+                                    {txVersion === 2 ? 'V2' : 'V1'}
+                                </span>
+                            ) : (
+                                <div className="flex items-center gap-0.5 border border-gray-300 rounded p-0.5">
+                                    {[1, 2].map(v => (
+                                        <button key={v} onClick={() => setTxVersion(v as TranscriptVersion)}
+                                            title={v === 2 ? 'V2 — function_calls / function_results' : 'V1 — numbered (n) turns'}
+                                            className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${txVersion === v ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}>
+                                            V{v}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                         {/* Tokens left for this turn */}
                         <div className="flex items-center gap-1 shrink-0" title="Tokens left for this turn">
                             <span className="text-[10px] text-gray-400">tokens left</span>
@@ -2446,7 +2765,7 @@ function AParseEditor({ turn, jobName, turns, onSwitchTurn, onClose }: { turn: a
                         const cols: { key: string; node: React.ReactNode }[] = []
                         if (showA) cols.push({
                             key: 'a', node: (
-                                <ModelPanel modelKey="a" title="Model A" turnTitle={turn.title} readOnly={readOnly}
+                                <ModelPanel modelKey="a" title="Model A" turnTitle={turn.title} readOnly={readOnly} version={txVersion}
                                     input={aInput} remarks={aRemarks} onInputChange={setAInput} onRemarksChange={setARemarks} sharedPrompt={prompt}
                                     reveal={reveal?.model === 'a' ? reveal : null}
                                     savedSummary={answers.summaryA} onSaveSummary={t => patchAnswers({ summaryA: t })} />
@@ -2454,7 +2773,7 @@ function AParseEditor({ turn, jobName, turns, onSwitchTurn, onClose }: { turn: a
                         })
                         if (showB) cols.push({
                             key: 'b', node: (
-                                <ModelPanel modelKey="b" title="Model B" turnTitle={turn.title} readOnly={readOnly}
+                                <ModelPanel modelKey="b" title="Model B" turnTitle={turn.title} readOnly={readOnly} version={txVersion}
                                     input={bInput} remarks={bRemarks} onInputChange={setBInput} onRemarksChange={setBRemarks} sharedPrompt={prompt}
                                     reveal={reveal?.model === 'b' ? reveal : null}
                                     savedSummary={answers.summaryB} onSaveSummary={t => patchAnswers({ summaryB: t })} />
@@ -2898,7 +3217,7 @@ export default function AParsePage() {
             const res: any = await getAParseTurns(jobId, deletedFilter)
             const list = res?.data ?? res
             const enriched = Array.isArray(list)
-                ? list.map((t: any) => ({ ...t, _stepsA: countModelSteps(t.model_a_input), _stepsB: countModelSteps(t.model_b_input) }))
+                ? list.map((t: any) => ({ ...t, _stepsA: countModelSteps(t.model_a_input, t.transcript_version === 2 ? 2 : 1), _stepsB: countModelSteps(t.model_b_input, t.transcript_version === 2 ? 2 : 1) }))
                 : []
             setTurnsByJob(m => ({ ...m, [jobId]: enriched }))
         } finally {
