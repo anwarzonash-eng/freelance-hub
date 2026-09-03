@@ -55,9 +55,17 @@ export interface ParsedItem {
     errorText?: string   // just the <error> portion, for the error banner
 }
 
-/** Version dispatcher — V2 parses the new <function_calls>/<function_results> shape. */
-function parseAny(text: string, version: TranscriptVersion = 1): ParsedItem[] {
-    return version === 2 ? parseTranscriptV2(text) : parseTranscript(text)
+/** Version dispatcher — V2 parses the new <function_calls>/<function_results> shape.
+ *  `numBase` (V2 only) is where this transcript's numbering starts — each new Turn in a
+ *  job gets its own fixed block (turn 1 → 1, turn 2 → 4, turn 3 → 8, … turnIndex*4) so
+ *  citations stay distinguishable turn-to-turn even though every turn is parsed independently. */
+function parseAny(text: string, version: TranscriptVersion = 1, numBase: number = 1): ParsedItem[] {
+    return version === 2 ? parseTranscriptV2(text, numBase) : parseTranscript(text)
+}
+
+/** Turn index (0-based position within the job) → the V2 numbering base for that turn. */
+function turnNumberBase(turnIndex: number): number {
+    return turnIndex <= 0 ? 1 : turnIndex * 4
 }
 
 function stripTokenLines(text: string): string {
@@ -255,7 +263,7 @@ function parseResultBody(body: string): V2Result {
     return { kind: 'text', text: t, hasError: false, errorText: '' }
 }
 
-function parseTranscriptV2(text: string): ParsedItem[] {
+function parseTranscriptV2(text: string, numBase: number = 1): ParsedItem[] {
     if (!text || !text.trim()) return []
     const region = sliceAssistantRegion(text)
 
@@ -300,23 +308,33 @@ function parseTranscriptV2(text: string): ParsedItem[] {
         }
     }
 
-    // Flatten to leaves with sequential numbering.
+    // Flatten to leaves with ONE continuous counter across the whole transcript — starts
+    // at 1, never resets per segment, no fixed block/gap. A description is never given a
+    // number of its own: it shares the number of its first child (the first execution, or
+    // the first result if the segment opens with no call). A description with no children
+    // at all (e.g. the trailing summary) consumes the next number itself.
     const items: ParsedItem[] = []
-    let num = 1
+    let running = numBase
     segs.forEach((seg, si) => {
+        const hasChildren = seg.steps.some(st => st.call || st.result)
+        let firstAssigned = false
+        const nextNum = () => { if (!firstAssigned) { firstAssigned = true; return running }; running += 1; return running }
+
         if (seg.description.trim()) {
             // Description is untagged narration only — tokens live on the call steps, not here.
-            items.push({ num: num++, role: 'description', label: 'Function Assist', kind: 'text', content: seg.description.trim(), segIndex: si })
+            items.push({ num: running, role: 'description', label: 'Function Assist', kind: 'text', content: seg.description.trim(), segIndex: si })
+            if (!hasChildren) running += 1 // nothing else will consume this number — advance now
         }
         seg.steps.forEach(st => {
             if (st.call) {
-                items.push({ num: num++, role: 'execution', label: 'Function Assist', kind: 'bash', tool: st.call.tool, command: st.call.command, content: st.call.command, prose: '', segIndex: si, tokensRemaining: st.tokens })
+                items.push({ num: nextNum(), role: 'execution', label: 'Function Assist', kind: 'bash', tool: st.call.tool, command: st.call.command, content: st.call.command, prose: '', segIndex: si, tokensRemaining: st.tokens })
             }
             if (st.result) {
                 // Only carry the token figure on the result when there was no call to hang it on.
-                items.push({ num: num++, role: 'result', label: 'Function Result', kind: 'result', content: st.result.text, resultKind: st.result.kind, hasError: st.result.hasError, errorText: st.result.errorText, segIndex: si, tokensRemaining: st.call ? undefined : st.tokens })
+                items.push({ num: nextNum(), role: 'result', label: 'Function Result', kind: 'result', content: st.result.text, resultKind: st.result.kind, hasError: st.result.hasError, errorText: st.result.errorText, segIndex: si, tokensRemaining: st.call ? undefined : st.tokens })
             }
         })
+        if (hasChildren) running += 1 // move past the last-used number for the next segment
     })
     return items
 }
@@ -484,6 +502,25 @@ function parseRemarksJson(raw: string): Record<string, string> {
  * ------------------------------------------------------------------ */
 function escHtml(s: string): string {
     return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+/** Strip common Markdown syntax so a citation matches its source text whether the
+ *  snippet was copied from the rendered preview (no md chars) or quoted verbatim
+ *  with md decoration (headings/bold/italic/bullets/etc) — either way it now compares
+ *  against the same plain-text form. */
+function stripMdSyntax(s: string): string {
+    return s
+        .replace(/^\s{0,3}#{1,6}\s+/gm, '')     // headings
+        .replace(/```[a-z]*\n?/gi, '')           // fenced code fences
+        .replace(/`([^`]+)`/g, '$1')             // inline code
+        .replace(/\*\*([^*]+)\*\*/g, '$1')       // bold **
+        .replace(/__([^_]+)__/g, '$1')           // bold __
+        .replace(/\*([^*]+)\*/g, '$1')           // italic *
+        .replace(/(?<![A-Za-z0-9])_([^_]+)_(?![A-Za-z0-9])/g, '$1') // italic _
+        .replace(/~~([^~]+)~~/g, '$1')           // strikethrough
+        .replace(/^\s*[-*+]\s+/gm, '')           // bullet markers
+        .replace(/^\s*>\s?/gm, '')               // blockquote markers
+        .replace(/[#*_`~]/g, '')                 // any stray leftover md chars
 }
 
 /** Escape HTML then wrap case-insensitive matches of `term` in a <mark>. */
@@ -760,15 +797,16 @@ function CopyPromptModal({ title, prompt, onClose, savedValue, onSaveValue }: {
  * Turn body renderer (used both inline when expanded and in the side
  * panel). `term` highlights matches across bash/command/result/text.
  * ------------------------------------------------------------------ */
-function DetailBody({ item, term, refTexts }: { item: ParsedItem; term: string; refTexts?: string[] }) {
+function DetailBody({ item, term, refTexts, raw }: { item: ParsedItem; term: string; refTexts?: string[]; raw?: boolean }) {
     const terms = buildHlTerms(term, refTexts)
+    const prose = (p: string) => raw
+        ? <pre className="text-[11px] text-gray-700 whitespace-pre-wrap font-mono leading-relaxed"
+            dangerouslySetInnerHTML={{ __html: highlightTermsText(p, terms) }} />
+        : <div className="apmd text-[11px] text-gray-700" dangerouslySetInnerHTML={{ __html: highlightTermsInHtml(renderMarkdown(p), terms) }} />
     if (item.kind === 'code_diff') {
         return (
             <div className="space-y-2">
-                {item.prose && (
-                    <div className="apmd text-[11px] text-gray-700"
-                        dangerouslySetInnerHTML={{ __html: highlightTermsInHtml(renderMarkdown(item.prose), terms) }} />
-                )}
+                {item.prose && prose(item.prose)}
                 <CodeDiffBody diff={item.diff || ''} terms={terms} />
             </div>
         )
@@ -776,10 +814,7 @@ function DetailBody({ item, term, refTexts }: { item: ParsedItem; term: string; 
     if (item.kind === 'bash') {
         return (
             <div className="space-y-2">
-                {item.prose && (
-                    <div className="apmd text-[11px] text-gray-700"
-                        dangerouslySetInnerHTML={{ __html: highlightTermsInHtml(renderMarkdown(item.prose), terms) }} />
-                )}
+                {item.prose && prose(item.prose)}
                 <div className="border border-gray-200 rounded overflow-hidden">
                     <div className="flex items-center justify-between px-2 py-1 bg-gray-100 border-b border-gray-200">
                         <span className="flex items-center gap-1 text-[10px] font-mono text-gray-500">
@@ -817,6 +852,12 @@ function DetailBody({ item, term, refTexts }: { item: ParsedItem; term: string; 
         )
     }
     if (!item.content) return <p className="text-[11px] text-gray-300 italic px-1 py-1">empty</p>
+    if (raw) {
+        return (
+            <pre className="text-[11px] text-gray-700 px-1 py-1 whitespace-pre-wrap font-mono leading-relaxed"
+                dangerouslySetInnerHTML={{ __html: highlightTermsText(item.content, terms) }} />
+        )
+    }
     return (
         <div className="apmd text-[11px] text-gray-700 px-1 py-1"
             dangerouslySetInnerHTML={{ __html: highlightTermsInHtml(renderMarkdown(item.content), terms) }} />
@@ -836,6 +877,8 @@ function TranscriptRow({
     onOpenDetail,
     detailActive,
     dataIdx,
+    raw,
+    onToggleRaw,
 }: {
     item: ParsedItem
     open: boolean
@@ -846,6 +889,8 @@ function TranscriptRow({
     onOpenDetail?: () => void
     detailActive?: boolean
     dataIdx?: number
+    raw?: boolean
+    onToggleRaw?: () => void
 }) {
     const isAssist = item.label === 'Function Assist'
     // Preview: prefer whichever field actually contains the search term so the
@@ -929,7 +974,15 @@ function TranscriptRow({
                             <p className="text-[11px] text-amber-900 leading-relaxed">{remark}</p>
                         </div>
                     )}
-                    <DetailBody item={item} term={highlight} refTexts={refTexts} />
+                    {onToggleRaw && (item.kind === 'text' || item.kind === 'bash' || item.kind === 'code_diff') && (
+                        <div className="flex justify-end">
+                            <button onClick={onToggleRaw} title="Toggle between Markdown preview and raw source text"
+                                className={`text-[9px] px-1.5 py-0.5 rounded border shrink-0 ${raw ? 'bg-indigo-600 text-white border-indigo-600' : 'text-gray-500 border-gray-300 hover:bg-white'}`}>
+                                {raw ? 'Raw' : 'Preview'}
+                            </button>
+                        </div>
+                    )}
+                    <DetailBody item={item} term={highlight} refTexts={refTexts} raw={raw} />
                 </div>
             )}
         </div>
@@ -940,7 +993,7 @@ function TranscriptRow({
  * One model panel (reused for Model A and Model B)
  * ------------------------------------------------------------------ */
 function ModelPanel({
-    modelKey, title, input, remarks, onInputChange, onRemarksChange, sharedPrompt, turnTitle, readOnly, reveal, savedSummary, onSaveSummary, version = 1,
+    modelKey, title, input, remarks, onInputChange, onRemarksChange, sharedPrompt, turnTitle, readOnly, reveal, savedSummary, onSaveSummary, version = 1, numBase = 1,
 }: {
     modelKey: 'a' | 'b'
     title: string
@@ -954,6 +1007,7 @@ function ModelPanel({
     reveal?: { turnNum: number; text: string; nonce: number } | null
     savedSummary?: string
     onSaveSummary?: (text: string) => void
+    numBase?: number
     version?: TranscriptVersion
 }) {
     // UI-only preferences persist globally; turn DATA (input/remarks) comes from props.
@@ -965,6 +1019,10 @@ function ModelPanel({
     const setRemarks = onRemarksChange
 
     const [openSet, setOpenSet] = useState<Set<number>>(new Set())
+    // Per-item "show raw text" toggle — off shows Markdown rendered, on shows the literal
+    // source so a citation quoted with md decoration can be found/highlighted verbatim.
+    const [rawSet, setRawSet] = useState<Set<number>>(new Set())
+    const toggleRaw = useCallback((idx: number) => setRawSet(prev => { const s = new Set(prev); s.has(idx) ? s.delete(idx) : s.add(idx); return s }), [])
     // Initialise from the last saved state so opening a turn keeps input shown/hidden as before.
     const [showInput, setShowInput] = useState<boolean>(() => {
         try { const v = localStorage.getItem(`aparse_model_${modelKey}_showinput`); return v == null ? true : v === '1' } catch { return true }
@@ -1020,7 +1078,7 @@ function ModelPanel({
         return () => document.removeEventListener('mousedown', handler)
     }, [showDownloadMenu])
 
-    const items = useMemo(() => parseAny(input, version), [input, version])
+    const items = useMemo(() => parseAny(input, version, numBase), [input, version, numBase])
     const isV2 = version === 2
     // Level-1 (description segment) open/close state for the V2 nested view.
     const [openSegs, setOpenSegs] = useState<Set<number>>(new Set())
@@ -1063,9 +1121,21 @@ function ModelPanel({
     // Reveal a referenced step when its {A:38 [text]} token is hovered in an answer field.
     useEffect(() => {
         if (!reveal) return
-        const idx = items.findIndex(it => it.num === reveal.turnNum)
-        if (idx === -1) return
+        // V2 numbering shares one number between a description and its first child — of
+        // the items with this number, open whichever one's text actually contains the
+        // cited snippet (falling back to the first if none match).
+        const candidates = items.map((it, i) => ({ it, i })).filter(x => x.it.num === reveal.turnNum)
+        if (!candidates.length) return
+        const needle = stripMdSyntax(reveal.text).replace(/\s+/g, ' ').trim().toLowerCase()
+        const found = needle
+            ? candidates.find(({ it }) => {
+                const hay = stripMdSyntax([it.content, it.prose, it.command, it.diff].filter(Boolean).join('\n')).replace(/\s+/g, ' ').toLowerCase()
+                return hay.includes(needle)
+            })
+            : undefined
+        const idx = (found ?? candidates[0]).i
         setSearch('')
+        setRawSet(prev => new Set(prev).add(idx)) // markdown source may not literally contain the cited text; show raw so it's visible
         setOpenSet(prev => new Set(prev).add(idx))
         if (isV2 && items[idx].segIndex != null) setOpenSegs(prev => new Set(prev).add(items[idx].segIndex!))
         setDetailIdx(idx)
@@ -1391,6 +1461,8 @@ function ModelPanel({
                                                     highlight={search}
                                                     onOpenDetail={() => setDetailIdx(idx)}
                                                     detailActive={detailIdx === idx}
+                                                    raw={rawSet.has(idx)}
+                                                    onToggleRaw={() => toggleRaw(idx)}
                                                 />
                                             ))}
                                             {g.children.length === 0 && <div className="px-3 py-1.5 text-[10px] text-gray-300 italic">no steps</div>}
@@ -1412,6 +1484,8 @@ function ModelPanel({
                             highlight={search}
                             onOpenDetail={() => setDetailIdx(idx)}
                             detailActive={detailIdx === idx}
+                            raw={rawSet.has(idx)}
+                            onToggleRaw={() => toggleRaw(idx)}
                         />
                     ))
                 )}
@@ -1448,6 +1522,12 @@ function ModelPanel({
                                         {it.tokensRemaining} left
                                     </span>
                                 )}
+                                {(it.kind === 'text' || it.kind === 'bash' || it.kind === 'code_diff') && (
+                                    <button onClick={() => toggleRaw(detailIdx)} title="Toggle between Markdown preview and raw source text"
+                                        className={`text-[9px] px-1.5 py-0.5 rounded border shrink-0 ${rawSet.has(detailIdx) ? 'bg-indigo-600 text-white border-indigo-600' : 'text-gray-500 border-gray-300 hover:bg-white'}`}>
+                                        {rawSet.has(detailIdx) ? 'Raw' : 'Preview'}
+                                    </button>
+                                )}
                                 <CopyBtn text={it.content} className="text-gray-400 hover:text-gray-700 hover:bg-gray-100" />
                                 <button onClick={() => { setDetailIdx(null); setDetailSearch('') }} className="text-gray-400 hover:text-gray-700 shrink-0"><X size={14} /></button>
                             </div>
@@ -1475,7 +1555,7 @@ function ModelPanel({
                                             dangerouslySetInnerHTML={{ __html: highlightInHtml(escHtml(rmk), detailSearch) }} />
                                     </div>
                                 )}
-                                <DetailBody item={it} term={detailSearch} />
+                                <DetailBody item={it} term={detailSearch} raw={rawSet.has(detailIdx)} />
                             </div>
                         </div>
                     </div>
@@ -1672,9 +1752,8 @@ const PROMPT_TYPES = [
     'System-Level Investigation *',
     'Code writing (Feature Implementation, Refactor)',
     'Code review',
-    'Exploration & learning',
     'Maintenance & ops tooling *',
-    'Planning & requirements',
+    'Testing and requirements',
     'Design',
     'Testing',
     'Deployment & infra',
@@ -1799,8 +1878,22 @@ function buildAnswersFillPrompt(): string {
         '- Do NOT mention file names, file paths, function names, or long identifiers in your prose. Say what the model did in plain words (e.g. "rewrote the pipeline", "kept the write ordering", "dropped the retry").',
         '- Keep punctuation light. No semicolons, no markdown, no bullet characters.',
         '- For each axis give 1 to 3 short arguments PER MODEL — no more.',
+        '- It should be concise and must reads like it was naturally written by a real person',
+        '- it should also read like natural senior software engineer tone',
+        '- no unnecessary explanation',
+        '- no repeated points',
+        '- no polished essay-style wording',
+        '- no long setup before the actual point',
+        '- keep only the evidence needed to justify the score',
+        '- each rationale should still mention both models where required',
+        '- Vary Sentence length naturally. Mix short sentences with longer ones where the thought actually needs more explanation.',
+        '- Use conversational transitions, occasional rhetorical questions, contractions, and small stylistic irregularities where they fit.',
+        '- Avoid overly balanced sentence structures, repetitive paragraph patterns, generic transitions, unnecessary summaries, polished corporate language, and textbook-style introductions or conclusions.',
+        '- The writing should still sound competent and natural for the person and context involved.',
+        '- N/A rationales still need enough reasoning to justify N/A',
+        '- preserve the references with the same claims they support',
         '',
-        'CITATIONS (required on every answer):',
+        'CITATIONS (required on every answer except seniorExpectation and promptForNextTurn):',
         '- Support every claim with at least one citation placed right after the claim, in EXACTLY this format:',
         '    {A:<turn> [exact text]}   or   {B:<turn> [exact text]}',
         '  <turn> is the turn number; [exact text] is a short snippet copied VERBATIM from that turn (character for character) so the tool can locate it.',
@@ -2527,9 +2620,15 @@ function AParseEditor({ turn, jobName, turns, onSwitchTurn, onClose }: { turn: a
         setTimeout(() => { setCopiedRef(false); setSelMenu(null) }, 1000)
     }
 
+    // Which turn (position in the job) this is, so V2 numbering gets its own block —
+    // turn 1 → starts at 1, turn 2 → 4, turn 3 → 8, … (turnIndex*4) — kept stable even
+    // though each turn's transcripts are parsed independently.
+    const turnIndex = turns.findIndex(t => t.id === turn.id)
+    const numBase = turnNumberBase(turnIndex)
+
     // Does a reference's [text] actually exist in the target turn? (whitespace-insensitive)
-    const itemsA = useMemo(() => parseAny(aInput, txVersion), [aInput, txVersion])
-    const itemsB = useMemo(() => parseAny(bInput, txVersion), [bInput, txVersion])
+    const itemsA = useMemo(() => parseAny(aInput, txVersion, numBase), [aInput, txVersion, numBase])
+    const itemsB = useMemo(() => parseAny(bInput, txVersion, numBase), [bInput, txVersion, numBase])
     // Latest "Tokens Remaining" in each pasted transcript (the last step that shows one).
     const latestA = useMemo(() => latestTokens(itemsA), [itemsA])
     const latestB = useMemo(() => latestTokens(itemsB), [itemsB])
@@ -2538,11 +2637,19 @@ function AParseEditor({ turn, jobName, turns, onSwitchTurn, onClose }: { turn: a
     useEffect(() => { if (latestB && latestB !== tokensB) setTokensB(latestB) /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [latestB])
     const refMatches = useCallback((model: 'a' | 'b', turnNum: number, text: string) => {
         const items = model === 'a' ? itemsA : itemsB
-        const it = items.find(i => i.num === turnNum)
-        if (!it) return false
-        const hay = [it.content, it.prose, it.command, it.diff].filter(Boolean).join('\n').replace(/\s+/g, ' ').toLowerCase()
-        const needle = text.replace(/\s+/g, ' ').trim().toLowerCase()
-        return needle.length > 0 && hay.includes(needle)
+        // V2 numbering shares one number between a description and its first child
+        // (execution/result), so a citation may land in either — check all of them.
+        const candidates = items.filter(i => i.num === turnNum)
+        if (!candidates.length) return false
+        // Compare with Markdown syntax stripped from both sides — a citation copied from
+        // the rendered preview has no md chars, but the underlying raw content might (or
+        // vice versa if quoted verbatim with decoration), so normalise both before matching.
+        const needle = stripMdSyntax(text).replace(/\s+/g, ' ').trim().toLowerCase()
+        if (!needle) return false
+        return candidates.some(it => {
+            const hay = stripMdSyntax([it.content, it.prose, it.command, it.diff].filter(Boolean).join('\n')).replace(/\s+/g, ' ').toLowerCase()
+            return hay.includes(needle)
+        })
     }, [itemsA, itemsB])
 
     // Column widths (flex-grow weights) for the A / B / Answers sections, synced to localStorage.
@@ -2589,8 +2696,8 @@ function AParseEditor({ turn, jobName, turns, onSwitchTurn, onClose }: { turn: a
     }
 
     const comparePrompt = useMemo(
-        () => buildComparePrompt(parseAny(aInput, txVersion), parseAny(bInput, txVersion), prompt),
-        [aInput, bInput, prompt, showCompare, txVersion],
+        () => buildComparePrompt(itemsA, itemsB, prompt),
+        [itemsA, itemsB, prompt, showCompare],
     )
     const canCompare = aInput.trim().length > 0 && bInput.trim().length > 0
 
@@ -2623,7 +2730,7 @@ function AParseEditor({ turn, jobName, turns, onSwitchTurn, onClose }: { turn: a
     }, [turn.id])
 
     // Previous turn's overall winner (just A or B, not the graded variation).
-    const curIdx = turns.findIndex(t => t.id === turn.id)
+    const curIdx = turnIndex
     const prevTurn = curIdx > 0 ? turns[curIdx - 1] : null
     const prevOverall = prevTurn?.answers?.overall
     const prevLetter = typeof prevOverall === 'number' ? (prevOverall < 0 ? 'A' : prevOverall > 0 ? 'B' : '=') : null
@@ -2765,7 +2872,7 @@ function AParseEditor({ turn, jobName, turns, onSwitchTurn, onClose }: { turn: a
                         const cols: { key: string; node: React.ReactNode }[] = []
                         if (showA) cols.push({
                             key: 'a', node: (
-                                <ModelPanel modelKey="a" title="Model A" turnTitle={turn.title} readOnly={readOnly} version={txVersion}
+                                <ModelPanel modelKey="a" title="Model A" turnTitle={turn.title} readOnly={readOnly} version={txVersion} numBase={numBase}
                                     input={aInput} remarks={aRemarks} onInputChange={setAInput} onRemarksChange={setARemarks} sharedPrompt={prompt}
                                     reveal={reveal?.model === 'a' ? reveal : null}
                                     savedSummary={answers.summaryA} onSaveSummary={t => patchAnswers({ summaryA: t })} />
@@ -2773,7 +2880,7 @@ function AParseEditor({ turn, jobName, turns, onSwitchTurn, onClose }: { turn: a
                         })
                         if (showB) cols.push({
                             key: 'b', node: (
-                                <ModelPanel modelKey="b" title="Model B" turnTitle={turn.title} readOnly={readOnly} version={txVersion}
+                                <ModelPanel modelKey="b" title="Model B" turnTitle={turn.title} readOnly={readOnly} version={txVersion} numBase={numBase}
                                     input={bInput} remarks={bRemarks} onInputChange={setBInput} onRemarksChange={setBRemarks} sharedPrompt={prompt}
                                     reveal={reveal?.model === 'b' ? reveal : null}
                                     savedSummary={answers.summaryB} onSaveSummary={t => patchAnswers({ summaryB: t })} />
