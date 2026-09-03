@@ -57,15 +57,20 @@ export interface ParsedItem {
 
 /** Version dispatcher — V2 parses the new <function_calls>/<function_results> shape.
  *  `numBase` (V2 only) is where this transcript's numbering starts — each new Turn in a
- *  job gets its own fixed block (turn 1 → 1, turn 2 → 4, turn 3 → 8, … turnIndex*4) so
- *  citations stay distinguishable turn-to-turn even though every turn is parsed independently. */
+ *  job gets its own default starting number (see turnNumberBase) so citations stay
+ *  distinguishable turn-to-turn even though every turn is parsed independently. The user
+ *  can override this per turn; `numBase` is always the resolved (possibly overridden) value. */
 function parseAny(text: string, version: TranscriptVersion = 1, numBase: number = 1): ParsedItem[] {
     return version === 2 ? parseTranscriptV2(text, numBase) : parseTranscript(text)
 }
 
-/** Turn index (0-based position within the job) → the V2 numbering base for that turn. */
+/** Turn index (0-based position within the job) → the DEFAULT V2 numbering start for that
+ *  turn: turn 1 → 1, turn 2 → 4, turn 3 onward → +2 each time (6, 8, 10, …). Overridable
+ *  per turn via `turn.numbering_start`. */
 function turnNumberBase(turnIndex: number): number {
-    return turnIndex <= 0 ? 1 : turnIndex * 4
+    if (turnIndex <= 0) return 1
+    if (turnIndex === 1) return 4
+    return (turnIndex + 1) * 2 // turnIndex 2 -> 6, 3 -> 8, 4 -> 10, …
 }
 
 function stripTokenLines(text: string): string {
@@ -2552,6 +2557,10 @@ function AParseEditor({ turn, jobName, turns, onSwitchTurn, onClose }: { turn: a
     const [tokensA, setTokensA] = useState<string>(turn.tokens_a || '')
     const [tokensB, setTokensB] = useState<string>(turn.tokens_b || '')
     const [txVersion, setTxVersion] = useState<TranscriptVersion>(turn.transcript_version === 2 ? 2 : 1)
+    // V2 numbering start override — null means "use the computed default for this turn's position".
+    const [numStartOverride, setNumStartOverride] = useState<number | null>(
+        typeof turn.numbering_start === 'number' ? turn.numbering_start : null
+    )
     const [aInput, setAInput] = useState<string>(turn.model_a_input || '')
     const [bInput, setBInput] = useState<string>(turn.model_b_input || '')
     const [aRemarks, setARemarks] = useState<Record<string, string>>(turn.model_a_remarks || {})
@@ -2620,11 +2629,13 @@ function AParseEditor({ turn, jobName, turns, onSwitchTurn, onClose }: { turn: a
         setTimeout(() => { setCopiedRef(false); setSelMenu(null) }, 1000)
     }
 
-    // Which turn (position in the job) this is, so V2 numbering gets its own block —
-    // turn 1 → starts at 1, turn 2 → 4, turn 3 → 8, … (turnIndex*4) — kept stable even
-    // though each turn's transcripts are parsed independently.
+    // Which turn (position in the job) this is, so V2 numbering gets its own default start
+    // — turn 1 → 1, turn 2 → 4, turn 3 onward → +2 each time (6, 8, 10, …) — kept stable
+    // even though each turn's transcripts are parsed independently. The user can override
+    // this per turn via numStartOverride.
     const turnIndex = turns.findIndex(t => t.id === turn.id)
-    const numBase = turnNumberBase(turnIndex)
+    const defaultNumBase = turnNumberBase(turnIndex)
+    const numBase = numStartOverride ?? defaultNumBase
 
     // Does a reference's [text] actually exist in the target turn? (whitespace-insensitive)
     const itemsA = useMemo(() => parseAny(aInput, txVersion, numBase), [aInput, txVersion, numBase])
@@ -2710,7 +2721,7 @@ function AParseEditor({ turn, jobName, turns, onSwitchTurn, onClose }: { turn: a
     const first = useRef(true)
     const dirtyRef = useRef(false)
     const latestRef = useRef<any>(null)
-    latestRef.current = { prompt, tokens_left: tokensLeft, tokens_a: tokensA, tokens_b: tokensB, model_a_input: aInput, model_b_input: bInput, model_a_remarks: aRemarks, model_b_remarks: bRemarks, answers, transcript_version: txVersion }
+    latestRef.current = { prompt, tokens_left: tokensLeft, tokens_a: tokensA, tokens_b: tokensB, model_a_input: aInput, model_b_input: bInput, model_a_remarks: aRemarks, model_b_remarks: bRemarks, answers, transcript_version: txVersion, numbering_start: numStartOverride }
     useEffect(() => {
         if (first.current) { first.current = false; return }
         dirtyRef.current = true
@@ -2722,7 +2733,7 @@ function AParseEditor({ turn, jobName, turns, onSwitchTurn, onClose }: { turn: a
             } catch { setSaveStatus('idle') }
         }, 700)
         return () => clearTimeout(t)
-    }, [prompt, tokensLeft, tokensA, tokensB, aInput, bInput, aRemarks, bRemarks, answers, txVersion, turn.id])
+    }, [prompt, tokensLeft, tokensA, tokensB, aInput, bInput, aRemarks, bRemarks, answers, txVersion, numStartOverride, turn.id])
 
     // Flush any pending edits when the editor unmounts or the turn is switched.
     useEffect(() => () => {
@@ -2774,6 +2785,30 @@ function AParseEditor({ turn, jobName, turns, onSwitchTurn, onClose }: { turn: a
                                 </div>
                             )}
                         </div>
+                        {/* V2 numbering start override — where this turn's segment numbers begin */}
+                        {txVersion === 2 && (
+                            <div className="flex items-center gap-1 shrink-0"
+                                title={`Where this turn's step numbering starts. Default for turn ${turnIndex + 1} is ${defaultNumBase}${numStartOverride != null ? ' — currently overridden' : ''}.`}>
+                                <span className="text-[10px] text-gray-400">start #</span>
+                                {readOnly ? (
+                                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${numStartOverride != null ? 'bg-amber-50 text-amber-700 border-amber-300' : 'bg-gray-50 text-gray-600 border-gray-300'}`}>
+                                        {numBase}{numStartOverride != null && ' *'}
+                                    </span>
+                                ) : (
+                                    <>
+                                        <input type="number" value={numBase}
+                                            onChange={e => { const v = e.target.value; setNumStartOverride(v === '' ? defaultNumBase : Number(v)) }}
+                                            className="w-14 text-[11px] border border-gray-300 rounded px-1.5 py-0.5 focus:outline-none focus:border-indigo-400" />
+                                        {numStartOverride != null && (
+                                            <button onClick={() => setNumStartOverride(null)} title={`Reset to the default for this turn (${defaultNumBase})`}
+                                                className="text-[9px] px-1 py-0.5 rounded border border-gray-300 text-gray-500 hover:bg-gray-50">
+                                                Auto
+                                            </button>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                        )}
                         {/* Tokens left for this turn */}
                         <div className="flex items-center gap-1 shrink-0" title="Tokens left for this turn">
                             <span className="text-[10px] text-gray-400">tokens left</span>
