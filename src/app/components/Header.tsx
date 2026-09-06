@@ -269,6 +269,11 @@ const navItems: NavItem[] = [
         href: "/tools/deck-grading",
         icon: "AParse",
       },
+      {
+        title: "Anton Parser",
+        href: "/tools/anton-parser",
+        icon: "AParse",
+      },
     ],
   },
 ];
@@ -367,6 +372,7 @@ export function getAllNavRoles(
     { label: "Applicants", value: "/applicants" },
     { label: "A Parse", value: "/tools/a-parse" },
     { label: "Deck Grading Tasks", value: "/tools/deck-grading" },
+    { label: "Anton Parser", value: "/tools/anton-parser" },
     { label: "Settings", value: "/settings" },
   ];
   // const roles: { label: string; value: string }[] = [];

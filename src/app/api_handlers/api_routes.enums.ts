@@ -195,6 +195,14 @@ export enum DeckGradingAPIRoutes {
     DELETE_SECTION_MEDIA = 'deck-grading/tasks/:id/section-media/:key/:mediaId',
 }
 
+export enum AntonParserAPIRoutes {
+    GET_TASKS = 'anton-parser/tasks',
+    CREATE_TASK = 'anton-parser/tasks',
+    GET_TASK = 'anton-parser/tasks/:id',
+    UPDATE_TASK = 'anton-parser/tasks/:id',
+    DELETE_TASK = 'anton-parser/tasks/:id',
+}
+
 export enum ProfessionalsAPIRoutes {
     GET_ALL = 'professionals',
     GET_BY_ID = 'professionals/:id',
