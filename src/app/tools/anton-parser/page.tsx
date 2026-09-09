@@ -6,7 +6,11 @@ import {
 } from 'lucide-react'
 import {
     getAntonTasks, createAntonTask, getAntonTask, updateAntonTask, deleteAntonTask,
+    saveAntonTaskTrajectory,
 } from '@/app/api_handlers/api/anton-parser.api'
+import TaskTab from './TaskTab'
+import SolutionTab from './SolutionTab'
+import { EMPTY_FILES, readUploadedFiles, TrajectoryFilesState } from './trajectoryFiles'
 
 /* ------------------------------------------------------------------ *
  * Types — a thin, permissive view over whatever the uploaded JSON
@@ -94,7 +98,7 @@ function readJsonFile(file: File): Promise<any> {
 /* ------------------------------------------------------------------ *
  * Task editor — full-screen, 3 tabs, autosaves the whole JSON blob.
  * ------------------------------------------------------------------ */
-type Tab = 'rubrics' | 'dimensions' | 'pairwise'
+type Tab = 'rubrics' | 'dimensions' | 'pairwise' | 'task' | 'solution'
 
 function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () => void; onSaved: () => void }) {
     const [loading, setLoading] = useState(true)
@@ -105,6 +109,15 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
     const [reuploadErr, setReuploadErr] = useState('')
     const fileRef = useRef<HTMLInputElement>(null)
 
+    // Task/Solution tabs — the six uploaded artefacts, stored in their own
+    // columns on this same row and parsed by those tabs at render time.
+    const [files, setFiles] = useState<TrajectoryFilesState>(EMPTY_FILES)
+    const [filesBusy, setFilesBusy] = useState(false)
+    const [filesNote, setFilesNote] = useState('')
+    // Tabs are kept mounted once opened so their search/collapse state survives
+    // a trip to another tab.
+    const [opened, setOpened] = useState<Partial<Record<Tab, boolean>>>({ rubrics: true })
+
     useEffect(() => {
         let cancelled = false
         setLoading(true)
@@ -112,9 +125,42 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
             if (cancelled) return
             const full = res?.data ?? res
             setData(full?.data ?? {})
+            setFiles({
+                trajectory_a: full?.trajectory_a ?? null,
+                trajectory_b: full?.trajectory_b ?? null,
+                md_a: full?.md_a ?? null,
+                md_b: full?.md_b ?? null,
+                patch_a: full?.patch_a ?? null,
+                patch_b: full?.patch_b ?? null,
+            })
         }).finally(() => { if (!cancelled) setLoading(false) })
         return () => { cancelled = true }
     }, [taskId])
+
+    const openTab = (next: Tab) => { setTab(next); setOpened(o => ({ ...o, [next]: true })) }
+
+    /**
+     * One picker for all six artefacts: each file is filed by its name, and
+     * everything that arrived goes up in a single write.
+     */
+    const handleFiles = async (list: File[]) => {
+        setFilesNote('')
+        setFilesBusy(true)
+        try {
+            const { patch, accepted, skipped, errors } = await readUploadedFiles(list)
+            if (Object.keys(patch).length) {
+                setFiles(f => ({ ...f, ...patch }))
+                await saveAntonTaskTrajectory(taskId, patch)
+            }
+            const notes: string[] = []
+            if (accepted.length) notes.push(`Loaded: ${accepted.join(', ')}`)
+            if (skipped.length) notes.push(`Ignored (unrecognised name): ${skipped.join(', ')}`)
+            if (errors.length) notes.push(errors.join(' '))
+            setFilesNote(notes.join(' · '))
+        } catch (e: any) {
+            setFilesNote(e?.message || 'Could not read those files.')
+        } finally { setFilesBusy(false) }
+    }
 
     // Debounced autosave of the whole JSON blob whenever it changes.
     const first = useRef(true)
@@ -226,13 +272,22 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
 
             {/* Tabs */}
             <div className="flex items-center gap-1 px-4 py-1.5 border-b border-gray-200 bg-white shrink-0">
-                {([['rubrics', 'Rubrics'], ['dimensions', 'Dimensions'], ['pairwise', 'Pairwise']] as [Tab, string][]).map(([key, label]) => (
-                    <button key={key} onClick={() => setTab(key)}
+                {([['rubrics', 'Rubrics'], ['dimensions', 'Dimensions'], ['pairwise', 'Pairwise'], ['task', 'Task'], ['solution', 'Solution']] as [Tab, string][]).map(([key, label]) => (
+                    <button key={key} onClick={() => openTab(key)}
                         className={`text-[12px] font-medium px-3 py-1.5 rounded ${tab === key ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}>
                         {label}
                     </button>
                 ))}
+                {filesBusy && <span className="text-[10px] text-gray-400 ml-2">Saving files…</span>}
             </div>
+            {filesNote && (
+                <div className="px-4 py-1.5 bg-indigo-50 text-indigo-800 text-[11px] border-b border-indigo-100 flex items-start gap-2">
+                    <span className="flex-1">{filesNote}</span>
+                    <button onClick={() => setFilesNote('')} className="text-indigo-400 hover:text-indigo-700 shrink-0">
+                        <X size={12} />
+                    </button>
+                </div>
+            )}
 
             {/* Body */}
             <div className="flex-1 overflow-y-auto p-4 space-y-6">
@@ -251,6 +306,23 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
                         onChange={setPairwise}
                         onChangeScore={setFinalScore}
                     />
+                )}
+                {/* Task and Solution stay mounted once opened — they carry their own
+                    search, collapse and sub-tab state. Both live in one wrapper so the
+                    hidden one is not a `space-y` sibling of the visible one. */}
+                {(opened.task || opened.solution) && (
+                    <div>
+                        {opened.task && (
+                            <div className={tab === 'task' ? '' : 'hidden'}>
+                                <TaskTab files={files} onFiles={handleFiles} busy={filesBusy} />
+                            </div>
+                        )}
+                        {opened.solution && (
+                            <div className={tab === 'solution' ? '' : 'hidden'}>
+                                <SolutionTab files={files} onFiles={handleFiles} busy={filesBusy} />
+                            </div>
+                        )}
+                    </div>
                 )}
             </div>
         </div>

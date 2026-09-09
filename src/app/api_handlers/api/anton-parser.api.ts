@@ -27,3 +27,18 @@ export async function deleteAntonTask(id: string) {
     const params: IApiParams = { path: { id } }
     return await apiClient(AntonParserAPIRoutes.DELETE_TASK, ApiMethod.DELETE, undefined, params, undefined, true, true)
 }
+
+/**
+ * Task tab — saves the raw trajectory logs (model_a_log.json /
+ * model_b_log.json) and their optional .patch text onto the same task
+ * row, through the same update endpoint. Only the keys sent are written,
+ * so this never disturbs the rubric `data` blob and the rubric autosave
+ * never carries a log.
+ */
+export async function saveAntonTaskTrajectory(
+    id: string,
+    body: { trajectory_a?: any; trajectory_b?: any; patch_a?: string | null; patch_b?: string | null },
+) {
+    const params: IApiParams = { path: { id } }
+    return await apiClient(AntonParserAPIRoutes.UPDATE_TASK, ApiMethod.PUT, body, params, undefined, true, false)
+}
