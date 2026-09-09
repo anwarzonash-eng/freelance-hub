@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import {
-    ListTree, Plus, RefreshCw, X, Check, Trash2, Copy, Upload, FileJson,
+    ListTree, Plus, RefreshCw, X, Check, Trash2, Copy, Upload, FileJson, Link2, ExternalLink, Pencil,
 } from 'lucide-react'
 import {
     getAntonTasks, createAntonTask, getAntonTask, updateAntonTask, deleteAntonTask,
@@ -79,6 +79,101 @@ function AreaCell({ value, onChange }: { value: string; onChange: (v: string) =>
     return (
         <textarea value={value ?? ''} onChange={e => onChange(e.target.value)} rows={3}
             className="w-full text-[11px] border border-transparent hover:border-gray-300 focus:border-indigo-400 rounded px-1.5 py-1 bg-transparent focus:bg-white outline-none resize-y leading-relaxed" />
+    )
+}
+
+/**
+ * Optional reference link shown in the task popup's header — a URL the
+ * annotator attaches to the task (the platform task page, a doc, a PR…).
+ * No value: a small "Add link" button. A value: the link itself, clickable,
+ * with edit/remove affordances. Saved through the same `onChange` as every
+ * other field on `data`, so it rides the editor's existing autosave.
+ */
+function TaskLinkField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+    const [editing, setEditing] = useState(false)
+    const [draft, setDraft] = useState(value || '')
+    const inputRef = useRef<HTMLInputElement>(null)
+
+    useEffect(() => { if (editing) inputRef.current?.focus() }, [editing])
+
+    const commit = () => {
+        onChange(draft.trim())
+        setEditing(false)
+    }
+    const cancel = () => { setDraft(value || ''); setEditing(false) }
+
+    if (editing) {
+        return (
+            <span className="flex items-center gap-1 shrink-0">
+                <Link2 size={12} className="text-gray-400 shrink-0" />
+                <input ref={inputRef} value={draft} onChange={e => setDraft(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') cancel() }}
+                    onBlur={commit} placeholder="https://…" type="url"
+                    className="text-[11px] border border-indigo-300 rounded px-1.5 py-0.5 w-56 outline-none focus:border-indigo-500" />
+            </span>
+        )
+    }
+
+    if (!value) {
+        return (
+            <button onClick={() => setEditing(true)} title="Attach a reference link to this task"
+                className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-indigo-600 shrink-0">
+                <Link2 size={12} /> Add link
+            </button>
+        )
+    }
+
+    return (
+        <span className="flex items-center gap-1 min-w-0 shrink-0">
+            <Link2 size={12} className="text-indigo-400 shrink-0" />
+            <a href={value} target="_blank" rel="noopener noreferrer" title={value}
+                className="text-[11px] text-indigo-600 hover:underline truncate max-w-[220px]">
+                {value}
+            </a>
+            <a href={value} target="_blank" rel="noopener noreferrer" title="Open link"
+                className="text-gray-400 hover:text-indigo-600"><ExternalLink size={11} /></a>
+            <button onClick={() => setEditing(true)} title="Edit link" className="text-gray-400 hover:text-indigo-600">
+                <Pencil size={11} />
+            </button>
+            <button onClick={() => onChange('')} title="Remove link" className="text-gray-400 hover:text-red-600">
+                <X size={12} />
+            </button>
+        </span>
+    )
+}
+
+/**
+ * The task popup's title, click-to-rename. Saved through the same
+ * `onChange` path as every other field on `data`, so it rides the
+ * editor's existing autosave — which also re-derives the list view's
+ * denormalised `title` column on that same save.
+ */
+function TaskNameField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+    const [editing, setEditing] = useState(false)
+    const [draft, setDraft] = useState(value)
+    const inputRef = useRef<HTMLInputElement>(null)
+
+    useEffect(() => { if (!editing) setDraft(value) }, [value, editing])
+    useEffect(() => { if (editing) { inputRef.current?.focus(); inputRef.current?.select() } }, [editing])
+
+    const commit = () => { onChange(draft); setEditing(false) }
+    const cancel = () => { setDraft(value); setEditing(false) }
+
+    if (editing) {
+        return (
+            <input ref={inputRef} value={draft} onChange={e => setDraft(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') cancel() }}
+                onBlur={commit}
+                className="text-sm font-semibold text-gray-800 border border-indigo-300 rounded px-1.5 py-0.5 outline-none focus:border-indigo-500 w-full max-w-[360px]" />
+        )
+    }
+
+    return (
+        <button onClick={() => setEditing(true)} title="Click to rename this task"
+            className="flex items-center gap-1.5 min-w-0 group shrink-0">
+            <span className="text-sm font-semibold text-gray-800 truncate max-w-[360px]" title={value}>{value}</span>
+            <Pencil size={11} className="text-gray-300 group-hover:text-indigo-500 shrink-0" />
+        </button>
     )
 }
 
@@ -192,7 +287,18 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
     }
     const removeRubric = (i: number) => { if (confirm('Delete this rubric row?')) setRubrics(rubrics.filter((_, idx) => idx !== i)) }
 
-    const dimensionEntries: DimensionEntry[] = Object.entries(data.dimensions || {}).map(([key, v]: [string, any]) => ({ key, ...(v || {}) }))
+    // Dimension keys are numbered, e.g. "1_correctness", "2_architecture" — sort on
+    // that leading number rather than the object's insertion order. Keys with no
+    // leading number sort after the numbered ones, alphabetically among themselves.
+    const dimensionEntries: DimensionEntry[] = Object.entries(data.dimensions || {})
+        .map(([key, v]: [string, any]) => ({ key, ...(v || {}) }))
+        .sort((a, b) => {
+            const na = parseInt(a.key, 10), nb = parseInt(b.key, 10)
+            if (!isNaN(na) && !isNaN(nb)) return na - nb
+            if (!isNaN(na)) return -1
+            if (!isNaN(nb)) return 1
+            return a.key.localeCompare(b.key)
+        })
     const patchDimension = (key: string, side: 'a' | 'b', field: 'score' | 'reason', value: any) => {
         setData((d: any) => ({
             ...d,
@@ -207,6 +313,13 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
         setData((d: any) => ({ ...d, [field]: value }))
     const setFinalScore = (field: 'final_quality_score_a' | 'final_quality_score_b', value: number | null) =>
         setData((d: any) => ({ ...d, [field]: value }))
+    // Reference link — an optional URL the annotator attaches to the task (e.g. the
+    // platform task page, a doc, a PR). Lives on the same `data` blob as everything
+    // else here, so it rides the existing autosave with no extra endpoint.
+    const setTaskLink = (value: string) => setData((d: any) => ({ ...d, task_link: value }))
+    // Task title — same `data.task_name` the list view's denormalised `title`
+    // column is derived from on every save (see the backend's `deriveTitle`).
+    const setTaskName = (value: string) => setData((d: any) => ({ ...d, task_name: value.trim() || 'Untitled task' }))
 
     const doReupload = async (file: File) => {
         setReuploadErr('')
@@ -243,7 +356,7 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
             {/* Header */}
             <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-200 bg-gray-50 shrink-0 flex-wrap">
                 <ListTree size={15} className="text-indigo-500 shrink-0" />
-                <span className="text-sm font-semibold text-gray-800 truncate max-w-[360px]" title={taskName}>{taskName}</span>
+                <TaskNameField value={taskName} onChange={setTaskName} />
                 <span title="Task type — read-only, derived from the JSON"
                     className="text-[10px] font-semibold px-1.5 py-0.5 rounded border bg-indigo-50 text-indigo-700 border-indigo-300 shrink-0">
                     {taskType}
@@ -255,6 +368,7 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
                         {modelB && <>B = <span className="text-teal-600 font-medium">{modelB}</span></>}
                     </span>
                 )}
+                <TaskLinkField value={typeof data.task_link === 'string' ? data.task_link : ''} onChange={setTaskLink} />
                 <div className="flex-1" />
                 <span className="text-[10px] text-gray-400">
                     {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? 'Saved' : ''}
