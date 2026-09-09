@@ -6,7 +6,8 @@ import {
 } from 'lucide-react'
 import {
     getAntonTasks, createAntonTask, getAntonTask, updateAntonTask, deleteAntonTask,
-    saveAntonTaskTrajectory,
+    saveAntonTaskTrajectory, setAntonTaskStatus, ANTON_TASK_STATUSES, DEFAULT_ANTON_TASK_STATUS,
+    AntonTaskStatus,
 } from '@/app/api_handlers/api/anton-parser.api'
 import TaskTab from './TaskTab'
 import SolutionTab from './SolutionTab'
@@ -17,7 +18,27 @@ import { EMPTY_FILES, readUploadedFiles, TrajectoryFilesState } from './trajecto
  * contains. `data` (the full object) is always the source of truth;
  * these are just the shapes we actively read/edit from it.
  * ------------------------------------------------------------------ */
-interface TaskListItem { id: string; title: string; task_type: string | null; createdAt?: string; updatedAt?: string }
+interface TaskListItem {
+    id: string; title: string; task_type: string | null; status: AntonTaskStatus
+    createdAt?: string; updatedAt?: string
+}
+
+/** Badge color per workflow status — same mapping used on the list and in the editor. */
+const STATUS_STYLE: Record<AntonTaskStatus, string> = {
+    'Need To Submit': 'bg-gray-100 text-gray-600 border-gray-300',
+    Submitted: 'bg-blue-50 text-blue-700 border-blue-300',
+    'Submit For QA': 'bg-amber-50 text-amber-700 border-amber-300',
+    'Required Revision': 'bg-red-50 text-red-700 border-red-300',
+    'Awaiting Audit': 'bg-purple-50 text-purple-700 border-purple-300',
+    Approved: 'bg-green-50 text-green-700 border-green-300',
+}
+function StatusBadge({ status }: { status: AntonTaskStatus }) {
+    return (
+        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border whitespace-nowrap ${STATUS_STYLE[status] || STATUS_STYLE['Need To Submit']}`}>
+            {status}
+        </span>
+    )
+}
 interface RubricRow {
     index?: number | string
     verifier_type?: string
@@ -204,6 +225,17 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
     const [reuploadErr, setReuploadErr] = useState('')
     const fileRef = useRef<HTMLInputElement>(null)
 
+    // Workflow status — its own column, not part of `data`, so it is set and
+    // saved directly (not through the debounced `data` autosave below).
+    const [status, setStatus] = useState<AntonTaskStatus>(DEFAULT_ANTON_TASK_STATUS)
+    const [statusBusy, setStatusBusy] = useState(false)
+    const changeStatus = async (next: AntonTaskStatus) => {
+        setStatus(next)
+        setStatusBusy(true)
+        try { await setAntonTaskStatus(taskId, next); onSaved() }
+        finally { setStatusBusy(false) }
+    }
+
     // Task/Solution tabs — the six uploaded artefacts, stored in their own
     // columns on this same row and parsed by those tabs at render time.
     const [files, setFiles] = useState<TrajectoryFilesState>(EMPTY_FILES)
@@ -220,6 +252,7 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
             if (cancelled) return
             const full = res?.data ?? res
             setData(full?.data ?? {})
+            setStatus(full?.status || DEFAULT_ANTON_TASK_STATUS)
             setFiles({
                 trajectory_a: full?.trajectory_a ?? null,
                 trajectory_b: full?.trajectory_b ?? null,
@@ -361,6 +394,12 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
                     className="text-[10px] font-semibold px-1.5 py-0.5 rounded border bg-indigo-50 text-indigo-700 border-indigo-300 shrink-0">
                     {taskType}
                 </span>
+                <select value={status} disabled={statusBusy} onChange={e => changeStatus(e.target.value as AntonTaskStatus)}
+                    title="Workflow status"
+                    className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border shrink-0 outline-none disabled:opacity-50 ${STATUS_STYLE[status] || STATUS_STYLE['Need To Submit']}`}>
+                    {ANTON_TASK_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+                {statusBusy && <RefreshCw size={11} className="animate-spin text-gray-400 shrink-0" />}
                 {(modelA || modelB) && (
                     <span className="text-[10px] text-gray-400 shrink-0">
                         {modelA && <>A = <span className="text-blue-600 font-medium">{modelA}</span></>}
@@ -678,7 +717,10 @@ export default function AntonParserPage() {
     const [uploadBusy, setUploadBusy] = useState(false)
     const [uploadErr, setUploadErr] = useState('')
     const [editingId, setEditingId] = useState<string | null>(null)
+    const [statusFilter, setStatusFilter] = useState<AntonTaskStatus | 'all'>('all')
     const fileRef = useRef<HTMLInputElement>(null)
+
+    const visibleTasks = statusFilter === 'all' ? tasks : tasks.filter(t => t.status === statusFilter)
 
     const load = async () => {
         setLoading(true)
@@ -719,9 +761,19 @@ export default function AntonParserPage() {
                 <div className="flex items-center gap-2">
                     <ListTree size={14} className="text-gray-500" />
                     <h1 className="text-sm font-semibold text-gray-800">Anton Parser</h1>
-                    <span className="text-[10px] text-gray-400">{tasks.length} task{tasks.length !== 1 ? 's' : ''}</span>
+                    <span className="text-[10px] text-gray-400">
+                        {statusFilter === 'all'
+                            ? `${tasks.length} task${tasks.length !== 1 ? 's' : ''}`
+                            : `${visibleTasks.length} of ${tasks.length} task${tasks.length !== 1 ? 's' : ''}`}
+                    </span>
                 </div>
                 <div className="flex items-center gap-2">
+                    <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as AntonTaskStatus | 'all')}
+                        title="Filter by status"
+                        className="text-xs border border-gray-300 rounded px-2 py-1 text-gray-600 bg-white hover:bg-gray-50 focus:outline-none focus:border-indigo-400">
+                        <option value="all">All statuses</option>
+                        {ANTON_TASK_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
                     <input ref={fileRef} type="file" accept="application/json,.json" hidden
                         onChange={e => { const f = e.target.files?.[0]; if (f) doUpload(f) }} />
                     <button onClick={() => load()} disabled={loading}
@@ -744,18 +796,23 @@ export default function AntonParserPage() {
                         <FileJson size={20} className="text-gray-300" />
                         No tasks yet. Click <span className="font-medium text-indigo-600">Upload JSON</span> to create one.
                     </div>
+                ) : visibleTasks.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center gap-2 py-12 text-gray-400 text-xs">
+                        No tasks with status <span className="font-medium text-gray-600">{statusFilter}</span>.
+                    </div>
                 ) : (
                     <table className="w-full text-xs">
                         <thead className="bg-gray-50 sticky top-0">
                             <tr className="text-left text-gray-500">
                                 <th className="px-3 py-1.5 font-medium">Task Name</th>
                                 <th className="px-3 py-1.5 font-medium">Task Type</th>
+                                <th className="px-3 py-1.5 font-medium">Status</th>
                                 <th className="px-3 py-1.5 font-medium">Updated</th>
                                 <th className="px-3 py-1.5 font-medium w-8"></th>
                             </tr>
                         </thead>
                         <tbody>
-                            {tasks.map(t => (
+                            {visibleTasks.map(t => (
                                 <tr key={t.id} className="border-t border-gray-100 hover:bg-gray-50 cursor-pointer" onClick={() => setEditingId(t.id)}>
                                     <td className="px-3 py-1.5 font-medium text-gray-800">{t.title}</td>
                                     <td className="px-3 py-1.5">
@@ -763,6 +820,7 @@ export default function AntonParserPage() {
                                             ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">{t.task_type}</span>
                                             : <span className="text-gray-300">—</span>}
                                     </td>
+                                    <td className="px-3 py-1.5"><StatusBadge status={t.status || DEFAULT_ANTON_TASK_STATUS} /></td>
                                     <td className="px-3 py-1.5 text-gray-400">{t.updatedAt ? new Date(t.updatedAt).toLocaleString() : '—'}</td>
                                     <td className="px-3 py-1.5">
                                         <button onClick={e => { e.stopPropagation(); removeTask(t.id) }} title="Delete"

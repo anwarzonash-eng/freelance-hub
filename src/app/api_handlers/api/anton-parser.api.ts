@@ -5,6 +5,19 @@ import { apiClient } from '../api_client'
 import { ApiMethod } from '../api_methods.enum'
 import { AntonParserAPIRoutes } from '../api_routes.enums'
 
+// Mirrors ANTON_TASK_STATUSES on the backend (upwork_tool_backend/src/anton_parser/anton-task.model.ts)
+// — the workflow order the status dropdown and filter both use.
+export const ANTON_TASK_STATUSES = [
+    'Need To Submit',
+    'Submitted',
+    'Submit For QA',
+    'Required Revision',
+    'Awaiting Audit',
+    'Approved',
+] as const
+export type AntonTaskStatus = typeof ANTON_TASK_STATUSES[number]
+export const DEFAULT_ANTON_TASK_STATUS: AntonTaskStatus = 'Need To Submit'
+
 export async function getAntonTasks() {
     return await apiClient(AntonParserAPIRoutes.GET_TASKS, ApiMethod.GET, undefined, undefined, undefined, true, false)
 }
@@ -41,4 +54,13 @@ export async function saveAntonTaskTrajectory(
 ) {
     const params: IApiParams = { path: { id } }
     return await apiClient(AntonParserAPIRoutes.UPDATE_TASK, ApiMethod.PUT, body, params, undefined, true, false)
+}
+
+/**
+ * Workflow status — its own column on the same task row, written directly
+ * (not wrapped under `data`) through the same update endpoint.
+ */
+export async function setAntonTaskStatus(id: string, status: AntonTaskStatus) {
+    const params: IApiParams = { path: { id } }
+    return await apiClient(AntonParserAPIRoutes.UPDATE_TASK, ApiMethod.PUT, { status }, params, undefined, true, false)
 }
