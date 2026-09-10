@@ -3137,7 +3137,12 @@ function JobReportModal({ job, admin, onClose, onSaved }: { job: AParseJob; admi
     useEffect(() => {
         getAParseTurns(job.id).then((res: any) => {
             const list = res?.data ?? res
-            setTurns(Array.isArray(list) ? list : [])
+            // Same enrichment the job listing's expanded turn rows use, so this
+            // report's per-turn step counts match exactly.
+            const enriched = Array.isArray(list)
+                ? list.map((t: any) => ({ ...t, _stepsA: countModelSteps(t.model_a_input, t.transcript_version === 2 ? 2 : 1), _stepsB: countModelSteps(t.model_b_input, t.transcript_version === 2 ? 2 : 1) }))
+                : []
+            setTurns(enriched)
         }).finally(() => setLoading(false))
     }, [job.id])
 
@@ -3151,6 +3156,36 @@ function JobReportModal({ job, admin, onClose, onSaved }: { job: AParseJob; admi
     const winnerRem = reportTokenNum(winnerRemStr)
     const consumed = winnerRem != null ? 1_000_000 - winnerRem : null
     const score = totalTurns ? (totalTurns * 100 / 60) : 0
+
+    // Per-turn hours — track_hours is visible to everyone, submitted_hours is admin-only
+    // (the backend strips it from `answers` for a non-admin fetch and ignores any attempt
+    // by a non-admin to set it, so this is enforced server-side too, not just hidden here).
+    const hoursValue = (answers: any, field: 'track_hours' | 'submitted_hours'): string => {
+        const v = answers?.[field]
+        return typeof v === 'number' && Number.isFinite(v) ? String(v) : ''
+    }
+    const totalSubmittedHours = turns.reduce((sum, t) => {
+        const v = t.answers?.submitted_hours
+        return sum + (typeof v === 'number' && Number.isFinite(v) ? v : 0)
+    }, 0)
+    const hourTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+    const onHourChange = (idx: number, turnId: string, field: 'track_hours' | 'submitted_hours', raw: string) => {
+        const value = raw === '' ? null : Number(raw)
+        setTurns(prev => {
+            const next = prev.slice()
+            next[idx] = { ...next[idx], answers: { ...(next[idx].answers || {}), [field]: value } }
+            return next
+        })
+        // Debounce per turn+field; the server merges this into the turn's stored
+        // `answers` rather than replacing it, so a minimal { [field]: value } patch
+        // is all that's needed — it can't clobber dims/reasoning/etc. saved elsewhere.
+        const key = `${turnId}:${field}`
+        if (hourTimers.current[key]) clearTimeout(hourTimers.current[key])
+        hourTimers.current[key] = setTimeout(() => {
+            updateAParseTurn(turnId, { answers: { [field]: value } }).catch(() => { })
+        }, 600)
+    }
+    useEffect(() => () => { Object.values(hourTimers.current).forEach(clearTimeout) }, [])
 
     // Prompt K's category comes from turn (K-1)'s promptType. Turn 1's is set here in the report.
     const promptRows = turns.map((t, i) => ({
@@ -3204,6 +3239,7 @@ function JobReportModal({ job, admin, onClose, onSaved }: { job: AParseJob; admi
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                         <Metric label="Total steps" value={totalSteps} sub={`A ${job.steps_a_total ?? 0} · B ${job.steps_b_total ?? 0}`} />
                         <Metric label="Total turns" value={totalTurns} />
+                        {admin && <Metric label="Total submitted hours" value={totalSubmittedHours.toFixed(2)} />}
                         <Metric label="Remaining tokens" value={<span className="text-sm">A {formatTokens(remA || '') || '—'} · B {formatTokens(remB || '') || '—'}</span>} sub="last turn" />
                         <Metric label="Tokens consumed" value={consumed != null ? consumed.toLocaleString('en-US') : '—'}
                             sub={winner && winner !== '=' ? `1,000,000 − ${winner} remaining` : 'no clear winner'} />
@@ -3235,15 +3271,23 @@ function JobReportModal({ job, admin, onClose, onSaved }: { job: AParseJob; admi
                         </label>
                     </div>
 
-                    {/* Prompt categories per turn */}
+                    {/* Prompt categories & hours per turn */}
                     <div>
-                        <p className="text-[11px] font-semibold text-gray-700 mb-1.5">Prompts & categories</p>
+                        <p className="text-[11px] font-semibold text-gray-700 mb-1.5">Prompts, categories & hours</p>
                         {loading ? (
                             <div className="flex items-center gap-2 py-4 text-gray-400 text-xs"><RefreshCw size={12} className="animate-spin" /> Loading turns…</div>
                         ) : promptRows.length === 0 ? (
                             <p className="text-[11px] text-gray-400">No turns yet.</p>
                         ) : (
                             <div className="border border-gray-200 rounded-lg overflow-hidden">
+                                <div className="flex items-center gap-2 px-2.5 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wide bg-gray-50 border-b border-gray-200">
+                                    <span className="w-16 shrink-0">Turn</span>
+                                    <span className="w-56 shrink-0">Category</span>
+                                    <span className="flex-1 min-w-0">Prompt</span>
+                                    <span className="w-24 shrink-0">Steps</span>
+                                    <span className="w-20 shrink-0">Track hrs</span>
+                                    {admin && <span className="w-20 shrink-0">Submitted hrs</span>}
+                                </div>
                                 {promptRows.map((r, i) => (
                                     <div key={i} className={`flex items-start gap-2 px-2.5 py-1.5 text-[11px] ${i ? 'border-t border-gray-100' : ''}`}>
                                         <span className="text-gray-400 font-mono w-16 shrink-0">Prompt {r.n}</span>
@@ -3260,6 +3304,30 @@ function JobReportModal({ job, admin, onClose, onSaved }: { job: AParseJob; admi
                                             )}
                                         </div>
                                         <span className="flex-1 min-w-0 text-gray-500 truncate" title={r.text}>{r.text || <span className="text-gray-300">(no prompt text)</span>}</span>
+                                        <div className="w-24 shrink-0">
+                                            {((turns[i]?._stepsA ?? 0) > 0 || (turns[i]?._stepsB ?? 0) > 0) && (
+                                                <span title="Steps taken this turn (Model A / Model B)"
+                                                    className="text-[9px] font-mono px-1 py-0.5 rounded bg-gray-100 text-gray-600 border border-gray-200 whitespace-nowrap">
+                                                    A {turns[i]?._stepsA ?? 0} · B {turns[i]?._stepsB ?? 0}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="w-20 shrink-0">
+                                            <input type="number" step="0.25" min="0" placeholder="0"
+                                                title="Track hours — visible to everyone"
+                                                value={hoursValue(turns[i]?.answers, 'track_hours')}
+                                                onChange={e => onHourChange(i, turns[i].id, 'track_hours', e.target.value)}
+                                                className="w-full text-[11px] border border-gray-300 rounded px-1.5 py-0.5 focus:outline-none focus:border-indigo-400" />
+                                        </div>
+                                        {admin && (
+                                            <div className="w-20 shrink-0">
+                                                <input type="number" step="0.25" min="0" placeholder="0"
+                                                    title="Submitted hours — admin only"
+                                                    value={hoursValue(turns[i]?.answers, 'submitted_hours')}
+                                                    onChange={e => onHourChange(i, turns[i].id, 'submitted_hours', e.target.value)}
+                                                    className="w-full text-[11px] border border-amber-300 rounded px-1.5 py-0.5 bg-amber-50/40 focus:outline-none focus:border-amber-500" />
+                                            </div>
+                                        )}
                                     </div>
                                 ))}
                             </div>
