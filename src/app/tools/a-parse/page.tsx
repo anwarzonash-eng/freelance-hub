@@ -3157,15 +3157,18 @@ function JobReportModal({ job, admin, onClose, onSaved }: { job: AParseJob; admi
     const consumed = winnerRem != null ? 1_000_000 - winnerRem : null
     const score = totalTurns ? (totalTurns * 100 / 60) : 0
 
-    // Per-turn hours — track_hours is visible to everyone, submitted_hours is admin-only
-    // (the backend strips it from `answers` for a non-admin fetch and ignores any attempt
-    // by a non-admin to set it, so this is enforced server-side too, not just hidden here).
-    const hoursValue = (answers: any, field: 'track_hours' | 'submitted_hours'): string => {
-        const v = answers?.[field]
+    // Per-turn hours — their own columns on AParseTurn (track_hours, submitted_hours),
+    // not keys inside `answers`: the main turn editor's autosave writes `answers` as a
+    // whole object on every save, so anything living inside it rides that same
+    // read-modify-write cycle. A dedicated column is written directly and can't be
+    // touched by an unrelated save. track_hours is visible to everyone; submitted_hours
+    // is admin-only — the backend strips/ignores it for a non-admin, not just hides it.
+    const hoursValue = (turn: any, field: 'track_hours' | 'submitted_hours'): string => {
+        const v = turn?.[field]
         return typeof v === 'number' && Number.isFinite(v) ? String(v) : ''
     }
     const totalSubmittedHours = turns.reduce((sum, t) => {
-        const v = t.answers?.submitted_hours
+        const v = t.submitted_hours
         return sum + (typeof v === 'number' && Number.isFinite(v) ? v : 0)
     }, 0)
     const hourTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
@@ -3173,16 +3176,13 @@ function JobReportModal({ job, admin, onClose, onSaved }: { job: AParseJob; admi
         const value = raw === '' ? null : Number(raw)
         setTurns(prev => {
             const next = prev.slice()
-            next[idx] = { ...next[idx], answers: { ...(next[idx].answers || {}), [field]: value } }
+            next[idx] = { ...next[idx], [field]: value }
             return next
         })
-        // Debounce per turn+field; the server merges this into the turn's stored
-        // `answers` rather than replacing it, so a minimal { [field]: value } patch
-        // is all that's needed — it can't clobber dims/reasoning/etc. saved elsewhere.
         const key = `${turnId}:${field}`
         if (hourTimers.current[key]) clearTimeout(hourTimers.current[key])
         hourTimers.current[key] = setTimeout(() => {
-            updateAParseTurn(turnId, { answers: { [field]: value } }).catch(() => { })
+            updateAParseTurn(turnId, { [field]: value }).catch(() => { })
         }, 600)
     }
     useEffect(() => () => { Object.values(hourTimers.current).forEach(clearTimeout) }, [])
@@ -3315,7 +3315,7 @@ function JobReportModal({ job, admin, onClose, onSaved }: { job: AParseJob; admi
                                         <div className="w-20 shrink-0">
                                             <input type="number" step="0.25" min="0" placeholder="0"
                                                 title="Track hours — visible to everyone"
-                                                value={hoursValue(turns[i]?.answers, 'track_hours')}
+                                                value={hoursValue(turns[i], 'track_hours')}
                                                 onChange={e => onHourChange(i, turns[i].id, 'track_hours', e.target.value)}
                                                 className="w-full text-[11px] border border-gray-300 rounded px-1.5 py-0.5 focus:outline-none focus:border-indigo-400" />
                                         </div>
@@ -3323,7 +3323,7 @@ function JobReportModal({ job, admin, onClose, onSaved }: { job: AParseJob; admi
                                             <div className="w-20 shrink-0">
                                                 <input type="number" step="0.25" min="0" placeholder="0"
                                                     title="Submitted hours — admin only"
-                                                    value={hoursValue(turns[i]?.answers, 'submitted_hours')}
+                                                    value={hoursValue(turns[i], 'submitted_hours')}
                                                     onChange={e => onHourChange(i, turns[i].id, 'submitted_hours', e.target.value)}
                                                     className="w-full text-[11px] border border-amber-300 rounded px-1.5 py-0.5 bg-amber-50/40 focus:outline-none focus:border-amber-500" />
                                             </div>
