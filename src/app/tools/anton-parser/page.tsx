@@ -21,6 +21,9 @@ import { EMPTY_FILES, readUploadedFiles, TrajectoryFilesState } from './trajecto
 interface TaskListItem {
     id: string; title: string; task_type: string | null; status: AntonTaskStatus
     createdAt?: string; updatedAt?: string
+    // Denormalised rubric summary — see deriveRubricStats/deriveScore on the backend.
+    rubrics_count?: number; yes_count_a?: number; yes_count_b?: number
+    final_quality_score_a?: number | null; final_quality_score_b?: number | null
 }
 
 /** Badge color per workflow status — same mapping used on the list and in the editor. */
@@ -36,6 +39,28 @@ function StatusBadge({ status }: { status: AntonTaskStatus }) {
     return (
         <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border whitespace-nowrap ${STATUS_STYLE[status] || STATUS_STYLE['Need To Submit']}`}>
             {status}
+        </span>
+    )
+}
+
+/** YES % for one side, as a share of the task's rubric count. */
+function YesPctBadge({ yesCount, total }: { yesCount?: number; total?: number }) {
+    if (!total) return <span className="text-gray-300">—</span>
+    const pct = Math.round(((yesCount ?? 0) / total) * 100)
+    return <span className="font-mono text-gray-700">{pct}%</span>
+}
+
+/** A/B winner on final_quality_score — higher score wins, matching how the editor's
+ *  own two score fields are labelled. */
+function WinnerBadge({ scoreA, scoreB }: { scoreA?: number | null; scoreB?: number | null }) {
+    if (scoreA == null || scoreB == null) return <span className="text-gray-300">—</span>
+    if (scoreA === scoreB) return <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded border bg-gray-100 text-gray-600 border-gray-300 whitespace-nowrap">Tie</span>
+    const aWins = scoreA > scoreB
+    return (
+        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border whitespace-nowrap ${aWins
+            ? 'bg-blue-50 text-blue-700 border-blue-300'
+            : 'bg-teal-50 text-teal-700 border-teal-300'}`}>
+            {aWins ? 'A wins' : 'B wins'}
         </span>
     )
 }
@@ -354,14 +379,24 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
     // column is derived from on every save (see the backend's `deriveTitle`).
     const setTaskName = (value: string) => setData((d: any) => ({ ...d, task_name: value.trim() || 'Untitled task' }))
 
+    // A task created via "Create" (title + link only, no rubric JSON uploaded yet) has
+    // nothing in `data` beyond those two fields — nothing a JSON upload could clobber,
+    // so it gets a plain "Upload JSON" (no confirm) instead of "Re-upload JSON".
+    const isEmptyTask = Object.keys(data || {}).every(k => k === 'task_name' || k === 'task_link')
+
     const doReupload = async (file: File) => {
         setReuploadErr('')
         try {
             const parsed = await readJsonFile(file)
-            if (!confirm('Uploading a new file resets everything in this task to the new JSON. Continue?')) return
+            if (!isEmptyTask && !confirm('Uploading a new file resets everything in this task to the new JSON. Continue?')) return
             setReuploadBusy(true)
-            setData(parsed)
-            await updateAntonTask(taskId, parsed)
+            // task_name and task_link are pure user input, set at creation and editable
+            // only via the header fields — never taken from an uploaded file, even if the
+            // JSON happens to carry its own task_name. Whatever is uploaded, these two
+            // always keep whatever the user already has here.
+            const merged = { ...parsed, task_name: data.task_name, task_link: data.task_link }
+            setData(merged)
+            await updateAntonTask(taskId, merged)
             onSaved()
         } catch (e: any) {
             setReuploadErr(e?.message || 'Could not parse that file.')
@@ -415,9 +450,11 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
                 <input ref={fileRef} type="file" accept="application/json,.json" hidden
                     onChange={e => { const f = e.target.files?.[0]; if (f) doReupload(f) }} />
                 <button onClick={() => fileRef.current?.click()} disabled={reuploadBusy}
-                    title="Upload a new JSON file — replaces everything in this task"
-                    className="flex items-center gap-1 text-[11px] border border-amber-300 text-amber-700 rounded px-2.5 py-1 hover:bg-amber-50 disabled:opacity-40">
-                    {reuploadBusy ? <RefreshCw size={12} className="animate-spin" /> : <Upload size={12} />} Re-upload JSON
+                    title={isEmptyTask ? 'Upload the task JSON' : 'Upload a new JSON file — replaces everything in this task'}
+                    className={`flex items-center gap-1 text-[11px] rounded px-2.5 py-1 disabled:opacity-40 ${isEmptyTask
+                        ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                        : 'border border-amber-300 text-amber-700 hover:bg-amber-50'}`}>
+                    {reuploadBusy ? <RefreshCw size={12} className="animate-spin" /> : <Upload size={12} />} {isEmptyTask ? 'Upload JSON' : 'Re-upload JSON'}
                 </button>
                 <button onClick={onClose} className="text-gray-400 hover:text-gray-700 ml-1"><X size={16} /></button>
             </div>
@@ -561,10 +598,27 @@ function VerificationTable({ side, title, rubrics, onPatch }: {
     const reasonKey = `reason_${side}` as const
     const accent = side === 'a' ? 'text-blue-600' : 'text-teal-600'
     const [selected, setSelected] = useState<number | null>(null)
+
+    // YES/NO breakdown for this side, as a share of every rubric row (not just the
+    // ones actually answered YES/NO) — so an unanswered row still counts toward 100%.
+    const total = rubrics.length
+    const yesCount = rubrics.filter(r => String(r[answerKey] ?? '').trim().toUpperCase() === 'YES').length
+    const noCount = rubrics.filter(r => String(r[answerKey] ?? '').trim().toUpperCase() === 'NO').length
+    const pct = (n: number) => total ? Math.round((n / total) * 100) : 0
+
     return (
         <section>
-            <div className="flex items-center justify-between mb-2">
-                <h2 className="text-xs font-semibold text-gray-700">{title}</h2>
+            <div className="flex items-center justify-between mb-2 flex-wrap gap-y-1.5">
+                <div className="flex items-center gap-2">
+                    <h2 className="text-xs font-semibold text-gray-700">{title}</h2>
+                    <span title={`${yesCount} of ${total} rows answered YES, ${noCount} of ${total} answered NO`}
+                        className="flex items-center gap-1.5 text-[10px] font-medium px-2 py-0.5 rounded-full bg-gray-50 border border-gray-200 whitespace-nowrap">
+                        <span className="text-emerald-600 font-semibold">YES {pct(yesCount)}%</span>
+                        <span className="text-gray-300">·</span>
+                        <span className="text-red-600 font-semibold">NO {pct(noCount)}%</span>
+                        <span className="text-gray-400">({yesCount}/{total} · {noCount}/{total})</span>
+                    </span>
+                </div>
                 <TableCopyBtn
                     headers={['Index', 'Criteria', side === 'a' ? 'Answer A' : 'Answer B', side === 'a' ? 'Reason A' : 'Reason B']}
                     rows={rubrics.map(r => [r.index, r.criteria, r[answerKey], r[reasonKey]])}
@@ -711,14 +765,83 @@ function PairwiseTab({ pairwiseEvaluation, comparativeRationale, finalQualitySco
 /* ------------------------------------------------------------------ *
  * Page — task list
  * ------------------------------------------------------------------ */
+/**
+ * Task creation — title + optional reference link only. The actual JSON (rubrics,
+ * trajectories, etc.) is added afterward, inside the opened task, via its own
+ * upload buttons — this modal only creates the empty task shell.
+ */
+function CreateTaskModal({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
+    const [title, setTitle] = useState('')
+    const [link, setLink] = useState('')
+    const [busy, setBusy] = useState(false)
+    const [err, setErr] = useState('')
+    const titleRef = useRef<HTMLInputElement>(null)
+
+    useEffect(() => { titleRef.current?.focus() }, [])
+
+    const submit = async () => {
+        const t = title.trim()
+        if (!t) { setErr('Title is required.'); return }
+        setErr('')
+        setBusy(true)
+        try {
+            const res: any = await createAntonTask({ task_name: t, task_link: link.trim() })
+            const created = res?.data ?? res
+            if (created?.id) onCreated(created.id)
+            else onClose()
+        } catch (e: any) {
+            setErr(e?.message || 'Could not create the task.')
+            setBusy(false)
+        }
+    }
+
+    return (
+        <div className="fixed inset-0 z-[9990] flex items-center justify-center bg-black/40"
+            onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+            <div className="bg-white border border-gray-200 rounded-xl shadow-2xl w-full max-w-[420px] overflow-hidden">
+                <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-100 bg-gray-50">
+                    <ListTree size={14} className="text-indigo-500 shrink-0" />
+                    <span className="text-[13px] font-semibold text-gray-800 flex-1">Create task</span>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={16} /></button>
+                </div>
+                <div className="p-4 space-y-3">
+                    <label className="flex flex-col gap-1">
+                        <span className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">Title</span>
+                        <input ref={titleRef} value={title} onChange={e => setTitle(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') submit() }}
+                            placeholder="e.g. UV-Vis run triage"
+                            className="text-[12.5px] border border-gray-300 rounded px-2.5 py-1.5 focus:outline-none focus:border-indigo-400" />
+                    </label>
+                    <label className="flex flex-col gap-1">
+                        <span className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">Link (optional)</span>
+                        <input value={link} onChange={e => setLink(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') submit() }}
+                            placeholder="https://…" type="url"
+                            className="text-[12.5px] border border-gray-300 rounded px-2.5 py-1.5 focus:outline-none focus:border-indigo-400" />
+                    </label>
+                    {err && <div className="text-[11px] text-red-600">{err}</div>}
+                </div>
+                <div className="flex items-center justify-end gap-2 px-4 py-2.5 border-t border-gray-100 bg-gray-50">
+                    <button onClick={onClose} disabled={busy}
+                        className="text-[11px] border border-gray-300 rounded px-2.5 py-1.5 text-gray-600 hover:bg-gray-100 disabled:opacity-40">
+                        Cancel
+                    </button>
+                    <button onClick={submit} disabled={busy || !title.trim()}
+                        className="flex items-center gap-1 text-[11px] bg-indigo-600 text-white rounded px-3 py-1.5 hover:bg-indigo-700 disabled:opacity-40">
+                        {busy ? <RefreshCw size={12} className="animate-spin" /> : <Plus size={12} />} Create
+                    </button>
+                </div>
+            </div>
+        </div>
+    )
+}
+
 export default function AntonParserPage() {
     const [tasks, setTasks] = useState<TaskListItem[]>([])
     const [loading, setLoading] = useState(false)
-    const [uploadBusy, setUploadBusy] = useState(false)
-    const [uploadErr, setUploadErr] = useState('')
     const [editingId, setEditingId] = useState<string | null>(null)
     const [statusFilter, setStatusFilter] = useState<AntonTaskStatus | 'all'>('all')
-    const fileRef = useRef<HTMLInputElement>(null)
+    const [creating, setCreating] = useState(false)
 
     const visibleTasks = statusFilter === 'all' ? tasks : tasks.filter(t => t.status === statusFilter)
 
@@ -732,21 +855,10 @@ export default function AntonParserPage() {
     }
     useEffect(() => { load() }, [])
 
-    const doUpload = async (file: File) => {
-        setUploadErr('')
-        setUploadBusy(true)
-        try {
-            const parsed = await readJsonFile(file)
-            const res: any = await createAntonTask(parsed)
-            const created = res?.data ?? res
-            await load()
-            if (created?.id) setEditingId(created.id)
-        } catch (e: any) {
-            setUploadErr(e?.message || 'Could not create the task.')
-        } finally {
-            setUploadBusy(false)
-            if (fileRef.current) fileRef.current.value = ''
-        }
+    const onTaskCreated = async (id: string) => {
+        setCreating(false)
+        await load()
+        setEditingId(id)
     }
 
     const removeTask = async (id: string) => {
@@ -774,19 +886,16 @@ export default function AntonParserPage() {
                         <option value="all">All statuses</option>
                         {ANTON_TASK_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
-                    <input ref={fileRef} type="file" accept="application/json,.json" hidden
-                        onChange={e => { const f = e.target.files?.[0]; if (f) doUpload(f) }} />
                     <button onClick={() => load()} disabled={loading}
                         className="flex items-center gap-1 text-xs border border-gray-300 rounded px-2 py-1 hover:bg-gray-50 disabled:opacity-50 text-gray-600">
                         <RefreshCw size={11} className={loading ? 'animate-spin' : ''} /> Refresh
                     </button>
-                    <button onClick={() => fileRef.current?.click()} disabled={uploadBusy}
-                        className="flex items-center gap-1 text-xs bg-indigo-600 text-white rounded px-2.5 py-1 hover:bg-indigo-700 disabled:opacity-40">
-                        {uploadBusy ? <RefreshCw size={13} className="animate-spin" /> : <Upload size={13} />} Upload JSON
+                    <button onClick={() => setCreating(true)}
+                        className="flex items-center gap-1 text-xs bg-indigo-600 text-white rounded px-2.5 py-1 hover:bg-indigo-700">
+                        <Plus size={13} /> Create
                     </button>
                 </div>
             </div>
-            {uploadErr && <div className="mb-2 px-3 py-1.5 bg-red-50 text-red-700 text-[11px] border border-red-200 rounded shrink-0">{uploadErr}</div>}
 
             <div className="flex-1 overflow-y-auto min-h-0 border border-gray-200 rounded">
                 {loading && tasks.length === 0 ? (
@@ -794,7 +903,7 @@ export default function AntonParserPage() {
                 ) : tasks.length === 0 ? (
                     <div className="flex flex-col items-center justify-center gap-2 py-12 text-gray-400 text-xs">
                         <FileJson size={20} className="text-gray-300" />
-                        No tasks yet. Click <span className="font-medium text-indigo-600">Upload JSON</span> to create one.
+                        No tasks yet. Click <span className="font-medium text-indigo-600">Create</span> to add one, then upload its files once it's open.
                     </div>
                 ) : visibleTasks.length === 0 ? (
                     <div className="flex flex-col items-center justify-center gap-2 py-12 text-gray-400 text-xs">
@@ -806,6 +915,12 @@ export default function AntonParserPage() {
                             <tr className="text-left text-gray-500">
                                 <th className="px-3 py-1.5 font-medium">Task Name</th>
                                 <th className="px-3 py-1.5 font-medium">Task Type</th>
+                                <th className="px-3 py-1.5 font-medium text-right">Rubrics</th>
+                                <th className="px-3 py-1.5 font-medium text-right" title="Share of rubrics answered YES, Model A">YES A</th>
+                                <th className="px-3 py-1.5 font-medium text-right" title="Share of rubrics answered YES, Model B">YES B</th>
+                                <th className="px-3 py-1.5 font-medium">Winner</th>
+                                <th className="px-3 py-1.5 font-medium text-right">Score A</th>
+                                <th className="px-3 py-1.5 font-medium text-right">Score B</th>
                                 <th className="px-3 py-1.5 font-medium">Status</th>
                                 <th className="px-3 py-1.5 font-medium">Updated</th>
                                 <th className="px-3 py-1.5 font-medium w-8"></th>
@@ -820,6 +935,12 @@ export default function AntonParserPage() {
                                             ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">{t.task_type}</span>
                                             : <span className="text-gray-300">—</span>}
                                     </td>
+                                    <td className="px-3 py-1.5 text-right text-gray-500">{t.rubrics_count ?? 0}</td>
+                                    <td className="px-3 py-1.5 text-right"><YesPctBadge yesCount={t.yes_count_a} total={t.rubrics_count} /></td>
+                                    <td className="px-3 py-1.5 text-right"><YesPctBadge yesCount={t.yes_count_b} total={t.rubrics_count} /></td>
+                                    <td className="px-3 py-1.5"><WinnerBadge scoreA={t.final_quality_score_a} scoreB={t.final_quality_score_b} /></td>
+                                    <td className="px-3 py-1.5 text-right font-mono text-gray-700">{t.final_quality_score_a ?? <span className="text-gray-300">—</span>}</td>
+                                    <td className="px-3 py-1.5 text-right font-mono text-gray-700">{t.final_quality_score_b ?? <span className="text-gray-300">—</span>}</td>
                                     <td className="px-3 py-1.5"><StatusBadge status={t.status || DEFAULT_ANTON_TASK_STATUS} /></td>
                                     <td className="px-3 py-1.5 text-gray-400">{t.updatedAt ? new Date(t.updatedAt).toLocaleString() : '—'}</td>
                                     <td className="px-3 py-1.5">
@@ -835,6 +956,9 @@ export default function AntonParserPage() {
 
             {editingId && (
                 <TaskEditor taskId={editingId} onClose={() => { setEditingId(null); load() }} onSaved={load} />
+            )}
+            {creating && (
+                <CreateTaskModal onClose={() => setCreating(false)} onCreated={onTaskCreated} />
             )}
         </div>
     )
