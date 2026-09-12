@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
     ListTree, Plus, RefreshCw, X, Check, Trash2, Copy, Upload, FileJson, Link2, ExternalLink, Pencil,
+    Eye, History, ShieldAlert,
 } from 'lucide-react'
 import {
     getAntonTasks, createAntonTask, getAntonTask, updateAntonTask, deleteAntonTask,
@@ -12,6 +13,10 @@ import {
 import TaskTab from './TaskTab'
 import SolutionTab from './SolutionTab'
 import { EMPTY_FILES, readUploadedFiles, TrajectoryFilesState } from './trajectoryFiles'
+import { DataVersion } from './versionDiff'
+import { RubricsViewTab, DimensionsViewTab, PairwiseViewTab } from './VersionViewTabs'
+import VerifyModal from './VerifyModal'
+import { AnnotationSnapshot } from './verify'
 
 /* ------------------------------------------------------------------ *
  * Types — a thin, permissive view over whatever the uploaded JSON
@@ -79,6 +84,22 @@ interface RubricRow {
     [k: string]: any
 }
 interface DimensionEntry { key: string; score_a?: number | string | null; reason_a?: string; score_b?: number | string | null; reason_b?: string }
+
+/** Dimension keys are numbered, e.g. "1_correctness", "2_architecture" — sort on that
+ *  leading number rather than object insertion order. Shared by the live editable
+ *  Dimensions tab and the read-only version-view tabs, so both list entries the same
+ *  way regardless of which `data` object (live vs. a historical snapshot) they read. */
+function buildDimensionEntries(data: any): DimensionEntry[] {
+    return Object.entries(data?.dimensions || {})
+        .map(([key, v]: [string, any]) => ({ key, ...(v || {}) }))
+        .sort((a, b) => {
+            const na = parseInt(a.key, 10), nb = parseInt(b.key, 10)
+            if (!isNaN(na) && !isNaN(nb)) return na - nb
+            if (!isNaN(na)) return -1
+            if (!isNaN(nb)) return 1
+            return a.key.localeCompare(b.key)
+        })
+}
 
 /* ------------------------------------------------------------------ *
  * Small shared UI bits
@@ -270,6 +291,15 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
     // a trip to another tab.
     const [opened, setOpened] = useState<Partial<Record<Tab, boolean>>>({ rubrics: true })
 
+    // Version history for the annotation JSON (Rubrics/Dimensions/Pairwise only —
+    // Task/Solution have their own separate, unversioned uploads). Edit mode always
+    // works on the live `data` above; View mode is read-only and renders whichever
+    // version is selected here, diffed against the one before it.
+    const [mode, setMode] = useState<'edit' | 'view'>('edit')
+    const [dataVersions, setDataVersions] = useState<DataVersion[]>([])
+    const [selectedVersionIdx, setSelectedVersionIdx] = useState(0)
+    const [showVerify, setShowVerify] = useState(false)
+
     useEffect(() => {
         let cancelled = false
         setLoading(true)
@@ -278,6 +308,13 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
             const full = res?.data ?? res
             setData(full?.data ?? {})
             setStatus(full?.status || DEFAULT_ANTON_TASK_STATUS)
+            const versions: DataVersion[] = Array.isArray(full?.data_versions) ? full.data_versions : []
+            setDataVersions(versions)
+            setSelectedVersionIdx(Math.max(0, versions.length - 1))
+            // Default to View (read-only, latest version) whenever there's something to
+            // view; a freshly created task with no upload yet has nothing to show there,
+            // so it opens in Edit — the only mode where the toggle would even be visible.
+            setMode(versions.length > 0 ? 'view' : 'edit')
             setFiles({
                 trajectory_a: full?.trajectory_a ?? null,
                 trajectory_b: full?.trajectory_b ?? null,
@@ -345,18 +382,7 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
     }
     const removeRubric = (i: number) => { if (confirm('Delete this rubric row?')) setRubrics(rubrics.filter((_, idx) => idx !== i)) }
 
-    // Dimension keys are numbered, e.g. "1_correctness", "2_architecture" — sort on
-    // that leading number rather than the object's insertion order. Keys with no
-    // leading number sort after the numbered ones, alphabetically among themselves.
-    const dimensionEntries: DimensionEntry[] = Object.entries(data.dimensions || {})
-        .map(([key, v]: [string, any]) => ({ key, ...(v || {}) }))
-        .sort((a, b) => {
-            const na = parseInt(a.key, 10), nb = parseInt(b.key, 10)
-            if (!isNaN(na) && !isNaN(nb)) return na - nb
-            if (!isNaN(na)) return -1
-            if (!isNaN(nb)) return 1
-            return a.key.localeCompare(b.key)
-        })
+    const dimensionEntries: DimensionEntry[] = buildDimensionEntries(data)
     const patchDimension = (key: string, side: 'a' | 'b', field: 'score' | 'reason', value: any) => {
         setData((d: any) => ({
             ...d,
@@ -396,7 +422,14 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
             // always keep whatever the user already has here.
             const merged = { ...parsed, task_name: data.task_name, task_link: data.task_link }
             setData(merged)
-            await updateAntonTask(taskId, merged)
+            // Every upload is a new version, numbered by upload order — the backend
+            // snapshots it and returns the task with the updated history attached.
+            const res: any = await updateAntonTask(taskId, merged, { newVersion: true })
+            const updated = res?.data ?? res
+            const versions: DataVersion[] = Array.isArray(updated?.data_versions) ? updated.data_versions : []
+            setDataVersions(versions)
+            setSelectedVersionIdx(Math.max(0, versions.length - 1))
+            setMode('edit')
             onSaved()
         } catch (e: any) {
             setReuploadErr(e?.message || 'Could not parse that file.')
@@ -410,6 +443,30 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
     const taskType = data?.seeded_value_checks?.field_task_type_assessed || '—'
     const modelA = data?.model_a || ''
     const modelB = data?.model_b || ''
+
+    // View mode's selected version and the one immediately before it (comparison is
+    // always against that one version, never the whole history).
+    const selectedVersion = dataVersions[selectedVersionIdx]
+    const previousVersion = selectedVersionIdx > 0 ? dataVersions[selectedVersionIdx - 1] : undefined
+    const hasPrevVersion = !!previousVersion
+    const viewData = selectedVersion?.data || {}
+    const prevViewData = previousVersion?.data || {}
+    const viewRubrics: RubricRow[] = Array.isArray(viewData.rubrics) ? viewData.rubrics : []
+    const prevViewRubrics: RubricRow[] = Array.isArray(prevViewData.rubrics) ? prevViewData.rubrics : []
+    const viewDimensionEntries = buildDimensionEntries(viewData)
+    const prevViewDimensionEntries = buildDimensionEntries(prevViewData)
+
+    // Verify always targets the version selected above — never "latest" implicitly.
+    const verifySnapshot: AnnotationSnapshot = {
+        rubric_count: viewData.rubric_count,
+        rubrics: viewRubrics,
+        dimensions: viewDimensionEntries,
+        dimension_0: viewData.dimension_0,
+        final_quality_score_a: viewData.final_quality_score_a,
+        final_quality_score_b: viewData.final_quality_score_b,
+        pairwise_evaluation: viewData.pairwise_evaluation,
+        comparative_rationale: viewData.comparative_rationale,
+    }
 
     if (loading) {
         return (
@@ -470,6 +527,48 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
                 ))}
                 {filesBusy && <span className="text-[10px] text-gray-400 ml-2">Saving files…</span>}
             </div>
+
+            {/* Edit/View + version — Rubrics/Dimensions/Pairwise only; Task/Solution
+                have their own separate, unversioned uploads. */}
+            {(['rubrics', 'dimensions', 'pairwise'] as Tab[]).includes(tab) && dataVersions.length > 0 && (
+                <div className="flex items-center gap-2 px-4 py-1.5 border-b border-gray-200 bg-gray-50 shrink-0 flex-wrap">
+                    <div className="flex items-center gap-0.5 bg-gray-200/60 rounded-md p-0.5">
+                        <button onClick={() => setMode('edit')}
+                            className={`flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded ${mode === 'edit' ? 'bg-white shadow-sm text-indigo-700' : 'text-gray-500 hover:text-gray-700'}`}>
+                            <Pencil size={11} /> Edit
+                        </button>
+                        <button onClick={() => setMode('view')}
+                            className={`flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded ${mode === 'view' ? 'bg-white shadow-sm text-indigo-700' : 'text-gray-500 hover:text-gray-700'}`}>
+                            <Eye size={11} /> View
+                        </button>
+                    </div>
+                    {mode === 'view' && (
+                        <>
+                            <History size={12} className="text-gray-400 shrink-0" />
+                            <select value={selectedVersionIdx} onChange={e => setSelectedVersionIdx(Number(e.target.value))}
+                                title="Switch between uploaded versions"
+                                className="text-[11px] border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:border-indigo-400">
+                                {dataVersions.map((v, i) => (
+                                    <option key={v.version} value={i}>
+                                        Version {v.version}{i === dataVersions.length - 1 ? ' (latest)' : ''}
+                                    </option>
+                                ))}
+                            </select>
+                            <span className="text-[10px] text-gray-400">
+                                {selectedVersionIdx > 0
+                                    ? <>changes highlighted vs. version {dataVersions[selectedVersionIdx - 1].version}</>
+                                    : 'first version — nothing to compare yet'}
+                            </span>
+                            <button onClick={() => setShowVerify(true)}
+                                title="Compare a Mercor Studio export against this version of annotation.json"
+                                className="ml-auto flex items-center gap-1 text-[11px] font-semibold border border-indigo-300 text-indigo-700 rounded px-2.5 py-1 hover:bg-indigo-50">
+                                <ShieldAlert size={12} /> Verify
+                            </button>
+                        </>
+                    )}
+                </div>
+            )}
+
             {filesNote && (
                 <div className="px-4 py-1.5 bg-indigo-50 text-indigo-800 text-[11px] border-b border-indigo-100 flex items-start gap-2">
                     <span className="flex-1">{filesNote}</span>
@@ -481,13 +580,19 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
 
             {/* Body */}
             <div className="flex-1 overflow-y-auto p-4 space-y-6">
-                {tab === 'rubrics' && (
+                {tab === 'rubrics' && mode === 'edit' && (
                     <RubricsTab rubrics={rubrics} onPatch={patchRubric} onAdd={addRubric} onRemove={removeRubric} />
                 )}
-                {tab === 'dimensions' && (
+                {tab === 'rubrics' && mode === 'view' && (
+                    <RubricsViewTab rubrics={viewRubrics} previousRubrics={prevViewRubrics} hasPrevVersion={hasPrevVersion} />
+                )}
+                {tab === 'dimensions' && mode === 'edit' && (
                     <DimensionsTab entries={dimensionEntries} onPatch={patchDimension} />
                 )}
-                {tab === 'pairwise' && (
+                {tab === 'dimensions' && mode === 'view' && (
+                    <DimensionsViewTab entries={viewDimensionEntries} previousEntries={prevViewDimensionEntries} hasPrevVersion={hasPrevVersion} />
+                )}
+                {tab === 'pairwise' && mode === 'edit' && (
                     <PairwiseTab
                         pairwiseEvaluation={data.pairwise_evaluation || ''}
                         comparativeRationale={data.comparative_rationale || ''}
@@ -495,6 +600,23 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
                         finalQualityScoreB={data.final_quality_score_b ?? null}
                         onChange={setPairwise}
                         onChangeScore={setFinalScore}
+                    />
+                )}
+                {tab === 'pairwise' && mode === 'view' && (
+                    <PairwiseViewTab
+                        current={{
+                            pairwise_evaluation: viewData.pairwise_evaluation,
+                            comparative_rationale: viewData.comparative_rationale,
+                            final_quality_score_a: viewData.final_quality_score_a,
+                            final_quality_score_b: viewData.final_quality_score_b,
+                        }}
+                        previous={{
+                            pairwise_evaluation: prevViewData.pairwise_evaluation,
+                            comparative_rationale: prevViewData.comparative_rationale,
+                            final_quality_score_a: prevViewData.final_quality_score_a,
+                            final_quality_score_b: prevViewData.final_quality_score_b,
+                        }}
+                        hasPrevVersion={hasPrevVersion}
                     />
                 )}
                 {/* Task and Solution stay mounted once opened — they carry their own
@@ -515,6 +637,14 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
                     </div>
                 )}
             </div>
+
+            {showVerify && selectedVersion && (
+                <VerifyModal
+                    annotationVersion={selectedVersion.version}
+                    snapshot={verifySnapshot}
+                    onClose={() => setShowVerify(false)}
+                />
+            )}
         </div>
     )
 }

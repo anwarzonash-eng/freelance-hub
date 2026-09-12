@@ -31,9 +31,16 @@ export async function getAntonTask(id: string) {
     return await apiClient(AntonParserAPIRoutes.GET_TASK, ApiMethod.GET, undefined, params, undefined, true, false)
 }
 
-export async function updateAntonTask(id: string, data: any) {
+/**
+ * `newVersion: true` marks this write as a fresh file upload — the backend snapshots
+ * it as the next version instead of updating the current one in place. Omit it (the
+ * default) for ordinary field edits/autosave.
+ */
+export async function updateAntonTask(id: string, data: any, opts?: { newVersion?: boolean }) {
     const params: IApiParams = { path: { id } }
-    return await apiClient(AntonParserAPIRoutes.UPDATE_TASK, ApiMethod.PUT, { data }, params, undefined, false, false)
+    const body: any = { data }
+    if (opts?.newVersion) body.new_version = true
+    return await apiClient(AntonParserAPIRoutes.UPDATE_TASK, ApiMethod.PUT, body, params, undefined, false, false)
 }
 
 export async function deleteAntonTask(id: string) {
