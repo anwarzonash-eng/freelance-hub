@@ -1,10 +1,18 @@
 'use client'
 
 /* ------------------------------------------------------------------ *
- * "Verify" modal — pick a Studio export (task-export-*.json), compare
- * it field by field against the currently selected annotation.json
- * version, and show mismatches/missing/matched, plus the fields Studio
- * simply never exports (check those manually).
+ * "Verify" side panel — pick a Studio export (task-export-*.json),
+ * compare it field by field against the currently selected
+ * annotation.json version, and show mismatches/missing/matched, plus
+ * the fields Studio simply never exports (check those manually).
+ *
+ * Rendered by TaskEditor (page.tsx) as an ordinary flex sibling next to
+ * the editor, not a `fixed`-position overlay — the editor's own
+ * `flex-1 min-w-0` wrapper shrinks to make room, so this is a real
+ * side-by-side split rather than something floating on top of the page.
+ * The version dropdown that drives it stays reachable on the left while
+ * this is open. Width is user-resizable by dragging the left edge,
+ * remembered in localStorage across opens.
  * ------------------------------------------------------------------ */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -15,6 +23,17 @@ import {
     AnnotationSnapshot, buildReportText, diffStrings, FieldRow,
     verifyExportAgainstAnnotation, VerifyResult,
 } from './verify'
+
+const WIDTH_KEY = 'anton_verify_panel_width'
+const DEFAULT_WIDTH = 560
+const MIN_WIDTH = 380
+
+function loadWidth(): number {
+    try {
+        const v = Number(localStorage.getItem(WIDTH_KEY))
+        return Number.isFinite(v) && v >= MIN_WIDTH ? v : DEFAULT_WIDTH
+    } catch { return DEFAULT_WIDTH }
+}
 
 function readJson(file: File): Promise<any> {
     return new Promise((resolve, reject) => {
@@ -110,28 +129,35 @@ function Section({ title, count, tone, defaultOpen, children }: {
     )
 }
 
-export default function VerifyModal({ annotationVersion, snapshot, onClose }: {
+export default function VerifyModal({
+    annotationVersion, snapshot, onClose,
+    exportRaw, fileName, onExportLoaded,
+    rubricIndexBase, onRubricIndexBaseChange,
+}: {
     annotationVersion: number
     snapshot: AnnotationSnapshot
     onClose: () => void
+    /**
+     * The loaded export and the rubric-numbering setting — owned by TaskEditor, not
+     * this component, so closing and reopening the panel (this component unmounting
+     * and remounting) doesn't lose them. Only leaving the task or refreshing the page
+     * does, same as every other field in this editor.
+     */
+    exportRaw: any
+    fileName: string
+    onExportLoaded: (raw: any, fileName: string) => void
+    rubricIndexBase: number
+    onRubricIndexBaseChange: (base: number) => void
 }) {
-    const [exportRaw, setExportRaw] = useState<any>(null)
-    const [fileName, setFileName] = useState('')
     const [busy, setBusy] = useState(false)
     const [err, setErr] = useState('')
     const [copied, setCopied] = useState(false)
     const fileRef = useRef<HTMLInputElement>(null)
 
-    // Re-run automatically whenever the selected version changes while the modal is
+    // Re-run automatically whenever the selected version changes while the panel is
     // open — `snapshot` is a new object each time the parent's selectedVersionIdx
-    // changes, so this effect re-fires without the user re-uploading anything.
-    // Studio's export numbers rubric fields (verifier_index, and the field_ta_rubric_NN_*
-    // suffix) starting from 0 on some exports and 1 on others, with nothing in the file
-    // itself to tell them apart — this app's own rubrics[].index is always 1-based. Left
-    // as a manual control rather than guessed at, since guessing wrong would silently
-    // shift every rubric row's comparison by one.
-    const [rubricIndexBase, setRubricIndexBase] = useState(1)
-
+    // changes, so this effect re-fires without the user re-uploading anything. Same
+    // for rubricIndexBase, changed via the toggle below.
     const result: VerifyResult | null = useMemo(() => {
         if (!exportRaw) return null
         return verifyExportAgainstAnnotation(exportRaw, snapshot, { rubricIndexBase })
@@ -142,8 +168,7 @@ export default function VerifyModal({ annotationVersion, snapshot, onClose }: {
         setBusy(true)
         try {
             const parsed = await readJson(file)
-            setExportRaw(parsed)
-            setFileName(file.name)
+            onExportLoaded(parsed, file.name)
         } catch (e: any) {
             setErr(e?.message || 'Could not read that file.')
         } finally {
@@ -163,32 +188,63 @@ export default function VerifyModal({ annotationVersion, snapshot, onClose }: {
     const missing = result?.rows.filter(r => r.status === 'missing_export' || r.status === 'missing_annotation') || []
     const matched = result?.rows.filter(r => r.status === 'match') || []
 
-    // Lock background scroll while open, same convention as the other modals here.
+    // Width — draggable from the panel's left edge, clamped to [MIN_WIDTH, 95vw],
+    // remembered across opens.
+    const [width, setWidth] = useState(DEFAULT_WIDTH)
+    useEffect(() => { setWidth(loadWidth()) }, [])
+    const resizing = useRef(false)
     useEffect(() => {
-        document.body.style.overflow = 'hidden'
-        return () => { document.body.style.overflow = '' }
-    }, [])
+        const onMove = (e: MouseEvent) => {
+            if (!resizing.current) return
+            const next = Math.min(Math.max(window.innerWidth - e.clientX, MIN_WIDTH), window.innerWidth * 0.95)
+            setWidth(next)
+        }
+        const onUp = () => {
+            if (!resizing.current) return
+            resizing.current = false
+            document.body.style.cursor = ''
+            document.body.style.userSelect = ''
+            try { localStorage.setItem(WIDTH_KEY, String(width)) } catch { /* ignore */ }
+        }
+        window.addEventListener('mousemove', onMove)
+        window.addEventListener('mouseup', onUp)
+        return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
+    }, [width])
+    const startResize = () => {
+        resizing.current = true
+        document.body.style.cursor = 'ew-resize'
+        document.body.style.userSelect = 'none'
+    }
+
+    // Escape closes it, same as clicking the X — there's no backdrop to click through
+    // to, since this docks beside the page rather than blocking it.
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+        window.addEventListener('keydown', onKey)
+        return () => window.removeEventListener('keydown', onKey)
+    }, [onClose])
 
     return (
-        <div className="fixed inset-0 z-[9995] flex items-center justify-center bg-black/40"
-            onClick={e => { if (e.target === e.currentTarget) onClose() }}>
-            <div className="bg-white border border-gray-200 rounded-xl shadow-2xl flex flex-col overflow-hidden"
-                style={{ width: 760, maxWidth: '95vw', maxHeight: '92vh' }}>
-                {/* Header */}
-                <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-100 bg-gray-50 shrink-0">
-                    <ShieldAlert size={15} className="text-indigo-500 shrink-0" />
-                    <span className="text-[12.5px] font-semibold text-gray-800">Verify export against annotation.json v{annotationVersion}</span>
-                    <div className="flex-1" />
-                    {result && (
-                        <button onClick={copyReport}
-                            className="flex items-center gap-1 text-[11px] border border-gray-300 rounded px-2 py-1 text-gray-600 hover:bg-gray-100">
-                            {copied ? <Check size={11} className="text-green-500" /> : <Copy size={11} />} {copied ? 'Copied' : 'Copy report'}
-                        </button>
-                    )}
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-700 ml-1"><X size={16} /></button>
-                </div>
+        <div className="relative shrink-0 bg-white border-l border-gray-200 shadow-2xl flex flex-col"
+            style={{ width, maxWidth: '95vw' }}>
+            <div onMouseDown={startResize} title="Drag to resize"
+                className="absolute left-0 top-0 bottom-0 w-1.5 -ml-0.5 cursor-ew-resize hover:bg-indigo-300 active:bg-indigo-400 z-10" />
 
-                <div className="p-4 overflow-y-auto space-y-3">
+            {/* Header */}
+            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-100 bg-gray-50 shrink-0">
+                <ShieldAlert size={15} className="text-indigo-500 shrink-0" />
+                <span className="text-[12.5px] font-semibold text-gray-800">Verify export against annotation.json v{annotationVersion}</span>
+                <div className="flex-1" />
+                {result && (
+                    <button onClick={copyReport}
+                        className="flex items-center gap-1 text-[11px] border border-gray-300 rounded px-2 py-1 text-gray-600 hover:bg-gray-100">
+                        {copied ? <Check size={11} className="text-green-500" /> : <Copy size={11} />} {copied ? 'Copied' : 'Copy report'}
+                    </button>
+                )}
+                <button onClick={onClose} className="text-gray-400 hover:text-gray-700 ml-1"><X size={16} /></button>
+            </div>
+
+            <div className="flex-1 p-4 overflow-y-auto space-y-3">
                     {/* Picker / export meta */}
                     <div className="flex items-center gap-2 flex-wrap">
                         <input ref={fileRef} type="file" accept="application/json,.json" hidden
@@ -200,12 +256,12 @@ export default function VerifyModal({ annotationVersion, snapshot, onClose }: {
                         {fileName && <span className="text-[11px] text-gray-500 font-mono truncate max-w-[280px]" title={fileName}>{fileName}</span>}
 
                         <div className="flex items-center gap-1.5 ml-auto">
-                            <span className="text-[11px] text-gray-500" title="Studio numbers rubric fields (verifier_index and field_ta_rubric_NN_*) starting from 0 on some exports and 1 on others — nothing in the file says which, so this has to be set by hand.">
+                            <span className="text-[11px] text-gray-500" title="Affects only which task_verifiers[] entry (and so which criteria) counts as verifier N when matching it to a rubric row. field_ta_rubric_NN_* field names, dimensions, final scores, pairwise evaluation and everything else are keyed by their own fixed names/indexes and never shift. Studio's verifier_index starts from 0 on some exports and 1 on others, with nothing in the file to tell them apart, so this has to be set by hand.">
                                 Export rubric numbering starts at
                             </span>
                             <div className="flex items-center gap-0.5 bg-gray-100 rounded-md p-0.5">
                                 {[0, 1].map(n => (
-                                    <button key={n} onClick={() => setRubricIndexBase(n)}
+                                    <button key={n} onClick={() => onRubricIndexBaseChange(n)}
                                         className={`px-2.5 py-0.5 rounded text-[11px] font-semibold ${rubricIndexBase === n ? 'bg-white shadow-sm text-indigo-700' : 'text-gray-500 hover:text-gray-700'}`}>
                                         {n}
                                     </button>
@@ -215,7 +271,8 @@ export default function VerifyModal({ annotationVersion, snapshot, onClose }: {
                     </div>
                     {rubricIndexBase !== 1 && (
                         <div className="text-[10.5px] text-amber-700">
-                            Adjusted: annotation.json's rubric 1 is being matched against the export's index {rubricIndexBase} (verifier_index and field_ta_rubric_{String(rubricIndexBase).padStart(2, '0')}_*).
+                            Adjusted: export verifier_index {rubricIndexBase} is being matched to annotation.json's rubric 1 (and so on from there) for the criteria comparison only.
+                            field_ta_rubric_NN_* field names stay keyed by each rubric's own index — unaffected, same as dimensions and every other field.
                         </div>
                     )}
                     {err && <div className="px-3 py-1.5 bg-red-50 text-red-700 text-[11px] border border-red-200 rounded">{err}</div>}
@@ -282,7 +339,6 @@ export default function VerifyModal({ annotationVersion, snapshot, onClose }: {
                             </Section>
                         </>
                     )}
-                </div>
             </div>
         </div>
     )

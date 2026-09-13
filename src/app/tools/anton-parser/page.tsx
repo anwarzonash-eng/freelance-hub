@@ -269,6 +269,12 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
     const [dataVersions, setDataVersions] = useState<DataVersion[]>([])
     const [selectedVersionIdx, setSelectedVersionIdx] = useState(0)
     const [showVerify, setShowVerify] = useState(false)
+    // Lifted out of VerifyModal so closing/reopening the panel (toggling the Verify
+    // button, Escape, the X) doesn't lose the loaded export — only leaving this task
+    // or refreshing the page does, same as everything else in this editor.
+    const [verifyExportRaw, setVerifyExportRaw] = useState<any>(null)
+    const [verifyFileName, setVerifyFileName] = useState('')
+    const [verifyRubricIndexBase, setVerifyRubricIndexBase] = useState(1)
 
     useEffect(() => {
         let cancelled = false
@@ -447,7 +453,10 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
     }
 
     return (
-        <div className="fixed inset-0 z-[9980] bg-white flex flex-col">
+        <div className="fixed inset-0 z-[9980] bg-white flex">
+            {/* Left — the editor itself. Shrinks to make room for the Verify panel
+                (a real split, not an overlay) whenever that's open. */}
+            <div className="flex-1 min-w-0 flex flex-col">
             {/* Header */}
             <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-200 bg-gray-50 shrink-0 flex-wrap">
                 <ListTree size={15} className="text-indigo-500 shrink-0" />
@@ -529,9 +538,11 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
                                     ? <>changes highlighted vs. version {dataVersions[selectedVersionIdx - 1].version}</>
                                     : 'first version — nothing to compare yet'}
                             </span>
-                            <button onClick={() => setShowVerify(true)}
+                            <button onClick={() => setShowVerify(v => !v)}
                                 title="Compare a Mercor Studio export against this version of annotation.json"
-                                className="ml-auto flex items-center gap-1 text-[11px] font-semibold border border-indigo-300 text-indigo-700 rounded px-2.5 py-1 hover:bg-indigo-50">
+                                className={`ml-auto flex items-center gap-1 text-[11px] font-semibold rounded px-2.5 py-1 ${showVerify
+                                    ? 'bg-indigo-600 text-white'
+                                    : 'border border-indigo-300 text-indigo-700 hover:bg-indigo-50'}`}>
                                 <ShieldAlert size={12} /> Verify
                             </button>
                         </>
@@ -607,12 +618,18 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
                     </div>
                 )}
             </div>
+            </div>
 
             {showVerify && selectedVersion && (
                 <VerifyModal
                     annotationVersion={selectedVersion.version}
                     snapshot={verifySnapshot}
                     onClose={() => setShowVerify(false)}
+                    exportRaw={verifyExportRaw}
+                    fileName={verifyFileName}
+                    onExportLoaded={(raw, name) => { setVerifyExportRaw(raw); setVerifyFileName(name) }}
+                    rubricIndexBase={verifyRubricIndexBase}
+                    onRubricIndexBaseChange={setVerifyRubricIndexBase}
                 />
             )}
         </div>

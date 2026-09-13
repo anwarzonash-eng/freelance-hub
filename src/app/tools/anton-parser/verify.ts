@@ -191,10 +191,11 @@ export function verifyExportAgainstAnnotation(exportRaw: any, annotation: Annota
         const n = Number(r?.index)
         if (Number.isFinite(n)) rubricsByIndex.set(n, r)
     }
-    // Export-side rubric numbers, translated into this app's own always-1-based
-    // numbering via the (manually supplied) base the export actually starts at.
-    const toAnnotationIndex = (exportIndex: number) => exportIndex - rubricIndexBase + 1
-    const toExportIndex = (annotationIndex: number) => annotationIndex - 1 + rubricIndexBase
+    // The offset applies to exactly one thing: which task_verifiers[] entry (and so
+    // which criteria) counts as "verifier N" when matching it against rubrics[].index.
+    // field_ta_rubric_NN_* field names are never touched by it — those are always keyed
+    // by the rubric's own index, 1-based, regardless of what verifier_index starts at.
+    const toAnnotationIndex = (exportVerifierIndex: number) => exportVerifierIndex - rubricIndexBase + 1
 
     const verifierByIndex = new Map<number, TaskVerifier>()
     for (const v of exp.verifiers) {
@@ -213,14 +214,15 @@ export function verifyExportAgainstAnnotation(exportRaw: any, annotation: Annota
 
     // Rows 2-6 — per rubric row, matched by index (annotation) / verifier_index (export),
     // never by array position. Union of both sides so an added/removed row still shows.
-    // Both maps are already keyed in this app's own 1-based numbering (verifierByIndex
-    // was translated above), so they compare directly; only the NN field suffix needs
-    // translating back to the export's own numbering.
+    // verifierByIndex is already keyed in this app's own 1-based numbering (translated
+    // above via the offset), so it compares directly against rubricsByIndex — but the
+    // field_ta_rubric_NN_* suffix is the rubric's own raw index, always, unaffected by
+    // the offset.
     const allRubricIndices = new Set<number>([...rubricsByIndex.keys(), ...verifierByIndex.keys()])
     for (const idx of [...allRubricIndices].sort((a, b) => a - b)) {
         const rubric = rubricsByIndex.get(idx)
         const verifier = verifierByIndex.get(idx)
-        const nn = pad2(toExportIndex(idx))
+        const nn = pad2(idx)
         rows.push(compareOne(`rubric_${idx}_criteria`, `Rubric ${idx} — criteria`, 'string',
             rubric?.criteria, verifier?.config_input?.criteria))
         rows.push(compareOne(`rubric_${idx}_answer_a`, `Rubric ${idx} — answer (A)`, 'string',
