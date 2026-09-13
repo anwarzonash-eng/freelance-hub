@@ -71,6 +71,19 @@ export interface VerifyResult {
     rows: FieldRow[]
     unverifiable: UnverifiableRow[]
     summary: { total: number; matched: number; mismatched: number; missing: number }
+    rubricIndexBase: number
+}
+
+export interface VerifyOptions {
+    /**
+     * What number the export's rubric numbering starts counting from — both
+     * `task_verifiers[].verifier_index` and the `field_ta_rubric_NN_*` suffix. This
+     * app's own `rubrics[].index` is always 1-based; Studio's own convention has been
+     * seen to vary per export (sometimes 0-based, sometimes 1-based) with nothing in
+     * the file itself to tell them apart, so this is a manual correction, not
+     * something the parser can detect. Defaults to 1 (no adjustment).
+     */
+    rubricIndexBase?: number
 }
 
 /* ------------------------------------------------------------------ *
@@ -168,7 +181,8 @@ const DIMENSION_RANGE = [2, 3, 4, 5, 6, 7, 8, 9]
 const FIELD_PAIRWISE_EVALUATION = 'field_e511999a150a45c2b7145f808103d78c'
 const FIELD_COMPARATIVE_RATIONALE = 'field_1e32bd048d564685ba8ec51f9af11c70'
 
-export function verifyExportAgainstAnnotation(exportRaw: any, annotation: AnnotationSnapshot): VerifyResult {
+export function verifyExportAgainstAnnotation(exportRaw: any, annotation: AnnotationSnapshot, options: VerifyOptions = {}): VerifyResult {
+    const rubricIndexBase = Number.isFinite(options.rubricIndexBase) ? (options.rubricIndexBase as number) : 1
     const exp = parseExportRoot(exportRaw)
     const cf = exp.customFields
 
@@ -177,9 +191,14 @@ export function verifyExportAgainstAnnotation(exportRaw: any, annotation: Annota
         const n = Number(r?.index)
         if (Number.isFinite(n)) rubricsByIndex.set(n, r)
     }
+    // Export-side rubric numbers, translated into this app's own always-1-based
+    // numbering via the (manually supplied) base the export actually starts at.
+    const toAnnotationIndex = (exportIndex: number) => exportIndex - rubricIndexBase + 1
+    const toExportIndex = (annotationIndex: number) => annotationIndex - 1 + rubricIndexBase
+
     const verifierByIndex = new Map<number, TaskVerifier>()
     for (const v of exp.verifiers) {
-        if (typeof v?.verifier_index === 'number') verifierByIndex.set(v.verifier_index, v)
+        if (typeof v?.verifier_index === 'number') verifierByIndex.set(toAnnotationIndex(v.verifier_index), v)
     }
     const dimByNum = new Map<number, DimensionEntry>()
     for (const d of annotation.dimensions || []) {
@@ -194,11 +213,14 @@ export function verifyExportAgainstAnnotation(exportRaw: any, annotation: Annota
 
     // Rows 2-6 — per rubric row, matched by index (annotation) / verifier_index (export),
     // never by array position. Union of both sides so an added/removed row still shows.
+    // Both maps are already keyed in this app's own 1-based numbering (verifierByIndex
+    // was translated above), so they compare directly; only the NN field suffix needs
+    // translating back to the export's own numbering.
     const allRubricIndices = new Set<number>([...rubricsByIndex.keys(), ...verifierByIndex.keys()])
     for (const idx of [...allRubricIndices].sort((a, b) => a - b)) {
         const rubric = rubricsByIndex.get(idx)
         const verifier = verifierByIndex.get(idx)
-        const nn = pad2(idx)
+        const nn = pad2(toExportIndex(idx))
         rows.push(compareOne(`rubric_${idx}_criteria`, `Rubric ${idx} — criteria`, 'string',
             rubric?.criteria, verifier?.config_input?.criteria))
         rows.push(compareOne(`rubric_${idx}_answer_a`, `Rubric ${idx} — answer (A)`, 'string',
@@ -275,6 +297,7 @@ export function verifyExportAgainstAnnotation(exportRaw: any, annotation: Annota
         rows,
         unverifiable,
         summary: { total: rows.length, matched, mismatched, missing },
+        rubricIndexBase,
     }
 }
 
@@ -302,6 +325,9 @@ export function buildReportText(result: VerifyResult, annotationVersion: number)
     lines.push(`Verify report — annotation.json v${annotationVersion} vs export` +
         (result.exportMeta.taskVersion != null ? ` (task_version ${result.exportMeta.taskVersion})` : ''))
     lines.push(`${result.summary.matched} of ${result.summary.total} fields match — ${result.summary.mismatched} mismatched — ${result.summary.missing} missing`)
+    if (result.rubricIndexBase !== 1) {
+        lines.push(`(export rubric numbering treated as starting at ${result.rubricIndexBase})`)
+    }
     if (!result.countCheck.consistent) {
         lines.push('')
         lines.push(`COUNT MISMATCH: field_rubric_count=${result.countCheck.fieldRubricCount ?? '—'}, task_verifiers=${result.countCheck.verifierCount}, rubrics.length=${result.countCheck.annotationRubricCount}`)

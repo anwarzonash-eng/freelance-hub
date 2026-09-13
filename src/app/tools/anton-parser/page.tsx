@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import {
-    ListTree, Plus, RefreshCw, X, Check, Trash2, Copy, Upload, FileJson, Link2, ExternalLink, Pencil,
+    ListTree, Plus, RefreshCw, X, Trash2, Upload, FileJson, Link2, ExternalLink, Pencil,
     Eye, History, ShieldAlert,
 } from 'lucide-react'
 import {
@@ -103,39 +103,9 @@ function buildDimensionEntries(data: any): DimensionEntry[] {
 
 /* ------------------------------------------------------------------ *
  * Small shared UI bits
- * ------------------------------------------------------------------ */
-function copyText(text: string) {
-    try { navigator.clipboard?.writeText(text ?? '') } catch { /* ignore */ }
-}
-function CopyIconBtn({ text, title = 'Copy' }: { text: string; title?: string }) {
-    const [copied, setCopied] = useState(false)
-    return (
-        <button type="button" title={title}
-            onClick={() => { copyText(text); setCopied(true); setTimeout(() => setCopied(false), 1200) }}
-            className="p-0.5 rounded text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 shrink-0">
-            {copied ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
-        </button>
-    )
-}
-/** TSV with proper quoting (tabs/newlines/quotes escaped) so pasting into Sheets/Excel
- *  lands each column correctly, including multi-line cells. */
-function tsvCell(raw: any): string {
-    const s = raw == null ? '' : String(raw)
-    return /[\t\n"]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
-}
-function copyTableTSV(headers: string[], rows: any[][]) {
-    copyText([headers, ...rows].map(r => r.map(tsvCell).join('\t')).join('\n'))
-}
-function TableCopyBtn({ headers, rows, label = 'Copy table' }: { headers: string[]; rows: any[][]; label?: string }) {
-    const [copied, setCopied] = useState(false)
-    return (
-        <button type="button" title="Copy as TSV — paste directly into Google Sheets/Excel"
-            onClick={() => { copyTableTSV(headers, rows); setCopied(true); setTimeout(() => setCopied(false), 1200) }}
-            className="flex items-center gap-1 text-[10px] border border-gray-300 rounded px-1.5 py-0.5 text-gray-600 hover:bg-gray-50 shrink-0">
-            {copied ? <Check size={11} className="text-green-500" /> : <Copy size={11} />} {copied ? 'Copied' : label}
-        </button>
-    )
-}
+ * ------------------------------------------------------------------ *
+ * Copying is a View-mode affordance now (see VersionViewTabs.tsx) — Edit
+ * mode's tables/fields are plain inputs, nothing here needs a copy button. */
 function TextCell({ value, onChange, mono }: { value: string; onChange: (v: string) => void; mono?: boolean }) {
     return (
         <input value={value ?? ''} onChange={e => onChange(e.target.value)}
@@ -665,15 +635,9 @@ function RubricsTab({ rubrics, onPatch, onAdd, onRemove }: {
             <section>
                 <div className="flex items-center justify-between mb-2">
                     <h2 className="text-xs font-semibold text-gray-700">Rubrics ({rubrics.length})</h2>
-                    <div className="flex items-center gap-2">
-                        <TableCopyBtn
-                            headers={['Index', 'Verifier Type', 'Dependencies', 'Criteria', 'Mapped Dimension', 'Source']}
-                            rows={rubrics.map(r => [r.index, r.verifier_type, r.dependencies_note, r.criteria, r.mapped_dimension, r.source])}
-                        />
-                        <button onClick={onAdd} className="flex items-center gap-1 text-[11px] bg-indigo-600 text-white rounded px-2 py-1 hover:bg-indigo-700">
-                            <Plus size={12} /> Add rubric
-                        </button>
-                    </div>
+                    <button onClick={onAdd} className="flex items-center gap-1 text-[11px] bg-indigo-600 text-white rounded px-2 py-1 hover:bg-indigo-700">
+                        <Plus size={12} /> Add rubric
+                    </button>
                 </div>
                 <div className="border border-gray-200 rounded overflow-x-auto">
                     <table className="w-full text-[11px] border-collapse">
@@ -749,10 +713,6 @@ function VerificationTable({ side, title, rubrics, onPatch }: {
                         <span className="text-gray-400">({yesCount}/{total} · {noCount}/{total})</span>
                     </span>
                 </div>
-                <TableCopyBtn
-                    headers={['Index', 'Criteria', side === 'a' ? 'Answer A' : 'Answer B', side === 'a' ? 'Reason A' : 'Reason B']}
-                    rows={rubrics.map(r => [r.index, r.criteria, r[answerKey], r[reasonKey]])}
-                />
             </div>
             <div className="border border-gray-200 rounded overflow-x-auto">
                 <table className="w-full text-[11px] border-collapse">
@@ -762,7 +722,6 @@ function VerificationTable({ side, title, rubrics, onPatch }: {
                             <th className="px-2 py-1.5 min-w-[220px]">Criteria</th>
                             <th className={`px-2 py-1.5 w-24 ${accent}`}>Answer</th>
                             <th className="px-2 py-1.5 min-w-[260px]">Reason</th>
-                            <th className="px-2 py-1.5 w-8"></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -773,10 +732,9 @@ function VerificationTable({ side, title, rubrics, onPatch }: {
                                 <td className="px-2 py-1.5 text-gray-500">{(r.criteria || '').slice(0, 90)}{(r.criteria || '').length > 90 ? '…' : ''}</td>
                                 <td className="px-1 py-0.5"><TextCell value={String(r[answerKey] ?? '')} onChange={v => onPatch(i, { [answerKey]: v } as any)} mono /></td>
                                 <td className="px-1 py-0.5"><AreaCell value={r[reasonKey] || ''} onChange={v => onPatch(i, { [reasonKey]: v } as any)} /></td>
-                                <td className="px-1 py-1 text-center"><CopyIconBtn text={r[reasonKey] || ''} title="Copy reason" /></td>
                             </tr>
                         ))}
-                        {!rubrics.length && <tr><td colSpan={5} className="px-3 py-4 text-center text-gray-300 italic">No rubrics yet.</td></tr>}
+                        {!rubrics.length && <tr><td colSpan={4} className="px-3 py-4 text-center text-gray-300 italic">No rubrics yet.</td></tr>}
                     </tbody>
                 </table>
             </div>
@@ -811,10 +769,6 @@ function DimensionSideTable({ side, title, entries, onPatch }: {
         <section>
             <div className="flex items-center justify-between mb-2">
                 <h2 className="text-xs font-semibold text-gray-700">{title}</h2>
-                <TableCopyBtn
-                    headers={['Dimension', 'Score', 'Reason']}
-                    rows={entries.map(e => [e.key, side === 'a' ? e.score_a : e.score_b, side === 'a' ? e.reason_a : e.reason_b])}
-                />
             </div>
             <div className="border border-gray-200 rounded overflow-x-auto">
                 <table className="w-full text-[11px] border-collapse">
@@ -823,7 +777,6 @@ function DimensionSideTable({ side, title, entries, onPatch }: {
                             <th className="px-2 py-1.5 w-56">Dimension</th>
                             <th className={`px-2 py-1.5 w-20 ${accent}`}>Score</th>
                             <th className="px-2 py-1.5 min-w-[320px]">Reason</th>
-                            <th className="px-2 py-1.5 w-8"></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -836,11 +789,10 @@ function DimensionSideTable({ side, title, entries, onPatch }: {
                                     <td className="px-2 py-1.5 font-mono text-gray-600">{e.key}</td>
                                     <td className="px-1 py-0.5"><TextCell value={String(score ?? '')} onChange={v => onPatch(e.key, side, 'score', v === '' ? null : Number(v))} mono /></td>
                                     <td className="px-1 py-0.5"><AreaCell value={reason || ''} onChange={v => onPatch(e.key, side, 'reason', v)} /></td>
-                                    <td className="px-1 py-1 text-center"><CopyIconBtn text={reason || ''} title="Copy reason" /></td>
                                 </tr>
                             )
                         })}
-                        {!entries.length && <tr><td colSpan={4} className="px-3 py-4 text-center text-gray-300 italic">No dimensions yet.</td></tr>}
+                        {!entries.length && <tr><td colSpan={3} className="px-3 py-4 text-center text-gray-300 italic">No dimensions yet.</td></tr>}
                     </tbody>
                 </table>
             </div>
@@ -881,10 +833,7 @@ function PairwiseTab({ pairwiseEvaluation, comparativeRationale, finalQualitySco
                 </div>
             </div>
             <div>
-                <div className="flex items-center justify-between mb-1">
-                    <label className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">Comparative Rationale</label>
-                    <CopyIconBtn text={comparativeRationale} title="Copy full rationale" />
-                </div>
+                <label className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">Comparative Rationale</label>
                 <textarea value={comparativeRationale} onChange={e => onChange('comparative_rationale', e.target.value)} rows={16}
                     className="w-full text-[12px] leading-relaxed border border-gray-300 rounded px-2.5 py-2 focus:outline-none focus:border-indigo-400 resize-y" />
             </div>

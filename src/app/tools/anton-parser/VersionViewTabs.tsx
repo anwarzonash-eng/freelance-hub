@@ -8,8 +8,48 @@
  * versions being compared is chosen).
  * ------------------------------------------------------------------ */
 
+import { useState } from 'react'
+import { Check, Copy } from 'lucide-react'
 import DiffCell from './DiffCell'
 import { matchPreviousDimensions, matchPreviousRubrics } from './versionDiff'
+
+/* ------------------------------------------------------------------ *
+ * Copying — a View-mode affordance: values here are read-only, so
+ * "copy this" is unambiguous (it's the committed value of the version
+ * being viewed). Edit mode's tables are plain inputs instead.
+ * ------------------------------------------------------------------ */
+function copyText(text: string) {
+    try { navigator.clipboard?.writeText(text ?? '') } catch { /* ignore */ }
+}
+function CopyIconBtn({ text, title = 'Copy' }: { text: string; title?: string }) {
+    const [copied, setCopied] = useState(false)
+    return (
+        <button type="button" title={title}
+            onClick={() => { copyText(text); setCopied(true); setTimeout(() => setCopied(false), 1200) }}
+            className="p-0.5 rounded text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 shrink-0">
+            {copied ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
+        </button>
+    )
+}
+/** TSV with proper quoting (tabs/newlines/quotes escaped) so pasting into Sheets/Excel
+ *  lands each column correctly, including multi-line cells. */
+function tsvCell(raw: any): string {
+    const s = raw == null ? '' : String(raw)
+    return /[\t\n"]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
+}
+function copyTableTSV(headers: string[], rows: any[][]) {
+    copyText([headers, ...rows].map(r => r.map(tsvCell).join('\t')).join('\n'))
+}
+function TableCopyBtn({ headers, rows, label = 'Copy table' }: { headers: string[]; rows: any[][]; label?: string }) {
+    const [copied, setCopied] = useState(false)
+    return (
+        <button type="button" title="Copy as TSV — paste directly into Google Sheets/Excel"
+            onClick={() => { copyTableTSV(headers, rows); setCopied(true); setTimeout(() => setCopied(false), 1200) }}
+            className="flex items-center gap-1 text-[10px] border border-gray-300 rounded px-1.5 py-0.5 text-gray-600 hover:bg-gray-50 shrink-0">
+            {copied ? <Check size={11} className="text-green-500" /> : <Copy size={11} />} {copied ? 'Copied' : label}
+        </button>
+    )
+}
 
 interface RubricRow {
     index?: number | string
@@ -35,7 +75,13 @@ export function RubricsViewTab({ rubrics, previousRubrics, hasPrevVersion }: {
     return (
         <div className="space-y-8">
             <section>
-                <h2 className="text-xs font-semibold text-gray-700 mb-2">Rubrics ({rubrics.length})</h2>
+                <div className="flex items-center justify-between mb-2">
+                    <h2 className="text-xs font-semibold text-gray-700">Rubrics ({rubrics.length})</h2>
+                    <TableCopyBtn
+                        headers={['Index', 'Verifier Type', 'Dependencies', 'Criteria', 'Mapped Dimension', 'Source']}
+                        rows={rubrics.map(r => [r.index, r.verifier_type, r.dependencies_note, r.criteria, r.mapped_dimension, r.source])}
+                    />
+                </div>
                 <div className="border border-gray-200 rounded overflow-x-auto">
                     <table className="w-full text-[11px] border-collapse">
                         <thead className="bg-gray-50">
@@ -100,6 +146,10 @@ function VerificationViewTable({ side, title, rubrics, matched, hasPrevVersion }
                     <span className="text-gray-300">·</span>
                     <span className="text-red-600 font-semibold">NO {pct(noCount)}%</span>
                 </span>
+                <TableCopyBtn
+                    headers={['Index', 'Criteria', side === 'a' ? 'Answer A' : 'Answer B', side === 'a' ? 'Reason A' : 'Reason B']}
+                    rows={rubrics.map(r => [r.index, r.criteria, r[answerKey], r[reasonKey]])}
+                />
             </div>
             <div className="border border-gray-200 rounded overflow-x-auto">
                 <table className="w-full text-[11px] border-collapse">
@@ -109,6 +159,7 @@ function VerificationViewTable({ side, title, rubrics, matched, hasPrevVersion }
                             <th className="px-2 py-1.5 min-w-[220px]">Criteria</th>
                             <th className={`px-2 py-1.5 w-24 ${accent}`}>Answer</th>
                             <th className="px-2 py-1.5 min-w-[260px]">Reason</th>
+                            <th className="px-2 py-1.5 w-8"></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -121,10 +172,11 @@ function VerificationViewTable({ side, title, rubrics, matched, hasPrevVersion }
                                     <td className="px-2 py-1.5 text-gray-500">{(r.criteria || '').slice(0, 90)}{(r.criteria || '').length > 90 ? '…' : ''}</td>
                                     <td className="px-1 py-0.5"><DiffCell value={r[answerKey]} prevValue={prev?.[answerKey]} hasPrevVersion={hasPrevVersion} isNewRow={isNewRow} mono /></td>
                                     <td className="px-1 py-0.5"><DiffCell value={r[reasonKey]} prevValue={prev?.[reasonKey]} hasPrevVersion={hasPrevVersion} isNewRow={isNewRow} area /></td>
+                                    <td className="px-1 py-1 text-center"><CopyIconBtn text={r[reasonKey] || ''} title="Copy reason" /></td>
                                 </tr>
                             )
                         })}
-                        {!rubrics.length && <tr><td colSpan={4} className="px-3 py-4 text-center text-gray-300 italic">No rubrics.</td></tr>}
+                        {!rubrics.length && <tr><td colSpan={5} className="px-3 py-4 text-center text-gray-300 italic">No rubrics.</td></tr>}
                     </tbody>
                 </table>
             </div>
@@ -156,7 +208,13 @@ function DimensionSideViewTable({ side, title, entries, matched, hasPrevVersion 
     const accent = side === 'a' ? 'text-blue-600' : 'text-teal-600'
     return (
         <section>
-            <h2 className="text-xs font-semibold text-gray-700 mb-2">{title}</h2>
+            <div className="flex items-center justify-between mb-2">
+                <h2 className="text-xs font-semibold text-gray-700">{title}</h2>
+                <TableCopyBtn
+                    headers={['Dimension', 'Score', 'Reason']}
+                    rows={entries.map(e => [e.key, side === 'a' ? e.score_a : e.score_b, side === 'a' ? e.reason_a : e.reason_b])}
+                />
+            </div>
             <div className="border border-gray-200 rounded overflow-x-auto">
                 <table className="w-full text-[11px] border-collapse">
                     <thead className="bg-gray-50">
@@ -164,6 +222,7 @@ function DimensionSideViewTable({ side, title, entries, matched, hasPrevVersion 
                             <th className="px-2 py-1.5 w-56">Dimension</th>
                             <th className={`px-2 py-1.5 w-20 ${accent}`}>Score</th>
                             <th className="px-2 py-1.5 min-w-[320px]">Reason</th>
+                            <th className="px-2 py-1.5 w-8"></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -179,10 +238,11 @@ function DimensionSideViewTable({ side, title, entries, matched, hasPrevVersion 
                                     <td className="px-2 py-1.5 font-mono text-gray-600">{e.key}</td>
                                     <td className="px-1 py-0.5"><DiffCell value={score} prevValue={prevScore} hasPrevVersion={hasPrevVersion} isNewRow={isNewRow} mono /></td>
                                     <td className="px-1 py-0.5"><DiffCell value={reason} prevValue={prevReason} hasPrevVersion={hasPrevVersion} isNewRow={isNewRow} area /></td>
+                                    <td className="px-1 py-1 text-center"><CopyIconBtn text={reason || ''} title="Copy reason" /></td>
                                 </tr>
                             )
                         })}
-                        {!entries.length && <tr><td colSpan={3} className="px-3 py-4 text-center text-gray-300 italic">No dimensions.</td></tr>}
+                        {!entries.length && <tr><td colSpan={4} className="px-3 py-4 text-center text-gray-300 italic">No dimensions.</td></tr>}
                     </tbody>
                 </table>
             </div>
@@ -221,11 +281,12 @@ export function PairwiseViewTab({ current, previous, hasPrevVersion }: {
                 </div>
             </div>
             <div>
-                <label className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">Comparative Rationale</label>
-                <div className="mt-1">
-                    <DiffCell value={current.comparative_rationale} prevValue={previous.comparative_rationale} hasPrevVersion={hasPrevVersion}
-                        area className="text-[12px] leading-relaxed border border-gray-200 block" />
+                <div className="flex items-center justify-between mb-1">
+                    <label className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">Comparative Rationale</label>
+                    <CopyIconBtn text={current.comparative_rationale || ''} title="Copy full rationale" />
                 </div>
+                <DiffCell value={current.comparative_rationale} prevValue={previous.comparative_rationale} hasPrevVersion={hasPrevVersion}
+                    area className="text-[12px] leading-relaxed border border-gray-200 block" />
             </div>
         </div>
     )

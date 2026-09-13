@@ -125,10 +125,17 @@ export default function VerifyModal({ annotationVersion, snapshot, onClose }: {
     // Re-run automatically whenever the selected version changes while the modal is
     // open — `snapshot` is a new object each time the parent's selectedVersionIdx
     // changes, so this effect re-fires without the user re-uploading anything.
+    // Studio's export numbers rubric fields (verifier_index, and the field_ta_rubric_NN_*
+    // suffix) starting from 0 on some exports and 1 on others, with nothing in the file
+    // itself to tell them apart — this app's own rubrics[].index is always 1-based. Left
+    // as a manual control rather than guessed at, since guessing wrong would silently
+    // shift every rubric row's comparison by one.
+    const [rubricIndexBase, setRubricIndexBase] = useState(1)
+
     const result: VerifyResult | null = useMemo(() => {
         if (!exportRaw) return null
-        return verifyExportAgainstAnnotation(exportRaw, snapshot)
-    }, [exportRaw, snapshot])
+        return verifyExportAgainstAnnotation(exportRaw, snapshot, { rubricIndexBase })
+    }, [exportRaw, snapshot, rubricIndexBase])
 
     const onPick = async (file: File) => {
         setErr('')
@@ -191,7 +198,26 @@ export default function VerifyModal({ annotationVersion, snapshot, onClose }: {
                             {busy ? <RefreshCw size={12} className="animate-spin" /> : <Upload size={12} />} {exportRaw ? 'Replace export file' : 'Load Studio export'}
                         </button>
                         {fileName && <span className="text-[11px] text-gray-500 font-mono truncate max-w-[280px]" title={fileName}>{fileName}</span>}
+
+                        <div className="flex items-center gap-1.5 ml-auto">
+                            <span className="text-[11px] text-gray-500" title="Studio numbers rubric fields (verifier_index and field_ta_rubric_NN_*) starting from 0 on some exports and 1 on others — nothing in the file says which, so this has to be set by hand.">
+                                Export rubric numbering starts at
+                            </span>
+                            <div className="flex items-center gap-0.5 bg-gray-100 rounded-md p-0.5">
+                                {[0, 1].map(n => (
+                                    <button key={n} onClick={() => setRubricIndexBase(n)}
+                                        className={`px-2.5 py-0.5 rounded text-[11px] font-semibold ${rubricIndexBase === n ? 'bg-white shadow-sm text-indigo-700' : 'text-gray-500 hover:text-gray-700'}`}>
+                                        {n}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
                     </div>
+                    {rubricIndexBase !== 1 && (
+                        <div className="text-[10.5px] text-amber-700">
+                            Adjusted: annotation.json's rubric 1 is being matched against the export's index {rubricIndexBase} (verifier_index and field_ta_rubric_{String(rubricIndexBase).padStart(2, '0')}_*).
+                        </div>
+                    )}
                     {err && <div className="px-3 py-1.5 bg-red-50 text-red-700 text-[11px] border border-red-200 rounded">{err}</div>}
 
                     {!result ? (
