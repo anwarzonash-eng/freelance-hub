@@ -7,20 +7,29 @@
  * Same feature set as that page: pick a model, then read its run as
  * PROMPT / FINAL ANSWER / DIFF / LOGS accordions, where LOGS is the
  * assistant turns rebuilt into "Step N" cards carrying their tool calls
- * with input and output — searchable, collapsible, copyable.
+ * with input and output — searchable, collapsible, copyable. A tool
+ * call's Output is cut to OUTPUT_CHAR_LIMIT characters (Input and the
+ * response text are not) with a "Show full" control in its own header.
  *
  * Two views per model: the parsed view above, built at render time from
  * the stored model_?_log.json, and the markdown transcript from
- * model_?_log.md when that file has been uploaded too.
+ * model_?_log.md when that file has been uploaded too — itself
+ * searchable, and with a Cut/Full toggle once model_?_log_full.md has
+ * also been uploaded (Cut matches what Studio shows; Full has nothing
+ * truncated).
  * ------------------------------------------------------------------ */
 
 import { ReactNode, useEffect, useMemo, useState } from 'react'
 import { ChevronDown, Copy, Check, Search, Pencil, FileJson } from 'lucide-react'
 import DiffView from './DiffView'
 import UploadFilesButton from './UploadFilesButton'
-import { renderMarkdown } from './markdown'
+import { renderMarkdown, highlightHtml } from './markdown'
 import { Side, SIDES, SIDE_LABEL, TrajectoryFilesState } from './trajectoryFiles'
 import { buildSteps, getFinalAnswerText, getPromptText, Step } from './trajectory'
+
+/** Output blocks alone truncate by character count, not lines — a run's tool output
+ *  can be enormous, and unlike input/response, most of it is rarely worth scanning. */
+const OUTPUT_CHAR_LIMIT = 500
 
 /* ------------------------------------------------------------------ *
  * Small UI atoms
@@ -92,6 +101,43 @@ function TextBlock({ text, query, limit = LINE_LIMIT, mono = true }: {
                 </span>
             )}
         </>
+    )
+}
+
+/**
+ * A tool call's Output — the whole block, header included, since the "show full"
+ * control sits at the top next to Copy rather than below the truncated text the way
+ * TextBlock's line-limit reveal does. Cut by character count (OUTPUT_CHAR_LIMIT), not
+ * lines — input and the response text above it are untouched, still TextBlock's
+ * 14-line limit.
+ */
+function OutputBlock({ text, query }: { text: string; query: string }) {
+    const [expanded, setExpanded] = useState(false)
+    const full = String(text ?? '')
+    const truncatable = full.length > OUTPUT_CHAR_LIMIT
+    const truncated = truncatable && !expanded
+    const shown = truncated ? full.slice(0, OUTPUT_CHAR_LIMIT) : full
+    return (
+        <div className="rounded-lg border border-[#DED2FB] bg-[#F1ECFE] mt-1.5 overflow-hidden">
+            <div className="flex items-center justify-between px-2.5 py-1.5 text-[10.5px] font-bold tracking-[0.04em] uppercase text-[#4F36B0]">
+                <span>Output</span>
+                <span className="flex items-center gap-2.5">
+                    {truncatable && (
+                        <span onClick={() => setExpanded(e => !e)}
+                            className="normal-case tracking-normal font-semibold text-[11px] cursor-pointer hover:underline">
+                            {expanded ? 'Show first 500 chars' : `Show full (${full.length.toLocaleString()} chars)`}
+                        </span>
+                    )}
+                    <CopyBtn text={full} />
+                </span>
+            </div>
+            <div className="px-2.5 pb-2.5">
+                <pre className="m-0 whitespace-pre-wrap break-words text-[#1F2430] font-mono text-[12px] leading-[1.5]">
+                    <Highlighted text={shown} query={query} />
+                    {truncated && <span className="text-[#9CA3AF]">…</span>}
+                </pre>
+            </div>
+        </div>
     )
 }
 
@@ -175,12 +221,7 @@ function StepCard({ step, query, collapsed, onToggle }: {
                                             </div>
                                             <div className="px-2.5 pb-2.5"><TextBlock text={item.input || '{}'} query={query} /></div>
                                         </div>
-                                        <div className="rounded-lg border border-[#DED2FB] bg-[#F1ECFE] mt-1.5 overflow-hidden">
-                                            <div className="flex items-center justify-between px-2.5 py-1.5 text-[10.5px] font-bold tracking-[0.04em] uppercase text-[#4F36B0]">
-                                                Output <CopyBtn text={item.output || ''} />
-                                            </div>
-                                            <div className="px-2.5 pb-2.5"><TextBlock text={item.output || ''} query={query} /></div>
-                                        </div>
+                                        <OutputBlock text={item.output || ''} query={query} />
                                     </>
                                 )}
                             </div>
@@ -255,13 +296,13 @@ function TrajectoryView({ side, data, patch }: { side: Side; data: any; patch: s
 
             {/* DIFF — the patch this run produced; uploaded as agent_?.patch and
                 shown in full on the Solution tab. */}
-            <Section title="DIFF" sub={`(agent_${side}.patch)`}
+            <Section title="DIFF" sub={`(agent_${side}_solution.patch)`}
                 collapsed={!!collapsedSections.diff} onToggle={() => toggleSection('diff')}>
                 {patch
                     ? <DiffView patch={patch} label={`field_patch_${side}`} />
                     : (
                         <div className="text-[11.5px] text-[#6B7280] bg-[#FAFAF5] border border-dashed border-[#E5E7EB] rounded-md px-2.5 py-2">
-                            No patch loaded for {SIDE_LABEL[side]}. Upload <code>agent_{side}.patch</code> with the picker
+                            No patch loaded for {SIDE_LABEL[side]}. Upload <code>agent_{side}_solution.patch</code> with the picker
                             above — it lands here and on the Solution tab.
                         </div>
                     )}
@@ -302,12 +343,36 @@ function TrajectoryView({ side, data, patch }: { side: Side; data: any; patch: s
 }
 
 /* ------------------------------------------------------------------ *
- * Markdown view of one trajectory (model_?_log.md)
+ * Markdown view of one trajectory (model_?_log.md, and the full-length
+ * model_?_log_full.md when that's been uploaded too)
  * ------------------------------------------------------------------ */
 
-function MarkdownView({ side, md }: { side: Side; md: string | null }) {
+/** Case-insensitive occurrence count, for the "N matches" indicator next to search. */
+function countMatches(text: string, query: string): number {
+    const q = query.trim()
+    if (!q) return 0
+    let re: RegExp
+    try { re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi') } catch { return 0 }
+    return (text.match(re) || []).length
+}
+
+function MarkdownView({ side, md, mdFull }: { side: Side; md: string | null; mdFull: string | null }) {
     const [raw, setRaw] = useState(false)
-    const html = useMemo(() => (md ? renderMarkdown(md) : ''), [md])
+    const [full, setFull] = useState(false)
+    const [query, setQuery] = useState('')
+
+    // The "full" variant only exists once model_?_log_full.md has actually been
+    // uploaded; fall back to the cut one either way so this never renders nothing.
+    const showingFull = full && !!mdFull
+    const activeMd = (showingFull ? mdFull : md) || ''
+    const fileName = `model_${side}_log${showingFull ? '_full' : ''}.md`
+
+    const q = query.trim()
+    const matchCount = useMemo(() => countMatches(activeMd, q), [activeMd, q])
+    const html = useMemo(() => {
+        const rendered = renderMarkdown(activeMd)
+        return q ? highlightHtml(rendered, q) : rendered
+    }, [activeMd, q])
 
     if (!md) {
         return (
@@ -322,20 +387,46 @@ function MarkdownView({ side, md }: { side: Side; md: string | null }) {
 
     return (
         <div className="bg-white border border-[#E5E7EB] rounded-[10px] overflow-hidden">
-            <div className="flex items-center gap-2 px-3.5 py-2 bg-[#F5F5F7] border-b border-[#E5E7EB]">
+            <div className="flex items-center gap-2 px-3.5 py-2 bg-[#F5F5F7] border-b border-[#E5E7EB] flex-wrap">
                 <span className="text-[11.5px] font-bold tracking-[0.05em] uppercase text-[#4B5563]">Markdown transcript</span>
-                <span className="text-[11px] font-mono text-[#6B7280]">model_{side}_log.md</span>
+                <span className="text-[11px] font-mono text-[#6B7280]">{fileName}</span>
+                {mdFull && (
+                    <div className="flex items-center gap-0.5 bg-gray-200/60 rounded-md p-0.5 ml-1">
+                        <button onClick={() => setFull(false)}
+                            className={`text-[10.5px] font-semibold px-2 py-0.5 rounded ${!showingFull ? 'bg-white shadow-sm text-[#4F36B0]' : 'text-[#6B7280] hover:text-[#4B5563]'}`}
+                            title="Tool outputs truncated at 500 characters, as Studio shows them">
+                            Cut
+                        </button>
+                        <button onClick={() => setFull(true)}
+                            className={`text-[10.5px] font-semibold px-2 py-0.5 rounded ${showingFull ? 'bg-white shadow-sm text-[#4F36B0]' : 'text-[#6B7280] hover:text-[#4B5563]'}`}
+                            title="Nothing truncated — for study only">
+                            Full
+                        </button>
+                    </div>
+                )}
                 <div className="ml-auto flex items-center gap-3">
                     <button onClick={() => setRaw(r => !r)}
                         className="text-[11px] border border-[#E5E7EB] bg-white rounded px-2 py-0.5 text-[#4B5563] hover:bg-gray-50">
                         {raw ? 'Rendered' : 'Raw'}
                     </button>
-                    <CopyBtn text={md} />
+                    <CopyBtn text={activeMd} />
                 </div>
+            </div>
+            <div className="px-3.5 py-2 border-b border-[#E5E7EB] flex items-center gap-2.5">
+                <div className="relative flex-1 min-w-[200px] max-w-[380px]">
+                    <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#6B7280]" />
+                    <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search this transcript..."
+                        className="w-full pl-[30px] pr-2.5 py-1.5 border border-[#E5E7EB] rounded-md text-[12.5px] outline-none focus:border-[#6C4CE0]" />
+                </div>
+                {q && <span className="text-[11.5px] text-[#6B7280]">{matchCount} match{matchCount === 1 ? '' : 'es'}</span>}
             </div>
             <div className="p-4 max-h-[75vh] overflow-y-auto">
                 {raw
-                    ? <pre className="m-0 font-mono text-[11.5px] leading-[1.55] whitespace-pre-wrap break-words text-[#1F2430]">{md}</pre>
+                    ? (
+                        <pre className="m-0 font-mono text-[11.5px] leading-[1.55] whitespace-pre-wrap break-words text-[#1F2430]">
+                            <Highlighted text={activeMd} query={q} />
+                        </pre>
+                    )
                     : <div className="text-[12.5px] text-gray-700" dangerouslySetInnerHTML={{ __html: html }} />}
             </div>
         </div>
@@ -355,6 +446,7 @@ export default function TaskTab({ files, onFiles, busy }: {
 }) {
     const logs: Record<Side, any> = { a: files.trajectory_a, b: files.trajectory_b }
     const mds: Record<Side, string | null> = { a: files.md_a, b: files.md_b }
+    const mdsFull: Record<Side, string | null> = { a: files.md_a_full, b: files.md_b_full }
     const patches: Record<Side, string | null> = { a: files.patch_a, b: files.patch_b }
 
     const [active, setActive] = useState<Side>(!files.trajectory_a && files.trajectory_b ? 'b' : 'a')
@@ -417,15 +509,16 @@ export default function TaskTab({ files, onFiles, busy }: {
                     <div className="text-[12.5px]">
                         Click <span className="font-semibold text-[#6C4CE0]">Upload files</span> above and pick{' '}
                         <code>model_a_log.json</code>, <code>model_b_log.json</code>, <code>model_a_log.md</code>,{' '}
-                        <code>model_b_log.md</code>, <code>agent_a.patch</code>, <code>agent_b.patch</code> — all at once
-                        or a few at a time.
+                        <code>model_b_log.md</code>, <code>model_a_log_full.md</code>, <code>model_b_log_full.md</code>,{' '}
+                        <code>agent_a_solution.patch</code>, <code>agent_b_solution.patch</code> — all at once or a
+                        few at a time.
                     </div>
                     <div className="text-[11.5px] mt-1">
                         Each file is filed by its name, and stored on this task so it is still here next time.
                     </div>
                 </div>
             ) : view === 'markdown' ? (
-                <MarkdownView key={`md-${active}`} side={active} md={mds[active]} />
+                <MarkdownView key={`md-${active}`} side={active} md={mds[active]} mdFull={mdsFull[active]} />
             ) : logs[active] ? (
                 <TrajectoryView key={`json-${active}`} side={active} data={logs[active]} patch={patches[active]} />
             ) : (

@@ -111,3 +111,20 @@ export function renderMarkdown(md: string): string {
     closeList()
     return out.join('')
 }
+
+/**
+ * Wraps every case-insensitive hit of `query` in `<mark>`, without touching markup —
+ * splits on tags first and only searches the text segments between them, so a query
+ * that happens to match inside an href or a class name is left alone. Used for search
+ * over an already-rendered markdown document, where the text isn't one plain string.
+ */
+export function highlightHtml(html: string, query: string): string {
+    const q = query.trim()
+    if (!q) return html
+    let re: RegExp
+    try { re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi') } catch { return html }
+    return html
+        .split(/(<[^>]+>)/g)
+        .map(part => part.startsWith('<') ? part : part.replace(re, m => `<mark class="bg-yellow-200 rounded-[2px] px-0.5">${m}</mark>`))
+        .join('')
+}

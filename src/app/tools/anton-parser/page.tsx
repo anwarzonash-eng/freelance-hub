@@ -296,6 +296,8 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
                 trajectory_b: full?.trajectory_b ?? null,
                 md_a: full?.md_a ?? null,
                 md_b: full?.md_b ?? null,
+                md_a_full: full?.md_a_full ?? null,
+                md_b_full: full?.md_b_full ?? null,
                 patch_a: full?.patch_a ?? null,
                 patch_b: full?.patch_b ?? null,
             })

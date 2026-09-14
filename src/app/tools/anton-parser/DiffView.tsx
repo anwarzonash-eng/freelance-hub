@@ -3,7 +3,7 @@
 /* ------------------------------------------------------------------ *
  * Unified-diff parser + GitHub-style renderer.
  *
- * Reads the `agent_a.patch` / `agent_b.patch` files as git produced them
+ * Reads the `agent_a_solution.patch` / `agent_b_solution.patch` files as git produced them
  * (`diff --git`, `---`/`+++`, `@@` hunks) and renders one collapsible
  * card per file: a line-number gutter, deleted lines in red, added lines
  * in green, and runs of untouched context folded behind a

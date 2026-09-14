@@ -2,8 +2,10 @@
 
 /* ------------------------------------------------------------------ *
  * Solution tab — the patch each rollout produced, as a GitHub-style
- * diff. Two sub-tabs, A and B, reading `agent_a.patch` / `agent_b.patch`
- * from the task row.
+ * diff. Two sub-tabs, A and B, reading `agent_a_solution.patch` /
+ * `agent_b_solution.patch` from the task row (the pre-rename
+ * `agent_a.patch` / `agent_b.patch` still uploads fine — see
+ * trajectoryFiles.ts — this label just always shows the current name).
  * ------------------------------------------------------------------ */
 
 import { useEffect, useState } from 'react'
@@ -12,7 +14,7 @@ import DiffView from './DiffView'
 import UploadFilesButton from './UploadFilesButton'
 import { Side, SIDES, TrajectoryFilesState } from './trajectoryFiles'
 
-const PATCH_FILE: Record<Side, string> = { a: 'agent_a.patch', b: 'agent_b.patch' }
+const PATCH_FILE: Record<Side, string> = { a: 'agent_a_solution.patch', b: 'agent_b_solution.patch' }
 
 function CopyPatchBtn({ text }: { text: string }) {
     const [copied, setCopied] = useState(false)
