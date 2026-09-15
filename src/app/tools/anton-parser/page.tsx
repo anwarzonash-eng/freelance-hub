@@ -18,6 +18,7 @@ import { DataVersion } from './versionDiff'
 import { RubricsViewTab, DimensionsViewTab, PairwiseViewTab } from './VersionViewTabs'
 import VerifyModal from './VerifyModal'
 import { AnnotationSnapshot } from './verify'
+import ProofButton, { ProofEntry, ProofPanel as ProofSidePanel } from './ProofPanel'
 
 /* ------------------------------------------------------------------ *
  * Types — a thin, permissive view over whatever the uploaded JSON
@@ -100,9 +101,18 @@ interface RubricRow {
     reason_b?: string
     // Free-standing manual annotation — NOT bound to the original `depends_on` key.
     dependencies_note?: string
+    // Evidence backing the criteria/source and each side's answer — read-only,
+    // shown via ProofButton, never edited here.
+    source_proof?: ProofEntry[]
+    proof_a?: ProofEntry[]
+    proof_b?: ProofEntry[]
     [k: string]: any
 }
-interface DimensionEntry { key: string; score_a?: number | string | null; reason_a?: string; score_b?: number | string | null; reason_b?: string }
+interface DimensionEntry {
+    key: string; score_a?: number | string | null; reason_a?: string; score_b?: number | string | null; reason_b?: string
+    proof_a?: ProofEntry[]
+    proof_b?: ProofEntry[]
+}
 
 /** Dimension keys are numbered, e.g. "1_correctness", "2_architecture" — sort on that
  *  leading number rather than object insertion order. Shared by the live editable
@@ -315,6 +325,14 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
     const [verifyExportRaw, setVerifyExportRaw] = useState<any>(null)
     const [verifyFileName, setVerifyFileName] = useState('')
     const [verifyRubricIndexBase, setVerifyRubricIndexBase] = useState(1)
+
+    // Proof panel — docks in the same right-hand slot as Verify (see below), so the
+    // two are mutually exclusive rather than stacking. It stays open until its own
+    // close button/Escape, never on an outside click — there's no backdrop to click
+    // through, same reasoning Verify uses.
+    const [proofPanel, setProofPanel] = useState<{ proof: ProofEntry[]; label: string } | null>(null)
+    const openProof = (proof: ProofEntry[], label: string) => { setShowVerify(false); setProofPanel({ proof, label }) }
+    const toggleVerify = () => setShowVerify(v => { const next = !v; if (next) setProofPanel(null); return next })
 
     useEffect(() => {
         let cancelled = false
@@ -596,7 +614,7 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
                                     ? <>changes highlighted vs. version {dataVersions[selectedVersionIdx - 1].version}</>
                                     : 'first version — nothing to compare yet'}
                             </span>
-                            <button onClick={() => setShowVerify(v => !v)}
+                            <button onClick={toggleVerify}
                                 title="Compare a Mercor Studio export against this version of annotation.json"
                                 className={`ml-auto flex items-center gap-1 text-[11px] font-semibold rounded px-2.5 py-1 ${showVerify
                                     ? 'bg-indigo-600 text-white'
@@ -620,16 +638,16 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
             {/* Body */}
             <div className="flex-1 overflow-y-auto p-4 space-y-6">
                 {tab === 'rubrics' && mode === 'edit' && (
-                    <RubricsTab rubrics={rubrics} onPatch={patchRubric} onAdd={addRubric} onRemove={removeRubric} />
+                    <RubricsTab rubrics={rubrics} onPatch={patchRubric} onAdd={addRubric} onRemove={removeRubric} onOpenProof={openProof} />
                 )}
                 {tab === 'rubrics' && mode === 'view' && (
-                    <RubricsViewTab rubrics={viewRubrics} previousRubrics={prevViewRubrics} hasPrevVersion={hasPrevVersion} />
+                    <RubricsViewTab rubrics={viewRubrics} previousRubrics={prevViewRubrics} hasPrevVersion={hasPrevVersion} onOpenProof={openProof} />
                 )}
                 {tab === 'dimensions' && mode === 'edit' && (
-                    <DimensionsTab entries={dimensionEntries} onPatch={patchDimension} />
+                    <DimensionsTab entries={dimensionEntries} onPatch={patchDimension} onOpenProof={openProof} />
                 )}
                 {tab === 'dimensions' && mode === 'view' && (
-                    <DimensionsViewTab entries={viewDimensionEntries} previousEntries={prevViewDimensionEntries} hasPrevVersion={hasPrevVersion} />
+                    <DimensionsViewTab entries={viewDimensionEntries} previousEntries={prevViewDimensionEntries} hasPrevVersion={hasPrevVersion} onOpenProof={openProof} />
                 )}
                 {tab === 'pairwise' && mode === 'edit' && (
                     <PairwiseTab
@@ -637,8 +655,10 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
                         comparativeRationale={data.comparative_rationale || ''}
                         finalQualityScoreA={data.final_quality_score_a ?? null}
                         finalQualityScoreB={data.final_quality_score_b ?? null}
+                        pairwiseProof={data.pairwise_proof}
                         onChange={setPairwise}
                         onChangeScore={setFinalScore}
+                        onOpenProof={openProof}
                     />
                 )}
                 {tab === 'pairwise' && mode === 'view' && (
@@ -648,6 +668,7 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
                             comparative_rationale: viewData.comparative_rationale,
                             final_quality_score_a: viewData.final_quality_score_a,
                             final_quality_score_b: viewData.final_quality_score_b,
+                            pairwise_proof: viewData.pairwise_proof,
                         }}
                         previous={{
                             pairwise_evaluation: prevViewData.pairwise_evaluation,
@@ -656,6 +677,7 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
                             final_quality_score_b: prevViewData.final_quality_score_b,
                         }}
                         hasPrevVersion={hasPrevVersion}
+                        onOpenProof={openProof}
                     />
                 )}
                 {/* Task and Solution stay mounted once opened — they carry their own
@@ -690,6 +712,10 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
                     onRubricIndexBaseChange={setVerifyRubricIndexBase}
                 />
             )}
+
+            {proofPanel && (
+                <ProofSidePanel proof={proofPanel.proof} label={proofPanel.label} onClose={() => setProofPanel(null)} />
+            )}
         </div>
     )
 }
@@ -697,11 +723,12 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
 /* ------------------------------------------------------------------ *
  * Rubrics tab — three views over the same `rubrics` array.
  * ------------------------------------------------------------------ */
-function RubricsTab({ rubrics, onPatch, onAdd, onRemove }: {
+function RubricsTab({ rubrics, onPatch, onAdd, onRemove, onOpenProof }: {
     rubrics: RubricRow[]
     onPatch: (i: number, patch: Partial<RubricRow>) => void
     onAdd: () => void
     onRemove: (i: number) => void
+    onOpenProof: (proof: ProofEntry[], label: string) => void
 }) {
     const [selected, setSelected] = useState<number | null>(null)
     return (
@@ -725,6 +752,7 @@ function RubricsTab({ rubrics, onPatch, onAdd, onRemove }: {
                                 <th className="px-2 py-1.5 w-48">Mapped Dimension</th>
                                 <th className="px-2 py-1.5 w-40">Source</th>
                                 <th className="px-2 py-1.5 w-8"></th>
+                                <th className="px-2 py-1.5 w-8"></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -737,31 +765,35 @@ function RubricsTab({ rubrics, onPatch, onAdd, onRemove }: {
                                     <td className="px-1 py-0.5"><AreaCell value={r.criteria || ''} onChange={v => onPatch(i, { criteria: v })} /></td>
                                     <td className="px-1 py-0.5"><TextCell value={r.mapped_dimension || ''} onChange={v => onPatch(i, { mapped_dimension: v })} /></td>
                                     <td className="px-1 py-0.5"><TextCell value={r.source || ''} onChange={v => onPatch(i, { source: v })} mono /></td>
+                                    <td className="px-1 py-1 text-center">
+                                        <ProofButton proof={r.source_proof} label={`Rubric ${r.index ?? i + 1} · Source`} onOpen={onOpenProof} />
+                                    </td>
                                     <td className="px-1 py-0.5 text-center">
                                         <button onClick={() => onRemove(i)} title="Delete row" className="p-0.5 text-red-300 hover:text-red-600 hover:bg-red-50 rounded"><Trash2 size={12} /></button>
                                     </td>
                                 </tr>
                             ))}
-                            {!rubrics.length && <tr><td colSpan={7} className="px-3 py-4 text-center text-gray-300 italic">No rubrics yet.</td></tr>}
+                            {!rubrics.length && <tr><td colSpan={8} className="px-3 py-4 text-center text-gray-300 italic">No rubrics yet.</td></tr>}
                         </tbody>
                     </table>
                 </div>
             </section>
 
             {/* Table 2 — Dimension Verification A */}
-            <VerificationTable side="a" title="Dimension Verification A" rubrics={rubrics} onPatch={onPatch} />
+            <VerificationTable side="a" title="Dimension Verification A" rubrics={rubrics} onPatch={onPatch} onOpenProof={onOpenProof} />
 
             {/* Table 3 — Dimension Verification B */}
-            <VerificationTable side="b" title="Dimension Verification B" rubrics={rubrics} onPatch={onPatch} />
+            <VerificationTable side="b" title="Dimension Verification B" rubrics={rubrics} onPatch={onPatch} onOpenProof={onOpenProof} />
         </div>
     )
 }
 
-function VerificationTable({ side, title, rubrics, onPatch }: {
+function VerificationTable({ side, title, rubrics, onPatch, onOpenProof }: {
     side: 'a' | 'b'
     title: string
     rubrics: RubricRow[]
     onPatch: (i: number, patch: Partial<RubricRow>) => void
+    onOpenProof: (proof: ProofEntry[], label: string) => void
 }) {
     const answerKey = `answer_${side}` as const
     const reasonKey = `reason_${side}` as const
@@ -797,19 +829,26 @@ function VerificationTable({ side, title, rubrics, onPatch }: {
                             <th className="px-2 py-1.5 min-w-[220px]">Criteria</th>
                             <th className={`px-2 py-1.5 w-24 ${accent}`}>Answer</th>
                             <th className="px-2 py-1.5 min-w-[260px]">Reason</th>
+                            <th className="px-2 py-1.5 w-8"></th>
                         </tr>
                     </thead>
                     <tbody>
-                        {rubrics.map((r, i) => (
-                            <tr key={i} onClick={() => setSelected(i)}
-                                className={`border-t border-gray-100 align-top cursor-pointer ${selected === i ? 'bg-indigo-50' : 'hover:bg-gray-50'}`}>
-                                <td className="px-2 py-1.5 font-mono text-gray-400">{r.index}</td>
-                                <td className="px-2 py-1.5 text-gray-500">{(r.criteria || '').slice(0, 90)}{(r.criteria || '').length > 90 ? '…' : ''}</td>
-                                <td className="px-1 py-0.5"><TextCell value={String(r[answerKey] ?? '')} onChange={v => onPatch(i, { [answerKey]: v } as any)} mono /></td>
-                                <td className="px-1 py-0.5"><AreaCell value={r[reasonKey] || ''} onChange={v => onPatch(i, { [reasonKey]: v } as any)} /></td>
-                            </tr>
-                        ))}
-                        {!rubrics.length && <tr><td colSpan={4} className="px-3 py-4 text-center text-gray-300 italic">No rubrics yet.</td></tr>}
+                        {rubrics.map((r, i) => {
+                            const proofKey = `proof_${side}` as const
+                            return (
+                                <tr key={i} onClick={() => setSelected(i)}
+                                    className={`border-t border-gray-100 align-top cursor-pointer ${selected === i ? 'bg-indigo-50' : 'hover:bg-gray-50'}`}>
+                                    <td className="px-2 py-1.5 font-mono text-gray-400">{r.index}</td>
+                                    <td className="px-2 py-1.5 text-gray-500">{(r.criteria || '').slice(0, 90)}{(r.criteria || '').length > 90 ? '…' : ''}</td>
+                                    <td className="px-1 py-0.5"><TextCell value={String(r[answerKey] ?? '')} onChange={v => onPatch(i, { [answerKey]: v } as any)} mono /></td>
+                                    <td className="px-1 py-0.5"><AreaCell value={r[reasonKey] || ''} onChange={v => onPatch(i, { [reasonKey]: v } as any)} /></td>
+                                    <td className="px-1 py-1 text-center">
+                                        <ProofButton proof={r[proofKey]} label={`Rubric ${r.index ?? i + 1} · Answer ${side.toUpperCase()}`} onOpen={onOpenProof} />
+                                    </td>
+                                </tr>
+                            )
+                        })}
+                        {!rubrics.length && <tr><td colSpan={5} className="px-3 py-4 text-center text-gray-300 italic">No rubrics yet.</td></tr>}
                     </tbody>
                 </table>
             </div>
@@ -820,23 +859,25 @@ function VerificationTable({ side, title, rubrics, onPatch }: {
 /* ------------------------------------------------------------------ *
  * Dimensions tab — two tables, one per model, over the `dimensions` object.
  * ------------------------------------------------------------------ */
-function DimensionsTab({ entries, onPatch }: {
+function DimensionsTab({ entries, onPatch, onOpenProof }: {
     entries: DimensionEntry[]
     onPatch: (key: string, side: 'a' | 'b', field: 'score' | 'reason', value: any) => void
+    onOpenProof: (proof: ProofEntry[], label: string) => void
 }) {
     return (
         <div className="space-y-8">
-            <DimensionSideTable side="a" title="Dimensions — Model A" entries={entries} onPatch={onPatch} />
-            <DimensionSideTable side="b" title="Dimensions — Model B" entries={entries} onPatch={onPatch} />
+            <DimensionSideTable side="a" title="Dimensions — Model A" entries={entries} onPatch={onPatch} onOpenProof={onOpenProof} />
+            <DimensionSideTable side="b" title="Dimensions — Model B" entries={entries} onPatch={onPatch} onOpenProof={onOpenProof} />
         </div>
     )
 }
 
-function DimensionSideTable({ side, title, entries, onPatch }: {
+function DimensionSideTable({ side, title, entries, onPatch, onOpenProof }: {
     side: 'a' | 'b'
     title: string
     entries: DimensionEntry[]
     onPatch: (key: string, side: 'a' | 'b', field: 'score' | 'reason', value: any) => void
+    onOpenProof: (proof: ProofEntry[], label: string) => void
 }) {
     const accent = side === 'a' ? 'text-blue-600' : 'text-teal-600'
     const [selected, setSelected] = useState<string | null>(null)
@@ -852,22 +893,27 @@ function DimensionSideTable({ side, title, entries, onPatch }: {
                             <th className="px-2 py-1.5 w-56">Dimension</th>
                             <th className={`px-2 py-1.5 w-20 ${accent}`}>Score</th>
                             <th className="px-2 py-1.5 min-w-[320px]">Reason</th>
+                            <th className="px-2 py-1.5 w-8"></th>
                         </tr>
                     </thead>
                     <tbody>
                         {entries.map(e => {
                             const score = side === 'a' ? e.score_a : e.score_b
                             const reason = side === 'a' ? e.reason_a : e.reason_b
+                            const proof = side === 'a' ? e.proof_a : e.proof_b
                             return (
                                 <tr key={e.key} onClick={() => setSelected(e.key)}
                                     className={`border-t border-gray-100 align-top cursor-pointer ${selected === e.key ? 'bg-indigo-50' : 'hover:bg-gray-50'}`}>
                                     <td className="px-2 py-1.5 font-mono text-gray-600">{e.key}</td>
                                     <td className="px-1 py-0.5"><TextCell value={String(score ?? '')} onChange={v => onPatch(e.key, side, 'score', v === '' ? null : Number(v))} mono /></td>
                                     <td className="px-1 py-0.5"><AreaCell value={reason || ''} onChange={v => onPatch(e.key, side, 'reason', v)} /></td>
+                                    <td className="px-1 py-1 text-center">
+                                        <ProofButton proof={proof} label={`${e.key} · Model ${side.toUpperCase()}`} onOpen={onOpenProof} />
+                                    </td>
                                 </tr>
                             )
                         })}
-                        {!entries.length && <tr><td colSpan={3} className="px-3 py-4 text-center text-gray-300 italic">No dimensions yet.</td></tr>}
+                        {!entries.length && <tr><td colSpan={4} className="px-3 py-4 text-center text-gray-300 italic">No dimensions yet.</td></tr>}
                     </tbody>
                 </table>
             </div>
@@ -878,18 +924,23 @@ function DimensionSideTable({ side, title, entries, onPatch }: {
 /* ------------------------------------------------------------------ *
  * Pairwise tab
  * ------------------------------------------------------------------ */
-function PairwiseTab({ pairwiseEvaluation, comparativeRationale, finalQualityScoreA, finalQualityScoreB, onChange, onChangeScore }: {
+function PairwiseTab({ pairwiseEvaluation, comparativeRationale, finalQualityScoreA, finalQualityScoreB, pairwiseProof, onChange, onChangeScore, onOpenProof }: {
     pairwiseEvaluation: string
     comparativeRationale: string
     finalQualityScoreA: number | null
     finalQualityScoreB: number | null
+    pairwiseProof?: ProofEntry[]
     onChange: (field: 'pairwise_evaluation' | 'comparative_rationale', value: string) => void
     onChangeScore: (field: 'final_quality_score_a' | 'final_quality_score_b', value: number | null) => void
+    onOpenProof: (proof: ProofEntry[], label: string) => void
 }) {
     return (
         <div className="max-w-3xl space-y-5">
             <div>
-                <label className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">Pairwise Evaluation</label>
+                <div className="flex items-center gap-1.5">
+                    <label className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">Pairwise Evaluation</label>
+                    <ProofButton proof={pairwiseProof} label="Pairwise" onOpen={onOpenProof} />
+                </div>
                 <input value={pairwiseEvaluation} onChange={e => onChange('pairwise_evaluation', e.target.value)}
                     className="mt-1 w-full text-sm font-semibold border border-gray-300 rounded px-2.5 py-1.5 focus:outline-none focus:border-indigo-400" />
             </div>

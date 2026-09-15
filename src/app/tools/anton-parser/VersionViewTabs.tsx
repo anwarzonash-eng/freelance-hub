@@ -12,6 +12,7 @@ import { useState } from 'react'
 import { Check, Copy } from 'lucide-react'
 import DiffCell from './DiffCell'
 import { matchPreviousDimensions, matchPreviousRubrics } from './versionDiff'
+import ProofButton, { ProofEntry } from './ProofPanel'
 
 /* ------------------------------------------------------------------ *
  * Copying — a View-mode affordance: values here are read-only, so
@@ -62,14 +63,22 @@ interface RubricRow {
     answer_b?: string
     reason_b?: string
     dependencies_note?: string
+    source_proof?: ProofEntry[]
+    proof_a?: ProofEntry[]
+    proof_b?: ProofEntry[]
     [k: string]: any
 }
-interface DimensionEntry { key: string; score_a?: number | string | null; reason_a?: string; score_b?: number | string | null; reason_b?: string }
+interface DimensionEntry {
+    key: string; score_a?: number | string | null; reason_a?: string; score_b?: number | string | null; reason_b?: string
+    proof_a?: ProofEntry[]
+    proof_b?: ProofEntry[]
+}
 
-export function RubricsViewTab({ rubrics, previousRubrics, hasPrevVersion }: {
+export function RubricsViewTab({ rubrics, previousRubrics, hasPrevVersion, onOpenProof }: {
     rubrics: RubricRow[]
     previousRubrics: RubricRow[]
     hasPrevVersion: boolean
+    onOpenProof: (proof: ProofEntry[], label: string) => void
 }) {
     const matched = matchPreviousRubrics(rubrics, previousRubrics)
     const [selected, setSelected] = useState<number | null>(null)
@@ -93,6 +102,7 @@ export function RubricsViewTab({ rubrics, previousRubrics, hasPrevVersion }: {
                                 <th className="px-2 py-1.5 min-w-[280px]">Criteria</th>
                                 <th className="px-2 py-1.5 w-48">Mapped Dimension</th>
                                 <th className="px-2 py-1.5 w-40">Source</th>
+                                <th className="px-2 py-1.5 w-8"></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -108,27 +118,31 @@ export function RubricsViewTab({ rubrics, previousRubrics, hasPrevVersion }: {
                                         <td className="px-1 py-0.5"><DiffCell value={r.criteria} prevValue={prev?.criteria} hasPrevVersion={hasPrevVersion} isNewRow={isNewRow} area /></td>
                                         <td className="px-1 py-0.5"><DiffCell value={r.mapped_dimension} prevValue={prev?.mapped_dimension} hasPrevVersion={hasPrevVersion} isNewRow={isNewRow} /></td>
                                         <td className="px-1 py-0.5"><DiffCell value={r.source} prevValue={prev?.source} hasPrevVersion={hasPrevVersion} isNewRow={isNewRow} mono /></td>
+                                        <td className="px-1 py-1 text-center">
+                                            <ProofButton proof={r.source_proof} label={`Rubric ${r.index ?? i + 1} · Source`} onOpen={onOpenProof} />
+                                        </td>
                                     </tr>
                                 )
                             })}
-                            {!rubrics.length && <tr><td colSpan={6} className="px-3 py-4 text-center text-gray-300 italic">No rubrics.</td></tr>}
+                            {!rubrics.length && <tr><td colSpan={7} className="px-3 py-4 text-center text-gray-300 italic">No rubrics.</td></tr>}
                         </tbody>
                     </table>
                 </div>
             </section>
 
-            <VerificationViewTable side="a" title="Dimension Verification A" rubrics={rubrics} matched={matched} hasPrevVersion={hasPrevVersion} />
-            <VerificationViewTable side="b" title="Dimension Verification B" rubrics={rubrics} matched={matched} hasPrevVersion={hasPrevVersion} />
+            <VerificationViewTable side="a" title="Dimension Verification A" rubrics={rubrics} matched={matched} hasPrevVersion={hasPrevVersion} onOpenProof={onOpenProof} />
+            <VerificationViewTable side="b" title="Dimension Verification B" rubrics={rubrics} matched={matched} hasPrevVersion={hasPrevVersion} onOpenProof={onOpenProof} />
         </div>
     )
 }
 
-function VerificationViewTable({ side, title, rubrics, matched, hasPrevVersion }: {
+function VerificationViewTable({ side, title, rubrics, matched, hasPrevVersion, onOpenProof }: {
     side: 'a' | 'b'
     title: string
     rubrics: RubricRow[]
     matched: (RubricRow | undefined)[]
     hasPrevVersion: boolean
+    onOpenProof: (proof: ProofEntry[], label: string) => void
 }) {
     const answerKey = `answer_${side}` as const
     const reasonKey = `reason_${side}` as const
@@ -169,6 +183,7 @@ function VerificationViewTable({ side, title, rubrics, matched, hasPrevVersion }
                         {rubrics.map((r, i) => {
                             const prev = matched[i]
                             const isNewRow = hasPrevVersion && !prev
+                            const proofKey = `proof_${side}` as const
                             return (
                                 <tr key={i} onClick={() => setSelected(i)}
                                     className={`border-t border-gray-100 align-top cursor-pointer ${selected === i ? 'bg-indigo-100' : 'hover:bg-gray-50'}`}>
@@ -176,7 +191,10 @@ function VerificationViewTable({ side, title, rubrics, matched, hasPrevVersion }
                                     <td className="px-2 py-1.5 text-gray-500">{(r.criteria || '').slice(0, 90)}{(r.criteria || '').length > 90 ? '…' : ''}</td>
                                     <td className="px-1 py-0.5"><DiffCell value={r[answerKey]} prevValue={prev?.[answerKey]} hasPrevVersion={hasPrevVersion} isNewRow={isNewRow} mono /></td>
                                     <td className="px-1 py-0.5"><DiffCell value={r[reasonKey]} prevValue={prev?.[reasonKey]} hasPrevVersion={hasPrevVersion} isNewRow={isNewRow} area /></td>
-                                    <td className="px-1 py-1 text-center"><CopyIconBtn text={r[reasonKey] || ''} title="Copy reason" /></td>
+                                    <td className="px-1 py-1 text-center flex items-center justify-center gap-0.5">
+                                        <CopyIconBtn text={r[reasonKey] || ''} title="Copy reason" />
+                                        <ProofButton proof={r[proofKey]} label={`Rubric ${r.index ?? i + 1} · Answer ${side.toUpperCase()}`} onOpen={onOpenProof} />
+                                    </td>
                                 </tr>
                             )
                         })}
@@ -188,26 +206,28 @@ function VerificationViewTable({ side, title, rubrics, matched, hasPrevVersion }
     )
 }
 
-export function DimensionsViewTab({ entries, previousEntries, hasPrevVersion }: {
+export function DimensionsViewTab({ entries, previousEntries, hasPrevVersion, onOpenProof }: {
     entries: DimensionEntry[]
     previousEntries: DimensionEntry[]
     hasPrevVersion: boolean
+    onOpenProof: (proof: ProofEntry[], label: string) => void
 }) {
     const matched = matchPreviousDimensions(entries, previousEntries)
     return (
         <div className="space-y-8">
-            <DimensionSideViewTable side="a" title="Dimensions — Model A" entries={entries} matched={matched} hasPrevVersion={hasPrevVersion} />
-            <DimensionSideViewTable side="b" title="Dimensions — Model B" entries={entries} matched={matched} hasPrevVersion={hasPrevVersion} />
+            <DimensionSideViewTable side="a" title="Dimensions — Model A" entries={entries} matched={matched} hasPrevVersion={hasPrevVersion} onOpenProof={onOpenProof} />
+            <DimensionSideViewTable side="b" title="Dimensions — Model B" entries={entries} matched={matched} hasPrevVersion={hasPrevVersion} onOpenProof={onOpenProof} />
         </div>
     )
 }
 
-function DimensionSideViewTable({ side, title, entries, matched, hasPrevVersion }: {
+function DimensionSideViewTable({ side, title, entries, matched, hasPrevVersion, onOpenProof }: {
     side: 'a' | 'b'
     title: string
     entries: DimensionEntry[]
     matched: (DimensionEntry | undefined)[]
     hasPrevVersion: boolean
+    onOpenProof: (proof: ProofEntry[], label: string) => void
 }) {
     const accent = side === 'a' ? 'text-blue-600' : 'text-teal-600'
     const [selected, setSelected] = useState<string | null>(null)
@@ -238,13 +258,17 @@ function DimensionSideViewTable({ side, title, entries, matched, hasPrevVersion 
                             const prevScore = side === 'a' ? prev?.score_a : prev?.score_b
                             const reason = side === 'a' ? e.reason_a : e.reason_b
                             const prevReason = side === 'a' ? prev?.reason_a : prev?.reason_b
+                            const proof = side === 'a' ? e.proof_a : e.proof_b
                             return (
                                 <tr key={e.key} onClick={() => setSelected(e.key)}
                                     className={`border-t border-gray-100 align-top cursor-pointer ${selected === e.key ? 'bg-indigo-100' : 'hover:bg-gray-50'}`}>
                                     <td className="px-2 py-1.5 font-mono text-gray-600">{e.key}</td>
                                     <td className="px-1 py-0.5"><DiffCell value={score} prevValue={prevScore} hasPrevVersion={hasPrevVersion} isNewRow={isNewRow} mono /></td>
                                     <td className="px-1 py-0.5"><DiffCell value={reason} prevValue={prevReason} hasPrevVersion={hasPrevVersion} isNewRow={isNewRow} area /></td>
-                                    <td className="px-1 py-1 text-center"><CopyIconBtn text={reason || ''} title="Copy reason" /></td>
+                                    <td className="px-1 py-1 text-center flex items-center justify-center gap-0.5">
+                                        <CopyIconBtn text={reason || ''} title="Copy reason" />
+                                        <ProofButton proof={proof} label={`${e.key} · Model ${side.toUpperCase()}`} onOpen={onOpenProof} />
+                                    </td>
                                 </tr>
                             )
                         })}
@@ -256,15 +280,19 @@ function DimensionSideViewTable({ side, title, entries, matched, hasPrevVersion 
     )
 }
 
-export function PairwiseViewTab({ current, previous, hasPrevVersion }: {
-    current: { pairwise_evaluation?: string; comparative_rationale?: string; final_quality_score_a?: number | null; final_quality_score_b?: number | null }
+export function PairwiseViewTab({ current, previous, hasPrevVersion, onOpenProof }: {
+    current: { pairwise_evaluation?: string; comparative_rationale?: string; final_quality_score_a?: number | null; final_quality_score_b?: number | null; pairwise_proof?: ProofEntry[] }
     previous: { pairwise_evaluation?: string; comparative_rationale?: string; final_quality_score_a?: number | null; final_quality_score_b?: number | null }
     hasPrevVersion: boolean
+    onOpenProof: (proof: ProofEntry[], label: string) => void
 }) {
     return (
         <div className="max-w-3xl space-y-5">
             <div>
-                <label className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">Pairwise Evaluation</label>
+                <div className="flex items-center gap-1.5">
+                    <label className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">Pairwise Evaluation</label>
+                    <ProofButton proof={current.pairwise_proof} label="Pairwise" onOpen={onOpenProof} />
+                </div>
                 <div className="mt-1">
                     <DiffCell value={current.pairwise_evaluation} prevValue={previous.pairwise_evaluation} hasPrevVersion={hasPrevVersion}
                         className="text-sm font-semibold border border-gray-200" />
