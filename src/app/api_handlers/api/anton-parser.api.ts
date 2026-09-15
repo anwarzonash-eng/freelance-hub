@@ -24,8 +24,15 @@ export const ANTON_TASK_STATUSES = [
 export type AntonTaskStatus = typeof ANTON_TASK_STATUSES[number]
 export const DEFAULT_ANTON_TASK_STATUS: AntonTaskStatus = 'Need To Submit'
 
-export async function getAntonTasks() {
-    return await apiClient(AntonParserAPIRoutes.GET_TASKS, ApiMethod.GET, undefined, undefined, undefined, true, false)
+/** `assignee`: 'all' (default) → every task, 'none' → unassigned only, else a userid. */
+export async function getAntonTasks(assignee: string = 'all') {
+    const params: IApiParams = { query: { assignee } }
+    return await apiClient(AntonParserAPIRoutes.GET_TASKS, ApiMethod.GET, undefined, params, undefined, true, false)
+}
+
+/** Distinct users tasks are actually assigned to — for the assignee filter. */
+export async function getAntonAssignees() {
+    return await apiClient(AntonParserAPIRoutes.GET_ASSIGNEES, ApiMethod.GET, undefined, undefined, undefined, false, false)
 }
 
 export async function createAntonTask(data: any) {
@@ -76,4 +83,13 @@ export async function saveAntonTaskTrajectory(
 export async function setAntonTaskStatus(id: string, status: AntonTaskStatus) {
     const params: IApiParams = { path: { id } }
     return await apiClient(AntonParserAPIRoutes.UPDATE_TASK, ApiMethod.PUT, { status }, params, undefined, true, false)
+}
+
+/**
+ * Assigned annotator — its own column, written directly through the same update
+ * endpoint. Admin-only server-side; pass `null` to unassign.
+ */
+export async function setAntonTaskAssignee(id: string, assignedTo: string | null) {
+    const params: IApiParams = { path: { id } }
+    return await apiClient(AntonParserAPIRoutes.UPDATE_TASK, ApiMethod.PUT, { assigned_to: assignedTo }, params, undefined, true, false)
 }

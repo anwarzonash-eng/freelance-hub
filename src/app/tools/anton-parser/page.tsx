@@ -1,15 +1,16 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
     ListTree, Plus, RefreshCw, X, Trash2, Upload, FileJson, Link2, ExternalLink, Pencil,
-    Eye, History, ShieldAlert,
+    Eye, History, ShieldAlert, User,
 } from 'lucide-react'
 import {
     getAntonTasks, createAntonTask, getAntonTask, updateAntonTask, deleteAntonTask,
-    saveAntonTaskTrajectory, setAntonTaskStatus, ANTON_TASK_STATUSES, DEFAULT_ANTON_TASK_STATUS,
-    AntonTaskStatus,
+    saveAntonTaskTrajectory, setAntonTaskStatus, setAntonTaskAssignee, getAntonAssignees,
+    ANTON_TASK_STATUSES, DEFAULT_ANTON_TASK_STATUS, AntonTaskStatus,
 } from '@/app/api_handlers/api/anton-parser.api'
+import { listAuthUsers } from '@/app/api_handlers/api/auth.api'
 import TaskTab from './TaskTab'
 import SolutionTab from './SolutionTab'
 import { EMPTY_FILES, readUploadedFiles, TrajectoryFilesState } from './trajectoryFiles'
@@ -29,6 +30,18 @@ interface TaskListItem {
     // Denormalised rubric summary — see deriveRubricStats/deriveScore on the backend.
     rubrics_count?: number; yes_count_a?: number; yes_count_b?: number
     final_quality_score_a?: number | null; final_quality_score_b?: number | null
+    // Assigned annotator (a userid) — admin-only to set.
+    assigned_to?: string | null
+}
+
+// Assigning a task is admin-only. Admin = JWT role 'admin' or a wildcard '*' in roles
+// — same rule A Parse uses for job assignment.
+function isAdminUser(): boolean {
+    try {
+        if (localStorage.getItem('userRole') === 'admin') return true
+        const roles = JSON.parse(localStorage.getItem('roles') || '[]')
+        return Array.isArray(roles) && roles.includes('*')
+    } catch { return false }
 }
 
 /** Badge color per workflow status — same mapping used on the list and in the editor. */
@@ -258,6 +271,27 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
         finally { setStatusBusy(false) }
     }
 
+    // Assigned annotator — its own column, editable only by an admin (server-enforced;
+    // the select below is hidden from non-admins entirely, same as A Parse's job assignment).
+    const [admin] = useState<boolean>(() => isAdminUser())
+    const [assignedTo, setAssignedTo] = useState<string | null>(null)
+    const [assigneeBusy, setAssigneeBusy] = useState(false)
+    const [allUsers, setAllUsers] = useState<string[]>([])
+    const changeAssignee = async (next: string) => {
+        const value = next || null
+        setAssignedTo(value)
+        setAssigneeBusy(true)
+        try { await setAntonTaskAssignee(taskId, value); onSaved() }
+        finally { setAssigneeBusy(false) }
+    }
+    useEffect(() => {
+        if (!admin) return
+        listAuthUsers().then((res: any) => {
+            const list = res?.data ?? res
+            if (Array.isArray(list)) setAllUsers(list.map((u: any) => u.userid).filter(Boolean).sort())
+        }).catch(() => { })
+    }, [admin])
+
     // Task/Solution tabs — the six uploaded artefacts, stored in their own
     // columns on this same row and parsed by those tabs at render time.
     const [files, setFiles] = useState<TrajectoryFilesState>(EMPTY_FILES)
@@ -290,6 +324,7 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
             const full = res?.data ?? res
             setData(full?.data ?? {})
             setStatus(full?.status || DEFAULT_ANTON_TASK_STATUS)
+            setAssignedTo(full?.assigned_to ?? null)
             const versions: DataVersion[] = Array.isArray(full?.data_versions) ? full.data_versions : []
             setDataVersions(versions)
             setSelectedVersionIdx(Math.max(0, versions.length - 1))
@@ -479,6 +514,21 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
                     {ANTON_TASK_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
                 {statusBusy && <RefreshCw size={11} className="animate-spin text-gray-400 shrink-0" />}
+                {admin ? (
+                    <select value={assignedTo || ''} disabled={assigneeBusy} onChange={e => changeAssignee(e.target.value)}
+                        title="Assigned annotator"
+                        className="text-[10px] font-semibold px-1.5 py-0.5 rounded border shrink-0 outline-none disabled:opacity-50 bg-sky-50 text-sky-700 border-sky-300">
+                        <option value="">Unassigned</option>
+                        {assignedTo && !allUsers.includes(assignedTo) && <option value={assignedTo}>{assignedTo}</option>}
+                        {allUsers.map(u => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                ) : assignedTo && (
+                    <span title="Assigned annotator"
+                        className="flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded border shrink-0 bg-sky-50 text-sky-700 border-sky-300">
+                        <User size={10} /> {assignedTo}
+                    </span>
+                )}
+                {assigneeBusy && <RefreshCw size={11} className="animate-spin text-gray-400 shrink-0" />}
                 {(modelA || modelB) && (
                     <span className="text-[10px] text-gray-400 shrink-0">
                         {modelA && <>A = <span className="text-blue-600 font-medium">{modelA}</span></>}
@@ -946,18 +996,28 @@ export default function AntonParserPage() {
     const [editingId, setEditingId] = useState<string | null>(null)
     const [statusFilter, setStatusFilter] = useState<AntonTaskStatus | 'all'>('all')
     const [creating, setCreating] = useState(false)
+    const [assigneeFilter, setAssigneeFilter] = useState<string>('all')
+    const [assignees, setAssignees] = useState<string[]>([])
 
     const visibleTasks = statusFilter === 'all' ? tasks : tasks.filter(t => t.status === statusFilter)
 
-    const load = async () => {
+    const load = useCallback(async () => {
         setLoading(true)
         try {
-            const res: any = await getAntonTasks()
+            const res: any = await getAntonTasks(assigneeFilter)
             const list = res?.data ?? res
             setTasks(Array.isArray(list) ? list : [])
         } finally { setLoading(false) }
-    }
-    useEffect(() => { load() }, [])
+    }, [assigneeFilter])
+    useEffect(() => { load() }, [load])
+
+    // Assignee filter options — only users tasks are actually assigned to.
+    useEffect(() => {
+        getAntonAssignees().then((res: any) => {
+            const list = res?.data ?? res
+            if (Array.isArray(list)) setAssignees(list)
+        }).catch(() => { })
+    }, [])
 
     const onTaskCreated = async (id: string) => {
         setCreating(false)
@@ -984,6 +1044,13 @@ export default function AntonParserPage() {
                     </span>
                 </div>
                 <div className="flex items-center gap-2">
+                    <select value={assigneeFilter} onChange={e => setAssigneeFilter(e.target.value)}
+                        title="Filter by assigned annotator"
+                        className="text-xs border border-gray-300 rounded px-2 py-1 text-gray-600 bg-white hover:bg-gray-50 focus:outline-none focus:border-indigo-400">
+                        <option value="all">All assignees</option>
+                        <option value="none">Unassigned</option>
+                        {assignees.map(u => <option key={u} value={u}>{u}</option>)}
+                    </select>
                     <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as AntonTaskStatus | 'all')}
                         title="Filter by status"
                         className="text-xs border border-gray-300 rounded px-2 py-1 text-gray-600 bg-white hover:bg-gray-50 focus:outline-none focus:border-indigo-400">
@@ -1026,6 +1093,7 @@ export default function AntonParserPage() {
                                 <th className="px-3 py-1.5 font-medium text-right">Score A</th>
                                 <th className="px-3 py-1.5 font-medium text-right">Score B</th>
                                 <th className="px-3 py-1.5 font-medium">Status</th>
+                                <th className="px-3 py-1.5 font-medium">Assigned</th>
                                 <th className="px-3 py-1.5 font-medium">Updated</th>
                                 <th className="px-3 py-1.5 font-medium w-8"></th>
                             </tr>
@@ -1046,6 +1114,11 @@ export default function AntonParserPage() {
                                     <td className="px-3 py-1.5 text-right font-mono text-gray-700">{t.final_quality_score_a ?? <span className="text-gray-300">—</span>}</td>
                                     <td className="px-3 py-1.5 text-right font-mono text-gray-700">{t.final_quality_score_b ?? <span className="text-gray-300">—</span>}</td>
                                     <td className="px-3 py-1.5"><StatusBadge status={t.status || DEFAULT_ANTON_TASK_STATUS} /></td>
+                                    <td className="px-3 py-1.5">
+                                        {t.assigned_to
+                                            ? <span title="Assigned annotator" className="flex items-center gap-0.5 w-fit text-[10px] font-medium px-1.5 py-0.5 rounded border bg-sky-50 text-sky-700 border-sky-200"><User size={9} /> {t.assigned_to}</span>
+                                            : <span className="text-gray-300">—</span>}
+                                    </td>
                                     <td className="px-3 py-1.5 text-gray-400">{t.updatedAt ? new Date(t.updatedAt).toLocaleString() : '—'}</td>
                                     <td className="px-3 py-1.5">
                                         <button onClick={e => { e.stopPropagation(); removeTask(t.id) }} title="Delete"

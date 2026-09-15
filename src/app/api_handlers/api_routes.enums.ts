@@ -201,6 +201,7 @@ export enum AntonParserAPIRoutes {
     GET_TASK = 'anton-parser/tasks/:id',
     UPDATE_TASK = 'anton-parser/tasks/:id',
     DELETE_TASK = 'anton-parser/tasks/:id',
+    GET_ASSIGNEES = 'anton-parser/assignees',
 }
 
 export enum ProfessionalsAPIRoutes {
