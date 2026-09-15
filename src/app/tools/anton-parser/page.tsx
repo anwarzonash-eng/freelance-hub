@@ -33,12 +33,18 @@ interface TaskListItem {
 
 /** Badge color per workflow status — same mapping used on the list and in the editor. */
 const STATUS_STYLE: Record<AntonTaskStatus, string> = {
+    Seeded: 'bg-indigo-50 text-indigo-700 border-indigo-300',
+    'Pre-Claim': 'bg-cyan-50 text-cyan-700 border-cyan-300',
+    Claimable: 'bg-teal-50 text-teal-700 border-teal-300',
     'Need To Submit': 'bg-gray-100 text-gray-600 border-gray-300',
+    'Assigned To Someone Else': 'bg-slate-100 text-slate-600 border-slate-300',
     Submitted: 'bg-blue-50 text-blue-700 border-blue-300',
     'Submit For QA': 'bg-amber-50 text-amber-700 border-amber-300',
     'Required Revision': 'bg-red-50 text-red-700 border-red-300',
     'Awaiting Audit': 'bg-purple-50 text-purple-700 border-purple-300',
+    Flagged: 'bg-orange-50 text-orange-700 border-orange-300',
     Approved: 'bg-green-50 text-green-700 border-green-300',
+    Rejected: 'bg-rose-100 text-rose-700 border-rose-300',
 }
 function StatusBadge({ status }: { status: AntonTaskStatus }) {
     return (

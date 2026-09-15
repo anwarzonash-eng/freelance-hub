@@ -72,6 +72,7 @@ export function RubricsViewTab({ rubrics, previousRubrics, hasPrevVersion }: {
     hasPrevVersion: boolean
 }) {
     const matched = matchPreviousRubrics(rubrics, previousRubrics)
+    const [selected, setSelected] = useState<number | null>(null)
     return (
         <div className="space-y-8">
             <section>
@@ -99,7 +100,8 @@ export function RubricsViewTab({ rubrics, previousRubrics, hasPrevVersion }: {
                                 const prev = matched[i]
                                 const isNewRow = hasPrevVersion && !prev
                                 return (
-                                    <tr key={i} className="border-t border-gray-100 align-top">
+                                    <tr key={i} onClick={() => setSelected(i)}
+                                        className={`border-t border-gray-100 align-top cursor-pointer ${selected === i ? 'bg-indigo-100' : 'hover:bg-gray-50'}`}>
                                         <td className="px-2 py-1.5 font-mono text-gray-600">{r.index}</td>
                                         <td className="px-1 py-0.5"><DiffCell value={r.verifier_type} prevValue={prev?.verifier_type} hasPrevVersion={hasPrevVersion} isNewRow={isNewRow} /></td>
                                         <td className="px-1 py-0.5"><DiffCell value={r.dependencies_note} prevValue={prev?.dependencies_note} hasPrevVersion={hasPrevVersion} isNewRow={isNewRow} /></td>
@@ -135,6 +137,7 @@ function VerificationViewTable({ side, title, rubrics, matched, hasPrevVersion }
     const yesCount = rubrics.filter(r => String(r[answerKey] ?? '').trim().toUpperCase() === 'YES').length
     const noCount = rubrics.filter(r => String(r[answerKey] ?? '').trim().toUpperCase() === 'NO').length
     const pct = (n: number) => total ? Math.round((n / total) * 100) : 0
+    const [selected, setSelected] = useState<number | null>(null)
 
     return (
         <section>
@@ -167,7 +170,8 @@ function VerificationViewTable({ side, title, rubrics, matched, hasPrevVersion }
                             const prev = matched[i]
                             const isNewRow = hasPrevVersion && !prev
                             return (
-                                <tr key={i} className="border-t border-gray-100 align-top">
+                                <tr key={i} onClick={() => setSelected(i)}
+                                    className={`border-t border-gray-100 align-top cursor-pointer ${selected === i ? 'bg-indigo-100' : 'hover:bg-gray-50'}`}>
                                     <td className="px-2 py-1.5 font-mono text-gray-400">{r.index}</td>
                                     <td className="px-2 py-1.5 text-gray-500">{(r.criteria || '').slice(0, 90)}{(r.criteria || '').length > 90 ? '…' : ''}</td>
                                     <td className="px-1 py-0.5"><DiffCell value={r[answerKey]} prevValue={prev?.[answerKey]} hasPrevVersion={hasPrevVersion} isNewRow={isNewRow} mono /></td>
@@ -206,6 +210,7 @@ function DimensionSideViewTable({ side, title, entries, matched, hasPrevVersion 
     hasPrevVersion: boolean
 }) {
     const accent = side === 'a' ? 'text-blue-600' : 'text-teal-600'
+    const [selected, setSelected] = useState<string | null>(null)
     return (
         <section>
             <div className="flex items-center justify-between mb-2">
@@ -234,7 +239,8 @@ function DimensionSideViewTable({ side, title, entries, matched, hasPrevVersion 
                             const reason = side === 'a' ? e.reason_a : e.reason_b
                             const prevReason = side === 'a' ? prev?.reason_a : prev?.reason_b
                             return (
-                                <tr key={e.key} className="border-t border-gray-100 align-top">
+                                <tr key={e.key} onClick={() => setSelected(e.key)}
+                                    className={`border-t border-gray-100 align-top cursor-pointer ${selected === e.key ? 'bg-indigo-100' : 'hover:bg-gray-50'}`}>
                                     <td className="px-2 py-1.5 font-mono text-gray-600">{e.key}</td>
                                     <td className="px-1 py-0.5"><DiffCell value={score} prevValue={prevScore} hasPrevVersion={hasPrevVersion} isNewRow={isNewRow} mono /></td>
                                     <td className="px-1 py-0.5"><DiffCell value={reason} prevValue={prevReason} hasPrevVersion={hasPrevVersion} isNewRow={isNewRow} area /></td>

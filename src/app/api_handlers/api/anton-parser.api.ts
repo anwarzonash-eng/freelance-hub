@@ -8,12 +8,18 @@ import { AntonParserAPIRoutes } from '../api_routes.enums'
 // Mirrors ANTON_TASK_STATUSES on the backend (upwork_tool_backend/src/anton_parser/anton-task.model.ts)
 // — the workflow order the status dropdown and filter both use.
 export const ANTON_TASK_STATUSES = [
+    'Seeded',
+    'Pre-Claim',
+    'Claimable',
     'Need To Submit',
+    'Assigned To Someone Else',
     'Submitted',
     'Submit For QA',
     'Required Revision',
     'Awaiting Audit',
+    'Flagged',
     'Approved',
+    'Rejected',
 ] as const
 export type AntonTaskStatus = typeof ANTON_TASK_STATUSES[number]
 export const DEFAULT_ANTON_TASK_STATUS: AntonTaskStatus = 'Need To Submit'
