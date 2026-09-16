@@ -88,8 +88,8 @@ export function RubricsViewTab({ rubrics, previousRubrics, hasPrevVersion, onOpe
                 <div className="flex items-center justify-between mb-2">
                     <h2 className="text-xs font-semibold text-gray-700">Rubrics ({rubrics.length})</h2>
                     <TableCopyBtn
-                        headers={['Index', 'Verifier Type', 'Dependencies', 'Criteria', 'Mapped Dimension', 'Source']}
-                        rows={rubrics.map(r => [r.index, r.verifier_type, r.dependencies_note, r.criteria, r.mapped_dimension, r.source])}
+                        headers={['Index', 'Verifier Type', 'Dependencies', 'Criteria', 'Mapped Dimension', 'Source', 'Answer (A)', 'Reason (A)', 'Answer (B)', 'Reason (B)']}
+                        rows={rubrics.map(r => [r.index, r.verifier_type, r.dependencies_note, r.criteria, r.mapped_dimension, r.source, r.answer_a, r.reason_a, r.answer_b, r.reason_b])}
                     />
                 </div>
                 <div className="border border-gray-200 rounded overflow-x-auto">
@@ -102,6 +102,10 @@ export function RubricsViewTab({ rubrics, previousRubrics, hasPrevVersion, onOpe
                                 <th className="px-2 py-1.5 min-w-[280px]">Criteria</th>
                                 <th className="px-2 py-1.5 w-48">Mapped Dimension</th>
                                 <th className="px-2 py-1.5 w-40">Source</th>
+                                <th className="px-2 py-1.5 w-20 text-blue-600">Answer (A)</th>
+                                <th className="px-2 py-1.5 min-w-[220px] text-blue-600">Reason (A)</th>
+                                <th className="px-2 py-1.5 w-20 text-teal-600">Answer (B)</th>
+                                <th className="px-2 py-1.5 min-w-[220px] text-teal-600">Reason (B)</th>
                                 <th className="px-2 py-1.5 w-8"></th>
                             </tr>
                         </thead>
@@ -118,13 +122,17 @@ export function RubricsViewTab({ rubrics, previousRubrics, hasPrevVersion, onOpe
                                         <td className="px-1 py-0.5"><DiffCell value={r.criteria} prevValue={prev?.criteria} hasPrevVersion={hasPrevVersion} isNewRow={isNewRow} area /></td>
                                         <td className="px-1 py-0.5"><DiffCell value={r.mapped_dimension} prevValue={prev?.mapped_dimension} hasPrevVersion={hasPrevVersion} isNewRow={isNewRow} /></td>
                                         <td className="px-1 py-0.5"><DiffCell value={r.source} prevValue={prev?.source} hasPrevVersion={hasPrevVersion} isNewRow={isNewRow} mono /></td>
+                                        <td className="px-1 py-0.5"><DiffCell value={r.answer_a} prevValue={prev?.answer_a} hasPrevVersion={hasPrevVersion} isNewRow={isNewRow} mono /></td>
+                                        <td className="px-1 py-0.5"><DiffCell value={r.reason_a} prevValue={prev?.reason_a} hasPrevVersion={hasPrevVersion} isNewRow={isNewRow} area /></td>
+                                        <td className="px-1 py-0.5"><DiffCell value={r.answer_b} prevValue={prev?.answer_b} hasPrevVersion={hasPrevVersion} isNewRow={isNewRow} mono /></td>
+                                        <td className="px-1 py-0.5"><DiffCell value={r.reason_b} prevValue={prev?.reason_b} hasPrevVersion={hasPrevVersion} isNewRow={isNewRow} area /></td>
                                         <td className="px-1 py-1 text-center">
                                             <ProofButton proof={r.source_proof} label={`Rubric ${r.index ?? i + 1} · Source`} onOpen={onOpenProof} />
                                         </td>
                                     </tr>
                                 )
                             })}
-                            {!rubrics.length && <tr><td colSpan={7} className="px-3 py-4 text-center text-gray-300 italic">No rubrics.</td></tr>}
+                            {!rubrics.length && <tr><td colSpan={11} className="px-3 py-4 text-center text-gray-300 italic">No rubrics.</td></tr>}
                         </tbody>
                     </table>
                 </div>

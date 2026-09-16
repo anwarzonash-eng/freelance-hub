@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
     ListTree, Plus, RefreshCw, X, Trash2, Upload, FileJson, Link2, ExternalLink, Pencil,
-    Eye, History, ShieldAlert, User,
+    Eye, History, ShieldAlert, User, Search,
 } from 'lucide-react'
 import {
     getAntonTasks, createAntonTask, getAntonTask, updateAntonTask, deleteAntonTask,
@@ -751,6 +751,10 @@ function RubricsTab({ rubrics, onPatch, onAdd, onRemove, onOpenProof }: {
                                 <th className="px-2 py-1.5 min-w-[280px]">Criteria</th>
                                 <th className="px-2 py-1.5 w-48">Mapped Dimension</th>
                                 <th className="px-2 py-1.5 w-40">Source</th>
+                                <th className="px-2 py-1.5 w-20 text-blue-600">Answer (A)</th>
+                                <th className="px-2 py-1.5 min-w-[220px] text-blue-600">Reason (A)</th>
+                                <th className="px-2 py-1.5 w-20 text-teal-600">Answer (B)</th>
+                                <th className="px-2 py-1.5 min-w-[220px] text-teal-600">Reason (B)</th>
                                 <th className="px-2 py-1.5 w-8"></th>
                                 <th className="px-2 py-1.5 w-8"></th>
                             </tr>
@@ -765,6 +769,10 @@ function RubricsTab({ rubrics, onPatch, onAdd, onRemove, onOpenProof }: {
                                     <td className="px-1 py-0.5"><AreaCell value={r.criteria || ''} onChange={v => onPatch(i, { criteria: v })} /></td>
                                     <td className="px-1 py-0.5"><TextCell value={r.mapped_dimension || ''} onChange={v => onPatch(i, { mapped_dimension: v })} /></td>
                                     <td className="px-1 py-0.5"><TextCell value={r.source || ''} onChange={v => onPatch(i, { source: v })} mono /></td>
+                                    <td className="px-1 py-0.5"><TextCell value={String(r.answer_a ?? '')} onChange={v => onPatch(i, { answer_a: v })} mono /></td>
+                                    <td className="px-1 py-0.5"><AreaCell value={r.reason_a || ''} onChange={v => onPatch(i, { reason_a: v })} /></td>
+                                    <td className="px-1 py-0.5"><TextCell value={String(r.answer_b ?? '')} onChange={v => onPatch(i, { answer_b: v })} mono /></td>
+                                    <td className="px-1 py-0.5"><AreaCell value={r.reason_b || ''} onChange={v => onPatch(i, { reason_b: v })} /></td>
                                     <td className="px-1 py-1 text-center">
                                         <ProofButton proof={r.source_proof} label={`Rubric ${r.index ?? i + 1} · Source`} onOpen={onOpenProof} />
                                     </td>
@@ -773,7 +781,7 @@ function RubricsTab({ rubrics, onPatch, onAdd, onRemove, onOpenProof }: {
                                     </td>
                                 </tr>
                             ))}
-                            {!rubrics.length && <tr><td colSpan={8} className="px-3 py-4 text-center text-gray-300 italic">No rubrics yet.</td></tr>}
+                            {!rubrics.length && <tr><td colSpan={12} className="px-3 py-4 text-center text-gray-300 italic">No rubrics yet.</td></tr>}
                         </tbody>
                     </table>
                 </div>
@@ -974,8 +982,12 @@ function PairwiseTab({ pairwiseEvaluation, comparativeRationale, finalQualitySco
  * Task creation — title + optional reference link only. The actual JSON (rubrics,
  * trajectories, etc.) is added afterward, inside the opened task, via its own
  * upload buttons — this modal only creates the empty task shell.
+ *
+ * `existingTitles` (already trimmed/lowercased) blocks a second task with the same
+ * name up front — the backend enforces the same rule (case-insensitively) as the
+ * source of truth, this is just the fast, inline check.
  */
-function CreateTaskModal({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
+function CreateTaskModal({ existingTitles, onClose, onCreated }: { existingTitles: string[]; onClose: () => void; onCreated: (id: string) => void }) {
     const [title, setTitle] = useState('')
     const [link, setLink] = useState('')
     const [busy, setBusy] = useState(false)
@@ -984,18 +996,25 @@ function CreateTaskModal({ onClose, onCreated }: { onClose: () => void; onCreate
 
     useEffect(() => { titleRef.current?.focus() }, [])
 
+    const trimmedTitle = title.trim()
+    const isDuplicate = !!trimmedTitle && existingTitles.includes(trimmedTitle.toLowerCase())
+
     const submit = async () => {
         const t = title.trim()
         if (!t) { setErr('Title is required.'); return }
+        if (existingTitles.includes(t.toLowerCase())) { setErr('A task with this title already exists.'); return }
         setErr('')
         setBusy(true)
         try {
             const res: any = await createAntonTask({ task_name: t, task_link: link.trim() })
             const created = res?.data ?? res
-            if (created?.id) onCreated(created.id)
-            else onClose()
+            if (created?.id) { onCreated(created.id); return }
+            // apiClient swallows a failed request into `null` rather than throwing —
+            // most likely the backend's own duplicate-title check rejected this.
+            setErr('Could not create the task — a task with this title may already exist.')
         } catch (e: any) {
             setErr(e?.message || 'Could not create the task.')
+        } finally {
             setBusy(false)
         }
     }
@@ -1015,7 +1034,8 @@ function CreateTaskModal({ onClose, onCreated }: { onClose: () => void; onCreate
                         <input ref={titleRef} value={title} onChange={e => setTitle(e.target.value)}
                             onKeyDown={e => { if (e.key === 'Enter') submit() }}
                             placeholder="e.g. UV-Vis run triage"
-                            className="text-[12.5px] border border-gray-300 rounded px-2.5 py-1.5 focus:outline-none focus:border-indigo-400" />
+                            className={`text-[12.5px] border rounded px-2.5 py-1.5 focus:outline-none ${isDuplicate ? 'border-amber-400 focus:border-amber-500' : 'border-gray-300 focus:border-indigo-400'}`} />
+                        {isDuplicate && <span className="text-[10px] text-amber-600">A task named &quot;{trimmedTitle}&quot; already exists.</span>}
                     </label>
                     <label className="flex flex-col gap-1">
                         <span className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">Link (optional)</span>
@@ -1031,7 +1051,7 @@ function CreateTaskModal({ onClose, onCreated }: { onClose: () => void; onCreate
                         className="text-[11px] border border-gray-300 rounded px-2.5 py-1.5 text-gray-600 hover:bg-gray-100 disabled:opacity-40">
                         Cancel
                     </button>
-                    <button onClick={submit} disabled={busy || !title.trim()}
+                    <button onClick={submit} disabled={busy || !trimmedTitle || isDuplicate}
                         className="flex items-center gap-1 text-[11px] bg-indigo-600 text-white rounded px-3 py-1.5 hover:bg-indigo-700 disabled:opacity-40">
                         {busy ? <RefreshCw size={12} className="animate-spin" /> : <Plus size={12} />} Create
                     </button>
@@ -1049,8 +1069,20 @@ export default function AntonParserPage() {
     const [creating, setCreating] = useState(false)
     const [assigneeFilter, setAssigneeFilter] = useState<string>('all')
     const [assignees, setAssignees] = useState<string[]>([])
+    const [titleSearch, setTitleSearch] = useState('')
 
-    const visibleTasks = statusFilter === 'all' ? tasks : tasks.filter(t => t.status === statusFilter)
+    const searchTerm = titleSearch.trim().toLowerCase()
+    const filtersActive = statusFilter !== 'all' || !!searchTerm
+    const visibleTasks = tasks
+        .filter(t => statusFilter === 'all' || t.status === statusFilter)
+        .filter(t => !searchTerm || (t.title || '').toLowerCase().includes(searchTerm))
+
+    // Existing titles (trimmed/lowercased) — the modal's fast, inline duplicate
+    // check; reads `tasks` (not `visibleTasks`) so the status/search filters don't
+    // narrow it. `tasks` itself is server-filtered by assignee though, so a title
+    // hidden behind that filter can slip past this — the backend's own check (the
+    // real source of truth) still catches it there.
+    const existingTitles = tasks.map(t => (t.title || '').trim().toLowerCase()).filter(Boolean)
 
     const load = useCallback(async () => {
         setLoading(true)
@@ -1089,12 +1121,24 @@ export default function AntonParserPage() {
                     <ListTree size={14} className="text-gray-500" />
                     <h1 className="text-sm font-semibold text-gray-800">Anton Parser</h1>
                     <span className="text-[10px] text-gray-400">
-                        {statusFilter === 'all'
+                        {!filtersActive
                             ? `${tasks.length} task${tasks.length !== 1 ? 's' : ''}`
                             : `${visibleTasks.length} of ${tasks.length} task${tasks.length !== 1 ? 's' : ''}`}
                     </span>
                 </div>
                 <div className="flex items-center gap-2">
+                    <span className="relative">
+                        <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                        <input value={titleSearch} onChange={e => setTitleSearch(e.target.value)}
+                            placeholder="Search by title…" title="Search tasks by title"
+                            className="text-xs border border-gray-300 rounded pl-6 pr-6 py-1 text-gray-700 bg-white focus:outline-none focus:border-indigo-400 w-48" />
+                        {titleSearch && (
+                            <button onClick={() => setTitleSearch('')} title="Clear search"
+                                className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-600">
+                                <X size={12} />
+                            </button>
+                        )}
+                    </span>
                     <select value={assigneeFilter} onChange={e => setAssigneeFilter(e.target.value)}
                         title="Filter by assigned annotator"
                         className="text-xs border border-gray-300 rounded px-2 py-1 text-gray-600 bg-white hover:bg-gray-50 focus:outline-none focus:border-indigo-400">
@@ -1128,8 +1172,9 @@ export default function AntonParserPage() {
                         No tasks yet. Click <span className="font-medium text-indigo-600">Create</span> to add one, then upload its files once it's open.
                     </div>
                 ) : visibleTasks.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center gap-2 py-12 text-gray-400 text-xs">
-                        No tasks with status <span className="font-medium text-gray-600">{statusFilter}</span>.
+                    <div className="flex flex-col items-center justify-center gap-2 py-12 text-gray-400 text-xs text-center">
+                        {searchTerm && <span>No tasks match &quot;<span className="font-medium text-gray-600">{titleSearch.trim()}</span>&quot;{statusFilter !== 'all' && <> with status <span className="font-medium text-gray-600">{statusFilter}</span></>}.</span>}
+                        {!searchTerm && statusFilter !== 'all' && <span>No tasks with status <span className="font-medium text-gray-600">{statusFilter}</span>.</span>}
                     </div>
                 ) : (
                     <table className="w-full text-xs">
@@ -1186,7 +1231,7 @@ export default function AntonParserPage() {
                 <TaskEditor taskId={editingId} onClose={() => { setEditingId(null); load() }} onSaved={load} />
             )}
             {creating && (
-                <CreateTaskModal onClose={() => setCreating(false)} onCreated={onTaskCreated} />
+                <CreateTaskModal existingTitles={existingTitles} onClose={() => setCreating(false)} onCreated={onTaskCreated} />
             )}
         </div>
     )

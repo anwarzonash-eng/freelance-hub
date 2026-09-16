@@ -50,7 +50,7 @@ function ProofEntryCard({ p }: { p: ProofEntry }) {
                 <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide text-indigo-600">
                     <KindIcon kind={p.kind} /> {p.kind || 'note'}
                 </span>
-                {p.where && <span className="text-[10px] text-gray-400 truncate" title={p.where}>{p.where}</span>}
+                {p.where && <span className="flex-1 min-w-0 text-[10px] text-gray-400 truncate" title={p.where}>{p.where}</span>}
                 {p.visible_in_studio && (
                     <span className="ml-auto shrink-0 text-[9px] font-medium px-1.5 py-0.5 rounded bg-sky-50 text-sky-700 border border-sky-200">
                         Visible in Studio
@@ -60,7 +60,11 @@ function ProofEntryCard({ p }: { p: ProofEntry }) {
             <div className="px-2.5 py-2 space-y-1.5 text-[11px]">
                 {p.principle && <div className="text-gray-800 font-medium leading-relaxed">{p.principle}</div>}
                 {p.find && (
-                    <div className="font-mono bg-gray-50 border border-gray-100 rounded px-2 py-1.5 text-gray-800 whitespace-pre-wrap break-words leading-relaxed">
+                    // Bleeds to the card's outer edges (-mx-2.5) then pads back in by the
+                    // same amount (px-2.5), so this text starts at exactly the same left
+                    // position as the plain lines above/below it instead of sitting a few
+                    // pixels further in from its own box padding.
+                    <div className="font-mono bg-gray-50 border-y border-gray-100 -mx-2.5 px-2.5 py-1.5 text-gray-800 whitespace-pre-wrap break-words leading-relaxed">
                         {p.find}
                     </div>
                 )}
