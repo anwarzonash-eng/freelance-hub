@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-    ListTree, Plus, RefreshCw, X, Trash2, Upload, FileJson, Link2, ExternalLink, Pencil,
+    ListTree, Plus, RefreshCw, X, Trash2, Upload, FileJson, Link2, Pencil, Check,
     Eye, History, ShieldAlert, User, Search,
 } from 'lucide-react'
 import {
@@ -151,22 +151,28 @@ function AreaCell({ value, onChange }: { value: string; onChange: (v: string) =>
 /**
  * Optional reference link shown in the task popup's header — a URL the
  * annotator attaches to the task (the platform task page, a doc, a PR…).
- * No value: a small "Add link" button. A value: the link itself, clickable,
- * with edit/remove affordances. Saved through the same `onChange` as every
+ * Icon-only: a copy icon (only when a link is set) and an edit icon — the
+ * full URL is never shown inline, only in the input that appears on edit
+ * and in each icon's tooltip. Saved through the same `onChange` as every
  * other field on `data`, so it rides the editor's existing autosave.
  */
 function TaskLinkField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
     const [editing, setEditing] = useState(false)
     const [draft, setDraft] = useState(value || '')
+    const [copied, setCopied] = useState(false)
     const inputRef = useRef<HTMLInputElement>(null)
 
+    useEffect(() => { if (!editing) setDraft(value || '') }, [value, editing])
     useEffect(() => { if (editing) inputRef.current?.focus() }, [editing])
 
-    const commit = () => {
-        onChange(draft.trim())
-        setEditing(false)
-    }
+    const commit = () => { onChange(draft.trim()); setEditing(false) }
     const cancel = () => { setDraft(value || ''); setEditing(false) }
+    const copyLink = () => {
+        if (!value) return
+        try { navigator.clipboard?.writeText(value) } catch { /* ignore */ }
+        setCopied(true)
+        setTimeout(() => setCopied(false), 1200)
+    }
 
     if (editing) {
         return (
@@ -175,34 +181,22 @@ function TaskLinkField({ value, onChange }: { value: string; onChange: (v: strin
                 <input ref={inputRef} value={draft} onChange={e => setDraft(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') cancel() }}
                     onBlur={commit} placeholder="https://…" type="url"
-                    className="text-[11px] border border-indigo-300 rounded px-1.5 py-0.5 w-56 outline-none focus:border-indigo-500" />
+                    className="text-[11px] border border-indigo-300 rounded px-1.5 py-0.5 w-48 outline-none focus:border-indigo-500" />
             </span>
         )
     }
 
-    if (!value) {
-        return (
-            <button onClick={() => setEditing(true)} title="Attach a reference link to this task"
-                className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-indigo-600 shrink-0">
-                <Link2 size={12} /> Add link
-            </button>
-        )
-    }
-
     return (
-        <span className="flex items-center gap-1 min-w-0 shrink-0">
-            <Link2 size={12} className="text-indigo-400 shrink-0" />
-            <a href={value} target="_blank" rel="noopener noreferrer" title={value}
-                className="text-[11px] text-indigo-600 hover:underline truncate max-w-[220px]">
-                {value}
-            </a>
-            <a href={value} target="_blank" rel="noopener noreferrer" title="Open link"
-                className="text-gray-400 hover:text-indigo-600"><ExternalLink size={11} /></a>
-            <button onClick={() => setEditing(true)} title="Edit link" className="text-gray-400 hover:text-indigo-600">
-                <Pencil size={11} />
-            </button>
-            <button onClick={() => onChange('')} title="Remove link" className="text-gray-400 hover:text-red-600">
-                <X size={12} />
+        <span className="flex items-center gap-0.5 shrink-0">
+            {value && (
+                <button onClick={copyLink} title={copied ? 'Copied' : value}
+                    className="p-0.5 rounded text-gray-400 hover:text-indigo-600 hover:bg-indigo-50">
+                    {copied ? <Check size={12} className="text-green-500" /> : <Link2 size={12} />}
+                </button>
+            )}
+            <button onClick={() => setEditing(true)} title={value ? 'Edit link' : 'Add a reference link'}
+                className="p-0.5 rounded text-gray-400 hover:text-indigo-600 hover:bg-indigo-50">
+                <Pencil size={12} />
             </button>
         </span>
     )
@@ -477,7 +471,9 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
     }
 
     const taskName = typeof data.task_name === 'string' ? data.task_name : 'Untitled task'
-    const taskType = data?.seeded_value_checks?.field_task_type_assessed || '—'
+    // Newer exports (annotation_with_proof.json and later) carry a flat `task_type`;
+    // older ones only have it nested under seeded_value_checks — read both.
+    const taskType = data?.task_type || data?.seeded_value_checks?.field_task_type_assessed || '—'
     const modelA = data?.model_a || ''
     const modelB = data?.model_b || ''
 
@@ -518,113 +514,115 @@ function TaskEditor({ taskId, onClose, onSaved }: { taskId: string; onClose: () 
             {/* Left — the editor itself. Shrinks to make room for the Verify panel
                 (a real split, not an overlay) whenever that's open. */}
             <div className="flex-1 min-w-0 flex flex-col">
-            {/* Header */}
-            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-200 bg-gray-50 shrink-0 flex-wrap">
-                <ListTree size={15} className="text-indigo-500 shrink-0" />
+            {/* Header — task info, tabs, and edit/view/version/verify controls all in
+                one compact, wrapping bar. */}
+            <div className="flex items-center gap-1 px-3 py-1.5 border-b border-gray-200 bg-gray-50 shrink-0 flex-wrap">
                 <TaskNameField value={taskName} onChange={setTaskName} />
                 <span title="Task type — read-only, derived from the JSON"
                     className="text-[10px] font-semibold px-1.5 py-0.5 rounded border bg-indigo-50 text-indigo-700 border-indigo-300 shrink-0">
                     {taskType}
                 </span>
                 <select value={status} disabled={statusBusy} onChange={e => changeStatus(e.target.value as AntonTaskStatus)}
-                    title="Workflow status"
-                    className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border shrink-0 outline-none disabled:opacity-50 ${STATUS_STYLE[status] || STATUS_STYLE['Need To Submit']}`}>
+                    title={`Workflow status: ${status}`}
+                    className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border shrink-0 outline-none disabled:opacity-50 max-w-[150px] truncate ${STATUS_STYLE[status] || STATUS_STYLE['Need To Submit']}`}>
                     {ANTON_TASK_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
                 {statusBusy && <RefreshCw size={11} className="animate-spin text-gray-400 shrink-0" />}
                 {admin ? (
                     <select value={assignedTo || ''} disabled={assigneeBusy} onChange={e => changeAssignee(e.target.value)}
-                        title="Assigned annotator"
-                        className="text-[10px] font-semibold px-1.5 py-0.5 rounded border shrink-0 outline-none disabled:opacity-50 bg-sky-50 text-sky-700 border-sky-300">
+                        title={`Assigned: ${assignedTo || 'Unassigned'}`}
+                        className="text-[10px] font-semibold px-1.5 py-0.5 rounded border shrink-0 outline-none disabled:opacity-50 bg-sky-50 text-sky-700 border-sky-300 max-w-[110px] truncate">
                         <option value="">Unassigned</option>
                         {assignedTo && !allUsers.includes(assignedTo) && <option value={assignedTo}>{assignedTo}</option>}
                         {allUsers.map(u => <option key={u} value={u}>{u}</option>)}
                     </select>
                 ) : assignedTo && (
                     <span title="Assigned annotator"
-                        className="flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded border shrink-0 bg-sky-50 text-sky-700 border-sky-300">
-                        <User size={10} /> {assignedTo}
+                        className="flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded border shrink-0 bg-sky-50 text-sky-700 border-sky-300 max-w-[110px]">
+                        <User size={10} className="shrink-0" /> <span className="truncate">{assignedTo}</span>
                     </span>
                 )}
                 {assigneeBusy && <RefreshCw size={11} className="animate-spin text-gray-400 shrink-0" />}
                 {(modelA || modelB) && (
                     <span className="text-[10px] text-gray-400 shrink-0">
-                        {modelA && <>A = <span className="text-blue-600 font-medium">{modelA}</span></>}
+                        {modelA && <span className="text-blue-600 font-medium">{modelA}</span>}
                         {modelA && modelB && ' · '}
-                        {modelB && <>B = <span className="text-teal-600 font-medium">{modelB}</span></>}
+                        {modelB && <span className="text-teal-600 font-medium">{modelB}</span>}
                     </span>
                 )}
                 <TaskLinkField value={typeof data.task_link === 'string' ? data.task_link : ''} onChange={setTaskLink} />
+
+                <span className="w-px h-4 bg-gray-200 mx-0.5 shrink-0" />
+
+                {/* Tabs */}
+                {([['rubrics', 'Rubrics'], ['dimensions', 'Dimensions'], ['pairwise', 'Pairwise'], ['task', 'Task'], ['solution', 'Solution']] as [Tab, string][]).map(([key, label]) => (
+                    <button key={key} onClick={() => openTab(key)}
+                        className={`text-[11px] font-medium px-2 py-1 rounded shrink-0 ${tab === key ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}>
+                        {label}
+                        {key === 'rubrics' && (mode === 'view' ? viewRubrics.length : rubrics.length) > 0 && (
+                            <span className={`ml-1 ${tab === key ? 'text-indigo-200' : 'text-gray-400'}`}>
+                                {mode === 'view' ? viewRubrics.length : rubrics.length}
+                            </span>
+                        )}
+                    </button>
+                ))}
+                {filesBusy && <span className="text-[10px] text-gray-400 shrink-0">Saving files…</span>}
+
+                {/* Edit/View + version + Verify — Rubrics/Dimensions/Pairwise only;
+                    Task/Solution have their own separate, unversioned uploads. */}
+                {(['rubrics', 'dimensions', 'pairwise'] as Tab[]).includes(tab) && dataVersions.length > 0 && (
+                    <>
+                        <span className="w-px h-4 bg-gray-200 mx-0.5 shrink-0" />
+                        <div className="flex items-center gap-0.5 bg-gray-200/60 rounded-md p-0.5 shrink-0">
+                            <button onClick={() => setMode('edit')} title="Edit"
+                                className={`p-1 rounded ${mode === 'edit' ? 'bg-white shadow-sm text-indigo-700' : 'text-gray-500 hover:text-gray-700'}`}>
+                                <Pencil size={12} />
+                            </button>
+                            <button onClick={() => setMode('view')} title="View"
+                                className={`p-1 rounded ${mode === 'view' ? 'bg-white shadow-sm text-indigo-700' : 'text-gray-500 hover:text-gray-700'}`}>
+                                <Eye size={12} />
+                            </button>
+                        </div>
+                        {mode === 'view' && (
+                            <>
+                                <History size={12} className="text-gray-400 shrink-0" />
+                                <select value={selectedVersionIdx} onChange={e => setSelectedVersionIdx(Number(e.target.value))}
+                                    title="Switch between uploaded versions"
+                                    className="text-[11px] border border-gray-300 rounded px-1.5 py-0.5 bg-white focus:outline-none focus:border-indigo-400 max-w-[120px] truncate shrink-0">
+                                    {dataVersions.map((v, i) => (
+                                        <option key={v.version} value={i}>
+                                            Version {v.version}{i === dataVersions.length - 1 ? ' (latest)' : ''}
+                                        </option>
+                                    ))}
+                                </select>
+                                <button onClick={toggleVerify}
+                                    title="Verify — compare a Mercor Studio export against this version of annotation.json"
+                                    className={`p-1 rounded shrink-0 ${showVerify
+                                        ? 'bg-indigo-600 text-white'
+                                        : 'border border-indigo-300 text-indigo-700 hover:bg-indigo-50'}`}>
+                                    <ShieldAlert size={12} />
+                                </button>
+                            </>
+                        )}
+                    </>
+                )}
+
                 <div className="flex-1" />
-                <span className="text-[10px] text-gray-400">
+                <span className="text-[10px] text-gray-400 shrink-0">
                     {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? 'Saved' : ''}
                 </span>
                 <input ref={fileRef} type="file" accept="application/json,.json" hidden
                     onChange={e => { const f = e.target.files?.[0]; if (f) doReupload(f) }} />
                 <button onClick={() => fileRef.current?.click()} disabled={reuploadBusy}
                     title={isEmptyTask ? 'Upload the task JSON' : 'Upload a new JSON file — replaces everything in this task'}
-                    className={`flex items-center gap-1 text-[11px] rounded px-2.5 py-1 disabled:opacity-40 ${isEmptyTask
+                    className={`p-1.5 rounded shrink-0 disabled:opacity-40 ${isEmptyTask
                         ? 'bg-indigo-600 text-white hover:bg-indigo-700'
                         : 'border border-amber-300 text-amber-700 hover:bg-amber-50'}`}>
-                    {reuploadBusy ? <RefreshCw size={12} className="animate-spin" /> : <Upload size={12} />} {isEmptyTask ? 'Upload JSON' : 'Re-upload JSON'}
+                    {reuploadBusy ? <RefreshCw size={13} className="animate-spin" /> : <Upload size={13} />}
                 </button>
-                <button onClick={onClose} className="text-gray-400 hover:text-gray-700 ml-1"><X size={16} /></button>
+                <button onClick={onClose} className="text-gray-400 hover:text-gray-700 shrink-0"><X size={16} /></button>
             </div>
             {reuploadErr && <div className="px-4 py-1.5 bg-red-50 text-red-700 text-[11px] border-b border-red-200">{reuploadErr}</div>}
-
-            {/* Tabs */}
-            <div className="flex items-center gap-1 px-4 py-1.5 border-b border-gray-200 bg-white shrink-0">
-                {([['rubrics', 'Rubrics'], ['dimensions', 'Dimensions'], ['pairwise', 'Pairwise'], ['task', 'Task'], ['solution', 'Solution']] as [Tab, string][]).map(([key, label]) => (
-                    <button key={key} onClick={() => openTab(key)}
-                        className={`text-[12px] font-medium px-3 py-1.5 rounded ${tab === key ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}>
-                        {label}
-                    </button>
-                ))}
-                {filesBusy && <span className="text-[10px] text-gray-400 ml-2">Saving files…</span>}
-            </div>
-
-            {/* Edit/View + version — Rubrics/Dimensions/Pairwise only; Task/Solution
-                have their own separate, unversioned uploads. */}
-            {(['rubrics', 'dimensions', 'pairwise'] as Tab[]).includes(tab) && dataVersions.length > 0 && (
-                <div className="flex items-center gap-2 px-4 py-1.5 border-b border-gray-200 bg-gray-50 shrink-0 flex-wrap">
-                    <div className="flex items-center gap-0.5 bg-gray-200/60 rounded-md p-0.5">
-                        <button onClick={() => setMode('edit')}
-                            className={`flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded ${mode === 'edit' ? 'bg-white shadow-sm text-indigo-700' : 'text-gray-500 hover:text-gray-700'}`}>
-                            <Pencil size={11} /> Edit
-                        </button>
-                        <button onClick={() => setMode('view')}
-                            className={`flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded ${mode === 'view' ? 'bg-white shadow-sm text-indigo-700' : 'text-gray-500 hover:text-gray-700'}`}>
-                            <Eye size={11} /> View
-                        </button>
-                    </div>
-                    {mode === 'view' && (
-                        <>
-                            <History size={12} className="text-gray-400 shrink-0" />
-                            <select value={selectedVersionIdx} onChange={e => setSelectedVersionIdx(Number(e.target.value))}
-                                title="Switch between uploaded versions"
-                                className="text-[11px] border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:border-indigo-400">
-                                {dataVersions.map((v, i) => (
-                                    <option key={v.version} value={i}>
-                                        Version {v.version}{i === dataVersions.length - 1 ? ' (latest)' : ''}
-                                    </option>
-                                ))}
-                            </select>
-                            <span className="text-[10px] text-gray-400">
-                                {selectedVersionIdx > 0
-                                    ? <>changes highlighted vs. version {dataVersions[selectedVersionIdx - 1].version}</>
-                                    : 'first version — nothing to compare yet'}
-                            </span>
-                            <button onClick={toggleVerify}
-                                title="Compare a Mercor Studio export against this version of annotation.json"
-                                className={`ml-auto flex items-center gap-1 text-[11px] font-semibold rounded px-2.5 py-1 ${showVerify
-                                    ? 'bg-indigo-600 text-white'
-                                    : 'border border-indigo-300 text-indigo-700 hover:bg-indigo-50'}`}>
-                                <ShieldAlert size={12} /> Verify
-                            </button>
-                        </>
-                    )}
-                </div>
-            )}
 
             {filesNote && (
                 <div className="px-4 py-1.5 bg-indigo-50 text-indigo-800 text-[11px] border-b border-indigo-100 flex items-start gap-2">
@@ -736,7 +734,7 @@ function RubricsTab({ rubrics, onPatch, onAdd, onRemove, onOpenProof }: {
             {/* Table 1 — Rubrics (full CRUD) */}
             <section>
                 <div className="flex items-center justify-between mb-2">
-                    <h2 className="text-xs font-semibold text-gray-700">Rubrics ({rubrics.length})</h2>
+                    <h2 className="text-xs font-semibold text-gray-700">Rubrics</h2>
                     <button onClick={onAdd} className="flex items-center gap-1 text-[11px] bg-indigo-600 text-white rounded px-2 py-1 hover:bg-indigo-700">
                         <Plus size={12} /> Add rubric
                     </button>

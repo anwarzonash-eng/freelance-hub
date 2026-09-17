@@ -117,14 +117,25 @@ export function renderMarkdown(md: string): string {
  * splits on tags first and only searches the text segments between them, so a query
  * that happens to match inside an href or a class name is left alone. Used for search
  * over an already-rendered markdown document, where the text isn't one plain string.
+ *
+ * Each match gets `id="{idPrefix}-{n}"` (0-based, in document order) so a caller can
+ * jump to a specific one with `getElementById` — the match at `currentIndex` (if any)
+ * gets a distinct "this is the one you're on" style instead of the plain highlight.
  */
-export function highlightHtml(html: string, query: string): string {
+export function highlightHtml(html: string, query: string, opts?: { idPrefix?: string; currentIndex?: number }): string {
     const q = query.trim()
     if (!q) return html
     let re: RegExp
     try { re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi') } catch { return html }
+    const idPrefix = opts?.idPrefix ?? 'md-match'
+    const currentIndex = opts?.currentIndex ?? -1
+    let i = 0
     return html
         .split(/(<[^>]+>)/g)
-        .map(part => part.startsWith('<') ? part : part.replace(re, m => `<mark class="bg-yellow-200 rounded-[2px] px-0.5">${m}</mark>`))
+        .map(part => part.startsWith('<') ? part : part.replace(re, m => {
+            const idx = i++
+            const cls = idx === currentIndex ? 'bg-orange-400 rounded-[2px] px-0.5' : 'bg-yellow-200 rounded-[2px] px-0.5'
+            return `<mark id="${idPrefix}-${idx}" class="${cls}">${m}</mark>`
+        }))
         .join('')
 }

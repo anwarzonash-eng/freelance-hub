@@ -20,7 +20,7 @@
  * ------------------------------------------------------------------ */
 
 import { ReactNode, useEffect, useMemo, useState } from 'react'
-import { ChevronDown, Copy, Check, Search, Pencil, FileJson } from 'lucide-react'
+import { ChevronDown, ChevronUp, Copy, Check, Search, Pencil, FileJson } from 'lucide-react'
 import DiffView from './DiffView'
 import UploadFilesButton from './UploadFilesButton'
 import { renderMarkdown, highlightHtml } from './markdown'
@@ -241,7 +241,8 @@ function TrajectoryView({ side, data, patch }: { side: Side; data: any; patch: s
     const steps = useMemo(() => buildSteps(data?.trajectory_messages || []), [data])
     const [query, setQuery] = useState('')
     const [collapsedSteps, setCollapsedSteps] = useState<Record<number, boolean>>({})
-    const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({})
+    // PROMPT / FINAL ANSWER / DIFF / LOGS all start collapsed.
+    const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({ prompt: true, final: true, diff: true, logs: true })
 
     const toggleSection = (id: string) => setCollapsedSections(s => ({ ...s, [id]: !s[id] }))
 
@@ -256,31 +257,8 @@ function TrajectoryView({ side, data, patch }: { side: Side; data: any; patch: s
     const promptText = useMemo(() => getPromptText(data), [data])
     const finalText = useMemo(() => getFinalAnswerText(data), [data])
 
-    const status = data?.trajectory_status || 'unknown'
-    const messageCount = (data?.trajectory_messages || []).length
-
     return (
         <div>
-            {/* Header — task, status and run metadata */}
-            <div className="bg-white border border-[#E5E7EB] rounded-[10px] px-4 py-3 mb-3.5">
-                <div className="flex items-center gap-2.5 flex-wrap">
-                    <span className="text-[16px] font-bold text-[#1F2430]">
-                        {data?.task_name || data?.task_id || 'Untitled task'}
-                    </span>
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold capitalize ${status === 'completed' ? 'bg-[#DCFCE7] text-[#16A34A]' : 'bg-[#FEF3C7] text-[#B45309]'}`}>
-                        {status}
-                    </span>
-                    <span className="text-[11px] text-[#6B7280]">({SIDE_LABEL[side]})</span>
-                </div>
-                <div className="mt-2 flex gap-[18px] flex-wrap text-[12.5px] text-[#6B7280]">
-                    <span><b className="text-[#1F2430] font-semibold">{data?.agent_name || data?.agent_id || '-'}</b> agent</span>
-                    <span>world: <b className="text-[#1F2430] font-semibold">{data?.world_name || data?.world_id || '-'}</b></span>
-                    <span>trajectory: <b className="text-[#1F2430] font-semibold">{data?.trajectory_id || '-'}</b></span>
-                    <span>messages: <b className="text-[#1F2430] font-semibold">{messageCount}</b></span>
-                    <span>created: <b className="text-[#1F2430] font-semibold">{data?.created_at ? new Date(data.created_at).toLocaleString() : '-'}</b></span>
-                </div>
-            </div>
-
             {/* PROMPT */}
             <Section title="PROMPT" copyValue={promptText}
                 collapsed={!!collapsedSections.prompt} onToggle={() => toggleSection('prompt')}>
@@ -360,6 +338,9 @@ function MarkdownView({ side, md, mdFull }: { side: Side; md: string | null; mdF
     const [raw, setRaw] = useState(false)
     const [full, setFull] = useState(false)
     const [query, setQuery] = useState('')
+    // Which match (0-based, in document order) Enter has landed on — -1 until the
+    // first Enter, so typing alone highlights everything without jumping yet.
+    const [currentIndex, setCurrentIndex] = useState(-1)
 
     // The "full" variant only exists once model_?_log_full.md has actually been
     // uploaded; fall back to the cut one either way so this never renders nothing.
@@ -369,10 +350,31 @@ function MarkdownView({ side, md, mdFull }: { side: Side; md: string | null; mdF
 
     const q = query.trim()
     const matchCount = useMemo(() => countMatches(activeMd, q), [activeMd, q])
+    const idPrefix = `md-match-${side}`
     const html = useMemo(() => {
         const rendered = renderMarkdown(activeMd)
-        return q ? highlightHtml(rendered, q) : rendered
-    }, [activeMd, q])
+        return q ? highlightHtml(rendered, q, { idPrefix, currentIndex }) : rendered
+    }, [activeMd, q, currentIndex, idPrefix])
+
+    // A new search term (or switching Cut/Full) starts unselected.
+    useEffect(() => { setCurrentIndex(-1) }, [q, activeMd])
+
+    useEffect(() => {
+        if (currentIndex < 0) return
+        const t = setTimeout(() => document.getElementById(`${idPrefix}-${currentIndex}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 30)
+        return () => clearTimeout(t)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentIndex])
+
+    const goToMatch = (idx: number) => {
+        if (!matchCount) return
+        setCurrentIndex(((idx % matchCount) + matchCount) % matchCount)
+    }
+    const onSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key !== 'Enter') return
+        e.preventDefault()
+        goToMatch(currentIndex + (e.shiftKey ? -1 : 1))
+    }
 
     if (!md) {
         return (
@@ -415,10 +417,23 @@ function MarkdownView({ side, md, mdFull }: { side: Side; md: string | null; mdF
             <div className="px-3.5 py-2 border-b border-[#E5E7EB] flex items-center gap-2.5">
                 <div className="relative flex-1 min-w-[200px] max-w-[380px]">
                     <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#6B7280]" />
-                    <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search this transcript..."
+                    <input value={query} onChange={e => setQuery(e.target.value)} onKeyDown={onSearchKeyDown}
+                        placeholder="Search this transcript, Enter to jump..."
                         className="w-full pl-[30px] pr-2.5 py-1.5 border border-[#E5E7EB] rounded-md text-[12.5px] outline-none focus:border-[#6C4CE0]" />
                 </div>
-                {q && <span className="text-[11.5px] text-[#6B7280]">{matchCount} match{matchCount === 1 ? '' : 'es'}</span>}
+                {q && (
+                    <span className="flex items-center gap-0.5 text-[11.5px] text-[#6B7280]">
+                        {matchCount ? `${currentIndex >= 0 ? currentIndex + 1 : 0}/${matchCount}` : 'No matches'}
+                        {matchCount > 0 && (
+                            <>
+                                <button onClick={() => goToMatch(currentIndex - 1)} title="Previous match (Shift+Enter)"
+                                    className="p-0.5 rounded hover:text-[#6C4CE0] hover:bg-gray-100"><ChevronUp size={12} /></button>
+                                <button onClick={() => goToMatch(currentIndex + 1)} title="Next match (Enter)"
+                                    className="p-0.5 rounded hover:text-[#6C4CE0] hover:bg-gray-100"><ChevronDown size={12} /></button>
+                            </>
+                        )}
+                    </span>
+                )}
             </div>
             <div className="p-4 max-h-[75vh] overflow-y-auto">
                 {raw
@@ -461,46 +476,74 @@ export default function TaskTab({ files, onFiles, busy }: {
     }, [files.trajectory_a, files.trajectory_b, files.md_a, files.md_b])
 
     const anyLoaded = SIDES.some(s => logs[s] || mds[s])
+    // Metadata for the header below — from the active side's parsed JSON when there
+    // is one; falls back to '-' placeholders when only markdown was uploaded (or
+    // nothing yet), same as TrajectoryView's own fields always have.
+    const data = logs[active]
+    const status = data?.trajectory_status || 'unknown'
+    const messageCount = (data?.trajectory_messages || []).length
 
     return (
         <div className="bg-[#FAFAFB] -m-4 p-4 min-h-full">
-            {/* Top bar — brand, crumb and the one picker */}
-            <div className="bg-white border border-[#E5E7EB] rounded-[10px] px-4 py-2.5 mb-3.5 flex items-center gap-2.5 flex-wrap">
-                <span className="text-[14px] font-bold text-[#4F36B0]">● Trajectory Viewer</span>
-                <span className="text-[13px] text-[#6B7280]">
-                    {anyLoaded ? <b className="text-[#1F2430] font-semibold">{SIDE_LABEL[active]}</b> : 'No file loaded'}
-                </span>
-                <div className="ml-auto">
-                    <UploadFilesButton onFiles={onFiles} busy={busy}
-                        label={anyLoaded ? 'Upload / replace files' : 'Upload files'} />
-                </div>
-            </div>
+            {/* One header — title/status, model switch, view toggle and the upload
+                picker, plus the run metadata row underneath. */}
+            <div className="bg-white border border-[#E5E7EB] rounded-[10px] px-4 py-3 mb-3.5">
+                <div className="flex items-center gap-2.5 flex-wrap">
+                    {anyLoaded ? (
+                        <>
+                            <span className="text-[15px] font-bold text-[#1F2430]">
+                                {data?.task_name || data?.task_id || 'Untitled task'}
+                            </span>
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold capitalize ${status === 'completed' ? 'bg-[#DCFCE7] text-[#16A34A]' : 'bg-[#FEF3C7] text-[#B45309]'}`}>
+                                {status}
+                            </span>
+                        </>
+                    ) : (
+                        <span className="text-[13px] text-[#6B7280]">No file loaded</span>
+                    )}
 
-            {/* Model A / Model B, then the view for that model */}
-            {anyLoaded && (
-                <div className="flex items-center gap-[22px] px-3.5 mb-3.5 border border-[#E5E7EB] bg-white rounded-[10px]">
-                    {SIDES.map(s => (
-                        <div key={s} onClick={() => setActive(s)}
-                            className={`px-0.5 py-3 text-[13.5px] font-semibold cursor-pointer border-b-2 ${active === s
-                                ? 'text-[#6C4CE0] border-[#6C4CE0]'
-                                : 'text-[#6B7280] border-transparent hover:text-[#4F36B0]'}`}>
-                            {SIDE_LABEL[s]}
-                            {!logs[s] && !mds[s] && <span className="ml-1 text-[10px] font-normal text-gray-300">not loaded</span>}
-                        </div>
-                    ))}
-                    <div className="ml-auto flex items-center gap-1 py-2">
-                        {([['parsed', 'Parsed logs'], ['markdown', 'Markdown']] as [ViewMode, string][]).map(([key, label]) => (
-                            <button key={key} onClick={() => setView(key)}
-                                className={`text-[11.5px] font-semibold px-2.5 py-1 rounded ${view === key
-                                    ? 'bg-[#6C4CE0] text-white'
-                                    : 'text-[#6B7280] hover:bg-gray-100'}`}>
-                                {label}
-                                {key === 'markdown' && !mds[active] && <span className="ml-1 font-normal opacity-60">—</span>}
-                            </button>
-                        ))}
+                    <div className="ml-auto flex items-center gap-1.5 flex-wrap">
+                        {anyLoaded && (
+                            <>
+                                <div className="flex items-center gap-0.5 bg-gray-100 rounded-md p-0.5">
+                                    {SIDES.map(s => (
+                                        <button key={s} onClick={() => setActive(s)}
+                                            className={`text-[11.5px] font-semibold px-2.5 py-1 rounded ${active === s
+                                                ? 'bg-white shadow-sm text-[#6C4CE0]'
+                                                : 'text-[#6B7280] hover:text-[#4B5563]'}`}>
+                                            {SIDE_LABEL[s]}
+                                            {!logs[s] && !mds[s] && <span className="ml-1 text-[9px] font-normal text-gray-300">—</span>}
+                                        </button>
+                                    ))}
+                                </div>
+                                <div className="flex items-center gap-0.5 bg-gray-100 rounded-md p-0.5">
+                                    {([['parsed', 'Parsed logs'], ['markdown', 'Markdown']] as [ViewMode, string][]).map(([key, label]) => (
+                                        <button key={key} onClick={() => setView(key)}
+                                            className={`text-[11.5px] font-semibold px-2.5 py-1 rounded ${view === key
+                                                ? 'bg-white shadow-sm text-[#6C4CE0]'
+                                                : 'text-[#6B7280] hover:text-[#4B5563]'}`}>
+                                            {label}
+                                            {key === 'markdown' && !mds[active] && <span className="ml-1 font-normal opacity-50">—</span>}
+                                        </button>
+                                    ))}
+                                </div>
+                            </>
+                        )}
+                        <UploadFilesButton onFiles={onFiles} busy={busy}
+                            label={anyLoaded ? 'Upload / replace files' : 'Upload files'} />
                     </div>
                 </div>
-            )}
+
+                {anyLoaded && (
+                    <div className="mt-2 flex gap-[18px] flex-wrap text-[12.5px] text-[#6B7280]">
+                        <span><b className="text-[#1F2430] font-semibold">{data?.agent_name || data?.agent_id || '-'}</b> agent</span>
+                        <span>world: <b className="text-[#1F2430] font-semibold">{data?.world_name || data?.world_id || '-'}</b></span>
+                        <span>trajectory: <b className="text-[#1F2430] font-semibold">{data?.trajectory_id || '-'}</b></span>
+                        <span>messages: <b className="text-[#1F2430] font-semibold">{messageCount}</b></span>
+                        <span>created: <b className="text-[#1F2430] font-semibold">{data?.created_at ? new Date(data.created_at).toLocaleString() : '-'}</b></span>
+                    </div>
+                )}
+            </div>
 
             {!anyLoaded ? (
                 <div className="text-center py-[90px] text-[#6B7280]">

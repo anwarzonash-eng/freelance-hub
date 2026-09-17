@@ -64,30 +64,21 @@ export default function SolutionTab({ files, onFiles, busy }: {
                 ))}
             </div>
 
-            {/* Heading — mirrors the annotation tool's solution section */}
-            <div className="flex items-start gap-2 mb-1 flex-wrap">
-                <FileDiff size={15} className="text-[#0969DA] mt-0.5 shrink-0" />
-                <div>
-                    <div className="text-[14px] font-semibold text-gray-900">
-                        Agent solution {upper} · Trajectory {upper}
-                    </div>
-                    <div className="text-[12px] text-gray-500">The patch this rollout produced.</div>
-                </div>
-                <div className="ml-auto flex items-center gap-2">
-                    {patch && (
-                        <>
-                            <button onClick={() => setRaw(r => !r)}
-                                className="text-[11px] border border-gray-300 rounded px-2 py-1 text-gray-600 hover:bg-gray-50">
-                                {raw ? 'Rendered diff' : 'Raw patch'}
-                            </button>
-                            <CopyPatchBtn text={patch} />
-                        </>
-                    )}
-                    <UploadFilesButton onFiles={onFiles} busy={busy} primary={false}
-                        label={patch ? 'Replace files' : 'Upload files'} />
-                </div>
+            {/* Actions */}
+            <div className="flex items-center gap-2 mb-3 flex-wrap">
+                <div className="flex-1" />
+                {patch && (
+                    <>
+                        <button onClick={() => setRaw(r => !r)}
+                            className="text-[11px] border border-gray-300 rounded px-2 py-1 text-gray-600 hover:bg-gray-50">
+                            {raw ? 'Rendered diff' : 'Raw patch'}
+                        </button>
+                        <CopyPatchBtn text={patch} />
+                    </>
+                )}
+                <UploadFilesButton onFiles={onFiles} busy={busy} primary={false}
+                    label={patch ? 'Replace files' : 'Upload files'} />
             </div>
-            <div className="text-[11px] text-gray-400 font-mono mb-3">{PATCH_FILE[active]}</div>
 
             {!patch ? (
                 <div className="text-center py-20 text-gray-400">

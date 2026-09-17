@@ -85,12 +85,8 @@ export function RubricsViewTab({ rubrics, previousRubrics, hasPrevVersion, onOpe
     return (
         <div className="space-y-8">
             <section>
-                <div className="flex items-center justify-between mb-2">
-                    <h2 className="text-xs font-semibold text-gray-700">Rubrics ({rubrics.length})</h2>
-                    <TableCopyBtn
-                        headers={['Index', 'Verifier Type', 'Dependencies', 'Criteria', 'Mapped Dimension', 'Source', 'Answer (A)', 'Reason (A)', 'Answer (B)', 'Reason (B)']}
-                        rows={rubrics.map(r => [r.index, r.verifier_type, r.dependencies_note, r.criteria, r.mapped_dimension, r.source, r.answer_a, r.reason_a, r.answer_b, r.reason_b])}
-                    />
+                <div className="mb-2">
+                    <h2 className="text-xs font-semibold text-gray-700">Rubrics</h2>
                 </div>
                 <div className="border border-gray-200 rounded overflow-x-auto">
                     <table className="w-full text-[11px] border-collapse">
@@ -106,7 +102,12 @@ export function RubricsViewTab({ rubrics, previousRubrics, hasPrevVersion, onOpe
                                 <th className="px-2 py-1.5 min-w-[220px] text-blue-600">Reason (A)</th>
                                 <th className="px-2 py-1.5 w-20 text-teal-600">Answer (B)</th>
                                 <th className="px-2 py-1.5 min-w-[220px] text-teal-600">Reason (B)</th>
-                                <th className="px-2 py-1.5 w-8"></th>
+                                <th className="px-2 py-1.5">
+                                    <TableCopyBtn
+                                        headers={['Index', 'Verifier Type', 'Dependencies', 'Criteria', 'Mapped Dimension', 'Source', 'Answer (A)', 'Reason (A)', 'Answer (B)', 'Reason (B)']}
+                                        rows={rubrics.map(r => [r.index, r.verifier_type, r.dependencies_note, r.criteria, r.mapped_dimension, r.source, r.answer_a, r.reason_a, r.answer_b, r.reason_b])}
+                                    />
+                                </th>
                             </tr>
                         </thead>
                         <tbody>
