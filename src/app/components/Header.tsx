@@ -274,6 +274,11 @@ const navItems: NavItem[] = [
         href: "/tools/anton-parser",
         icon: "AParse",
       },
+      {
+        title: "Anthropic Parser",
+        href: "/tools/anthropic-parser",
+        icon: "AParse",
+      },
     ],
   },
 ];
@@ -373,6 +378,7 @@ export function getAllNavRoles(
     { label: "A Parse", value: "/tools/a-parse" },
     { label: "Deck Grading Tasks", value: "/tools/deck-grading" },
     { label: "Anton Parser", value: "/tools/anton-parser" },
+    { label: "Anthropic Parser", value: "/tools/anthropic-parser" },
     { label: "Settings", value: "/settings" },
   ];
   // const roles: { label: string; value: string }[] = [];

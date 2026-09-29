@@ -204,6 +204,14 @@ export enum AntonParserAPIRoutes {
     GET_ASSIGNEES = 'anton-parser/assignees',
 }
 
+export enum AnthropicParserAPIRoutes {
+    GET_TASKS = 'anthropic-parser/tasks',
+    CREATE_TASK = 'anthropic-parser/tasks',
+    GET_TASK = 'anthropic-parser/tasks/:id',
+    UPDATE_TASK = 'anthropic-parser/tasks/:id',
+    DELETE_TASK = 'anthropic-parser/tasks/:id',
+}
+
 export enum ProfessionalsAPIRoutes {
     GET_ALL = 'professionals',
     GET_BY_ID = 'professionals/:id',
