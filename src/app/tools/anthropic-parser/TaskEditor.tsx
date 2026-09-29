@@ -11,6 +11,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Check, Pencil, RefreshCw } from 'lucide-react'
 import { getAnthropicTask, setAnthropicTaskTitle, updateAnthropicTask } from '@/app/api_handlers/api/anthropic-parser.api'
 import { buildDiffBlocks, parseUnifiedDiff } from './diffLogic'
+import { MD_CONTENT_CLASS } from './markdown'
 import {
     AddedComment, DEFAULT_SCHEMA, RUBRIC_HTML, UnitState, defaultKind, extractProps, formatLocal,
 } from './taskLogic'
@@ -304,7 +305,7 @@ export default function TaskEditor({ taskId, onClose }: { taskId: string; onClos
 
                     <details className="border border-gray-200 rounded-md my-2.5" id="rubric">
                         <summary className="cursor-pointer px-3 py-2 font-semibold bg-gray-50 rounded-t-md select-none">Rubric quick reference</summary>
-                        <div className="px-3.5 py-2.5 text-[13px] leading-relaxed [&_table]:my-2 [&_th]:border [&_td]:border [&_th]:border-gray-200 [&_td]:border-gray-200 [&_th]:px-2 [&_td]:px-2 [&_th]:py-1 [&_td]:py-1 [&_th]:bg-gray-50 [&_table]:border-collapse"
+                        <div className={`px-3.5 py-2.5 text-[13px] leading-relaxed ${MD_CONTENT_CLASS}`}
                             dangerouslySetInnerHTML={{ __html: RUBRIC_HTML }} />
                     </details>
 

@@ -8,7 +8,7 @@
  * ------------------------------------------------------------------ */
 
 import { useEffect, useState } from 'react'
-import { mdRender } from './markdown'
+import { MD_CONTENT_CLASS, mdRender } from './markdown'
 
 export default function EditableTextPanel({ value, onSave }: { value: string; onSave: (text: string) => void }) {
     const [renderMd, setRenderMd] = useState(true)
@@ -32,7 +32,7 @@ export default function EditableTextPanel({ value, onSave }: { value: string; on
                 {!editing && <button type="button" onClick={() => { setDraft(value); setEditing(true) }} className="ml-auto text-[12.5px] border border-gray-300 rounded px-2.5 py-1 hover:bg-gray-50">edit</button>}
             </div>
             {renderMd
-                ? <div className="text-[13px] leading-relaxed max-h-[26em] overflow-auto bg-gray-50 rounded p-3" dangerouslySetInnerHTML={{ __html: mdRender(value) }} />
+                ? <div className={`text-[13px] leading-relaxed max-h-[26em] overflow-auto bg-gray-50 rounded p-3 ${MD_CONTENT_CLASS}`} dangerouslySetInnerHTML={{ __html: mdRender(value) }} />
                 : <pre className="bg-gray-50 rounded p-3 max-h-[26em] overflow-auto whitespace-pre-wrap break-words font-mono text-[12px]">{value}</pre>}
             {editing && (
                 <div className="mt-2">

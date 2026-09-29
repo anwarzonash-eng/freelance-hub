@@ -7,7 +7,7 @@
  * fields. Ported from task.html's wirePad.
  * ------------------------------------------------------------------ */
 
-import { mdRender } from './markdown'
+import { MD_CONTENT_CLASS, mdRender } from './markdown'
 
 function Pad({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
     const stats = value ? `${value.length.toLocaleString()} chars · ${value.split('\n').length} lines` : ''
@@ -19,7 +19,7 @@ function Pad({ label, value, onChange }: { label: string; value: string; onChang
                     className="w-full min-h-[14em] font-mono text-[12px] border border-gray-300 rounded px-2.5 py-2 outline-none focus:border-indigo-400" />
                 <div>
                     <div className="border border-gray-200 rounded px-3 py-2.5 min-h-[14em] overflow-auto bg-gray-50 text-[12.5px] leading-relaxed">
-                        {value.trim() ? <div dangerouslySetInnerHTML={{ __html: mdRender(value) }} /> : <span className="text-gray-400 italic">preview</span>}
+                        {value.trim() ? <div className={MD_CONTENT_CLASS} dangerouslySetInnerHTML={{ __html: mdRender(value) }} /> : <span className="text-gray-400 italic">preview</span>}
                     </div>
                     <div className="text-[11px] text-gray-500 mt-1">{stats}</div>
                 </div>

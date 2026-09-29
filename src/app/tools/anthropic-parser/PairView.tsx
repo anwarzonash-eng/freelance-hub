@@ -8,7 +8,7 @@
 
 import { ReactNode, useState } from 'react'
 import { wordDiffTokens, WordTok } from './diffLogic'
-import { mdRender } from './markdown'
+import { MD_CONTENT_CLASS, mdRender } from './markdown'
 import { heuristicFindings } from './taskLogic'
 
 function renderWordDiff(toks: WordTok[], markClass: string): ReactNode {
@@ -63,13 +63,13 @@ export default function PairView({ commitA, commitB, prA, prB, testSummary }: {
                 </tr></thead>
                 <tbody><tr>
                     <td className="border border-gray-200 p-2.5 align-top">
-                        {md ? <div className="text-[12.5px] leading-relaxed" dangerouslySetInnerHTML={{ __html: mdRender(commitA) }} />
+                        {md ? <div className={`text-[12.5px] leading-relaxed ${MD_CONTENT_CLASS}`} dangerouslySetInnerHTML={{ __html: mdRender(commitA) }} />
                             : wd ? <pre className="bg-gray-50 p-3 rounded text-[12px] whitespace-pre-wrap break-words font-mono">{renderWordDiff(wdB.a, 'bg-blue-100')}</pre>
                                 : <pre className="bg-gray-50 p-3 rounded text-[12px] whitespace-pre-wrap break-words font-mono">{commitA}</pre>}
                         <Findings hits={heuristicFindings(commitA, testSummary)} />
                     </td>
                     <td className="border border-gray-200 p-2.5 align-top">
-                        {md ? <div className="text-[12.5px] leading-relaxed" dangerouslySetInnerHTML={{ __html: mdRender(commitB) }} />
+                        {md ? <div className={`text-[12.5px] leading-relaxed ${MD_CONTENT_CLASS}`} dangerouslySetInnerHTML={{ __html: mdRender(commitB) }} />
                             : wd ? <pre className="bg-gray-50 p-3 rounded text-[12px] whitespace-pre-wrap break-words font-mono">{renderWordDiff(wdB.b, 'bg-pink-100')}</pre>
                                 : <pre className="bg-gray-50 p-3 rounded text-[12px] whitespace-pre-wrap break-words font-mono">{commitB}</pre>}
                         <Findings hits={heuristicFindings(commitB, testSummary)} />
@@ -85,13 +85,13 @@ export default function PairView({ commitA, commitB, prA, prB, testSummary }: {
                 </tr></thead>
                 <tbody><tr>
                     <td className="border border-gray-200 p-2.5 align-top">
-                        {md ? <div className="text-[12.5px] leading-relaxed" dangerouslySetInnerHTML={{ __html: mdRender(prA) }} />
+                        {md ? <div className={`text-[12.5px] leading-relaxed ${MD_CONTENT_CLASS}`} dangerouslySetInnerHTML={{ __html: mdRender(prA) }} />
                             : wd ? <pre className="bg-gray-50 p-3 rounded text-[12px] whitespace-pre-wrap break-words font-mono">{renderWordDiff(prWd.a, 'bg-blue-100')}</pre>
                                 : <pre className="bg-gray-50 p-3 rounded text-[12px] whitespace-pre-wrap break-words font-mono">{prA}</pre>}
                         <Findings hits={heuristicFindings(prA, testSummary)} />
                     </td>
                     <td className="border border-gray-200 p-2.5 align-top">
-                        {md ? <div className="text-[12.5px] leading-relaxed" dangerouslySetInnerHTML={{ __html: mdRender(prB) }} />
+                        {md ? <div className={`text-[12.5px] leading-relaxed ${MD_CONTENT_CLASS}`} dangerouslySetInnerHTML={{ __html: mdRender(prB) }} />
                             : wd ? <pre className="bg-gray-50 p-3 rounded text-[12px] whitespace-pre-wrap break-words font-mono">{renderWordDiff(prWd.b, 'bg-pink-100')}</pre>
                                 : <pre className="bg-gray-50 p-3 rounded text-[12px] whitespace-pre-wrap break-words font-mono">{prB}</pre>}
                         <Findings hits={heuristicFindings(prB, testSummary)} />

@@ -6,6 +6,31 @@
  * summary, commit message, PR description and the two drafting pads.
  * ------------------------------------------------------------------ */
 
+/**
+ * mdRender()'s output is bare `<h1>`/`<ul>`/`<strong>`/`<code>`/... tags with
+ * no classes of their own — in task.html that was fine, since the page had no
+ * CSS reset and browsers style those elements by default (bold+large
+ * headings, indented bullets, monospace code). This app's Tailwind preflight
+ * strips exactly that default styling, so every `dangerouslySetInnerHTML`
+ * that renders `mdRender()` output needs this class on its wrapper — without
+ * it the whole document collapses to same-size unstyled paragraphs.
+ */
+export const MD_CONTENT_CLASS =
+    '[&_h1]:text-[17px] [&_h1]:font-bold [&_h1]:text-gray-900 [&_h1]:mt-3 [&_h1]:mb-1.5 ' +
+    '[&_h2]:text-[15px] [&_h2]:font-bold [&_h2]:text-gray-900 [&_h2]:mt-3 [&_h2]:mb-1.5 ' +
+    '[&_h3]:text-[13.5px] [&_h3]:font-bold [&_h3]:text-gray-900 [&_h3]:mt-2.5 [&_h3]:mb-1 ' +
+    '[&_h4]:text-[13px] [&_h4]:font-bold [&_h5]:text-[13px] [&_h5]:font-bold [&_h6]:text-[13px] [&_h6]:font-bold [&_h4]:my-1 [&_h5]:my-1 [&_h6]:my-1 ' +
+    '[&_p]:my-1.5 [&_p:first-child]:mt-0 ' +
+    '[&_ul]:list-disc [&_ul]:pl-5 [&_ul]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:my-1.5 [&_li]:my-0.5 [&_li>ul]:my-0.5 [&_li>ol]:my-0.5 ' +
+    '[&_strong]:font-semibold [&_strong]:text-gray-900 [&_em]:italic [&_del]:line-through [&_del]:text-gray-500 ' +
+    '[&_code]:font-mono [&_code]:text-[0.9em] [&_code]:bg-gray-100 [&_code]:text-pink-700 [&_code]:rounded [&_code]:px-1 [&_code]:py-0.5 ' +
+    '[&_pre.md-code]:bg-gray-900 [&_pre.md-code]:text-gray-100 [&_pre.md-code]:rounded-md [&_pre.md-code]:p-2.5 [&_pre.md-code]:overflow-x-auto [&_pre.md-code]:my-2 [&_pre.md-code_code]:bg-transparent [&_pre.md-code_code]:text-inherit [&_pre.md-code_code]:p-0 ' +
+    '[&_blockquote]:border-l-2 [&_blockquote]:border-gray-300 [&_blockquote]:pl-2.5 [&_blockquote]:text-gray-600 [&_blockquote]:italic [&_blockquote]:my-1.5 ' +
+    '[&_hr]:my-3 [&_hr]:border-gray-200 ' +
+    '[&_table]:border-collapse [&_table]:my-2 [&_th]:border [&_td]:border [&_th]:border-gray-200 [&_td]:border-gray-200 [&_th]:px-2 [&_td]:px-2 [&_th]:py-1 [&_td]:py-1 [&_th]:bg-gray-50 [&_th]:text-left [&_th]:font-semibold ' +
+    '[&_.md-link]:text-indigo-600 [&_.md-link]:underline [&_.md-link]:decoration-dotted [&_.md-link]:cursor-help ' +
+    '[&_.md-img]:text-gray-400 [&_.md-img]:italic'
+
 function mdEsc(s: string): string {
     return String(s).replace(/\u0000/g, '�').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
 }
