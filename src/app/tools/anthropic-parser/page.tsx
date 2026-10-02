@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { ListTree, Plus, RefreshCw, Trash2, Upload } from 'lucide-react'
-import { getAnthropicTasks, createAnthropicTask, deleteAnthropicTask } from '@/app/api_handlers/api/anthropic-parser.api'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { ListTree, MessageSquareText, Plus, RefreshCw, Trash2, Upload } from 'lucide-react'
+import { getAnthropicTasks, createAnthropicTask, deleteAnthropicTask, ANTHROPIC_TASK_STATUSES, ANTHROPIC_STATUS_STYLE, AnthropicTaskStatus, DEFAULT_ANTHROPIC_TASK_STATUS } from '@/app/api_handlers/api/anthropic-parser.api'
+import { formatMinutes } from './taskLogic'
 import TaskEditor from './TaskEditor'
 
 interface TaskListItem {
@@ -12,6 +13,11 @@ interface TaskListItem {
     updated_by?: string | null
     createdAt?: string
     updatedAt?: string
+    pair_id?: string | null
+    track_time?: number | null
+    submit_minutes?: number | null
+    status?: AnthropicTaskStatus
+    feedback?: string | null
 }
 
 function readJsonFile(file: File): Promise<any> {
@@ -26,12 +32,22 @@ function readJsonFile(file: File): Promise<any> {
     })
 }
 
+function StatusBadge({ status }: { status: AnthropicTaskStatus }) {
+    return (
+        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border whitespace-nowrap ${ANTHROPIC_STATUS_STYLE[status] || ANTHROPIC_STATUS_STYLE[DEFAULT_ANTHROPIC_TASK_STATUS]}`}>
+            {status}
+        </span>
+    )
+}
+
 export default function AnthropicParserPage() {
     const [tasks, setTasks] = useState<TaskListItem[]>([])
     const [loading, setLoading] = useState(false)
     const [editingId, setEditingId] = useState<string | null>(null)
     const [uploadBusy, setUploadBusy] = useState(false)
     const [uploadErr, setUploadErr] = useState('')
+    const [statusFilter, setStatusFilter] = useState<AnthropicTaskStatus | 'all'>('all')
+    const [feedbackFilter, setFeedbackFilter] = useState<'all' | 'yes' | 'no'>('all')
     const fileRef = useRef<HTMLInputElement>(null)
 
     const load = async () => {
@@ -43,6 +59,12 @@ export default function AnthropicParserPage() {
         } finally { setLoading(false) }
     }
     useEffect(() => { load() }, [])
+
+    const visibleTasks = useMemo(() => tasks
+        .filter(t => statusFilter === 'all' || (t.status || DEFAULT_ANTHROPIC_TASK_STATUS) === statusFilter)
+        .filter(t => feedbackFilter === 'all' || (feedbackFilter === 'yes' ? !!t.feedback?.trim() : !t.feedback?.trim())),
+    [tasks, statusFilter, feedbackFilter])
+    const filtersActive = statusFilter !== 'all' || feedbackFilter !== 'all'
 
     const onFile = async (file: File) => {
         setUploadErr('')
@@ -73,9 +95,26 @@ export default function AnthropicParserPage() {
                 <div className="flex items-center gap-2">
                     <ListTree size={14} className="text-gray-500" />
                     <h1 className="text-sm font-semibold text-gray-800">Anthropic Parser</h1>
-                    <span className="text-[10px] text-gray-400">{tasks.length} task{tasks.length !== 1 ? 's' : ''}</span>
+                    <span className="text-[10px] text-gray-400">
+                        {!filtersActive
+                            ? `${tasks.length} task${tasks.length !== 1 ? 's' : ''}`
+                            : `${visibleTasks.length} of ${tasks.length} task${tasks.length !== 1 ? 's' : ''}`}
+                    </span>
                 </div>
                 <div className="flex items-center gap-2">
+                    <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as AnthropicTaskStatus | 'all')}
+                        title="Filter by status"
+                        className="text-xs border border-gray-300 rounded px-2 py-1 text-gray-600 bg-white hover:bg-gray-50 focus:outline-none focus:border-indigo-400">
+                        <option value="all">All statuses</option>
+                        {ANTHROPIC_TASK_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                    <select value={feedbackFilter} onChange={e => setFeedbackFilter(e.target.value as 'all' | 'yes' | 'no')}
+                        title="Filter by feedback"
+                        className="text-xs border border-gray-300 rounded px-2 py-1 text-gray-600 bg-white hover:bg-gray-50 focus:outline-none focus:border-indigo-400">
+                        <option value="all">Feedback: all</option>
+                        <option value="yes">Has feedback</option>
+                        <option value="no">No feedback</option>
+                    </select>
                     <button onClick={() => load()} disabled={loading}
                         className="flex items-center gap-1 text-xs border border-gray-300 rounded px-2 py-1 hover:bg-gray-50 disabled:opacity-50 text-gray-600">
                         <RefreshCw size={11} className={loading ? 'animate-spin' : ''} /> Refresh
@@ -102,23 +141,39 @@ export default function AnthropicParserPage() {
                         <Upload size={20} className="text-gray-300" />
                         No tasks yet. Click <span className="font-medium text-indigo-600">Upload original.json</span> to add one.
                     </div>
+                ) : visibleTasks.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center gap-2 py-12 text-gray-400 text-xs">
+                        No tasks match these filters.
+                    </div>
                 ) : (
                     <table className="w-full text-xs">
                         <thead className="bg-gray-50 sticky top-0">
                             <tr className="text-left text-gray-500">
                                 <th className="px-3 py-1.5 font-medium">Task</th>
+                                <th className="px-3 py-1.5 font-medium">Pair ID</th>
+                                <th className="px-3 py-1.5 font-medium">Track time</th>
+                                <th className="px-3 py-1.5 font-medium">Submit time</th>
+                                <th className="px-3 py-1.5 font-medium">Status</th>
+                                <th className="px-3 py-1.5 font-medium text-center">Feedback</th>
                                 <th className="px-3 py-1.5 font-medium">Created by</th>
-                                <th className="px-3 py-1.5 font-medium">Updated by</th>
                                 <th className="px-3 py-1.5 font-medium">Updated</th>
                                 <th className="px-3 py-1.5 font-medium w-8"></th>
                             </tr>
                         </thead>
                         <tbody>
-                            {tasks.map(t => (
+                            {visibleTasks.map(t => (
                                 <tr key={t.id} className="border-t border-gray-100 hover:bg-gray-50 cursor-pointer" onClick={() => setEditingId(t.id)}>
                                     <td className="px-3 py-1.5 font-medium text-gray-800">{t.title}</td>
+                                    <td className="px-3 py-1.5 text-gray-500">{t.pair_id || <span className="text-gray-300">—</span>}</td>
+                                    <td className="px-3 py-1.5 text-gray-500">{t.track_time != null ? formatMinutes(t.track_time) : <span className="text-gray-300">—</span>}</td>
+                                    <td className="px-3 py-1.5 text-gray-500">{t.submit_minutes != null ? formatMinutes(t.submit_minutes) : <span className="text-gray-300">—</span>}</td>
+                                    <td className="px-3 py-1.5"><StatusBadge status={t.status || DEFAULT_ANTHROPIC_TASK_STATUS} /></td>
+                                    <td className="px-3 py-1.5 text-center">
+                                        <span title={t.feedback?.trim() ? 'Has feedback' : 'No feedback yet'}>
+                                            <MessageSquareText size={13} className={`inline-block ${t.feedback?.trim() ? 'text-indigo-600' : 'text-gray-200'}`} />
+                                        </span>
+                                    </td>
                                     <td className="px-3 py-1.5 text-gray-500">{t.created_by || <span className="text-gray-300">—</span>}</td>
-                                    <td className="px-3 py-1.5 text-gray-500">{t.updated_by || <span className="text-gray-300">—</span>}</td>
                                     <td className="px-3 py-1.5 text-gray-400">{t.updatedAt ? new Date(t.updatedAt).toLocaleString() : '—'}</td>
                                     <td className="px-3 py-1.5">
                                         <button onClick={e => { e.stopPropagation(); removeTask(t.id) }} title="Delete"

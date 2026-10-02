@@ -9,11 +9,14 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Check, Pencil, RefreshCw } from 'lucide-react'
-import { getAnthropicTask, setAnthropicTaskTitle, updateAnthropicTask } from '@/app/api_handlers/api/anthropic-parser.api'
+import {
+    AnthropicTaskStatus, ANTHROPIC_STATUS_STYLE, ANTHROPIC_TASK_STATUSES, DEFAULT_ANTHROPIC_TASK_STATUS,
+    getAnthropicTask, setAnthropicTaskTitle, updateAnthropicTask,
+} from '@/app/api_handlers/api/anthropic-parser.api'
 import { buildDiffBlocks, parseUnifiedDiff } from './diffLogic'
 import { MD_CONTENT_CLASS } from './markdown'
 import {
-    AddedComment, DEFAULT_SCHEMA, RUBRIC_HTML, UnitState, defaultKind, extractProps, formatLocal,
+    AddedComment, DEFAULT_SCHEMA, RUBRIC_HTML, UnitState, defaultKind, extractProps, formatLocal, formatMinutes,
 } from './taskLogic'
 import DiffPane from './DiffPane'
 import EditCommentsPanel from './EditCommentsPanel'
@@ -71,6 +74,44 @@ function IdChip({ label, value }: { label: string; value: string }) {
     )
 }
 
+/** A small always-editable text input for the header — commits on blur/Enter,
+ *  not on every keystroke. */
+function MetaTextField({ label, value, placeholder, onCommit }: { label: string; value: string; placeholder?: string; onCommit: (v: string) => void }) {
+    const [draft, setDraft] = useState(value)
+    useEffect(() => { setDraft(value) }, [value])
+    return (
+        <span className="flex items-center gap-1 shrink-0">
+            <span className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">{label}</span>
+            <input value={draft} onChange={e => setDraft(e.target.value)}
+                onBlur={() => { if (draft !== value) onCommit(draft) }}
+                onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                placeholder={placeholder}
+                className="text-[12px] border border-gray-300 rounded px-1.5 py-0.5 outline-none focus:border-indigo-400 w-28" />
+        </span>
+    )
+}
+
+/** Minutes input + a derived "3h 40min" label — same commit-on-blur behaviour. */
+function MetaMinutesField({ label, value, onCommit }: { label: string; value: number | null; onCommit: (v: number | null) => void }) {
+    const [draft, setDraft] = useState(value == null ? '' : String(value))
+    useEffect(() => { setDraft(value == null ? '' : String(value)) }, [value])
+    const commit = () => {
+        if (draft.trim() === '') { if (value != null) onCommit(null); return }
+        const n = Math.max(0, Math.round(Number(draft)))
+        if (Number.isNaN(n)) { setDraft(value == null ? '' : String(value)); return }
+        if (n !== value) onCommit(n)
+    }
+    return (
+        <span className="flex items-center gap-1 shrink-0">
+            <span className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">{label}</span>
+            <input type="number" min={0} value={draft} onChange={e => setDraft(e.target.value)}
+                onBlur={commit} onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                placeholder="min" className="text-[12px] border border-gray-300 rounded px-1.5 py-0.5 outline-none focus:border-indigo-400 w-16" />
+            {value != null && <span className="text-[11px] text-gray-400 whitespace-nowrap">{formatMinutes(value)}</span>}
+        </span>
+    )
+}
+
 const ANSWERS_PANEL_WIDTH_KEY = 'anthropic_answers_panel_width'
 const DEFAULT_ANSWERS_WIDTH = 440
 
@@ -91,6 +132,9 @@ export default function TaskEditor({ taskId, onClose }: { taskId: string; onClos
     const [showAnswers, setShowAnswers] = useState(false)
     const [answersWidth, setAnswersWidth] = useState(DEFAULT_ANSWERS_WIDTH)
     const [saveStatus, setSaveStatus] = useState('not saved yet')
+    // Feedback lives in the Answers panel, but it's its own column (not part of
+    // the `answers` JSONB blob) — same debounced-autosave shape as `updated`.
+    const [feedback, setFeedback] = useState('')
 
     useEffect(() => {
         try {
@@ -109,6 +153,7 @@ export default function TaskEditor({ taskId, onClose }: { taskId: string; onClos
             if (!full) { setLoadError('Could not load this task.'); return }
             setRow(full)
             setUpdated(full.updated || {})
+            setFeedback(full.feedback || '')
             const af = full.answers
             if (af && af.answers) {
                 setBundle({
@@ -165,6 +210,15 @@ export default function TaskEditor({ taskId, onClose }: { taskId: string; onClos
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [bundle, loading, taskId])
 
+    // Autosave `feedback`, debounced — its own column, typed in the Answers panel.
+    const firstFeedback = useRef(true)
+    useEffect(() => {
+        if (loading) return
+        if (firstFeedback.current) { firstFeedback.current = false; return }
+        const t = setTimeout(() => { updateAnthropicTask(taskId, { feedback }) }, 500)
+        return () => clearTimeout(t)
+    }, [feedback, loading, taskId])
+
     const currentText = (field: 'problem_statement' | 'test_summary') => {
         if (viewMode === 'updated' && updated?.[field] != null) return updated[field]
         return props?.[field] || ''
@@ -178,6 +232,13 @@ export default function TaskEditor({ taskId, onClose }: { taskId: string; onClos
         const title = next.trim() || 'Untitled task'
         setRow((r: any) => ({ ...r, title }))
         setAnthropicTaskTitle(taskId, title)
+    }
+
+    // Tracking metadata — their own columns, each commits on its own (blur, or
+    // immediately for the status dropdown), not part of the debounced autosaves.
+    const saveMeta = (patch: { pair_id?: string | null; track_time?: number | null; submit_minutes?: number | null; status?: AnthropicTaskStatus }) => {
+        setRow((r: any) => ({ ...r, ...patch }))
+        updateAnthropicTask(taskId, patch)
     }
 
     const setAnswer = (id: string, val: string) => setBundle(b => ({ ...b, answers: { ...b.answers, [id]: val } }))
@@ -246,6 +307,15 @@ export default function TaskEditor({ taskId, onClose }: { taskId: string; onClos
                         {stage?.id && <IdChip label="stageID" value={stage.id} />}
                         {stage?.expires_at && <span className="text-gray-500" title={stage.expires_at}>expires {formatLocal(stage.expires_at)}</span>}
                     </span>
+                    <span className="w-px self-stretch bg-indigo-200" />
+                    <MetaTextField label="Pair ID" value={row?.pair_id || ''} placeholder="pair id" onCommit={v => saveMeta({ pair_id: v || null })} />
+                    <MetaMinutesField label="Track time" value={row?.track_time ?? null} onCommit={v => saveMeta({ track_time: v })} />
+                    <MetaMinutesField label="Submit time" value={row?.submit_minutes ?? null} onCommit={v => saveMeta({ submit_minutes: v })} />
+                    <select value={row?.status || DEFAULT_ANTHROPIC_TASK_STATUS} onChange={e => saveMeta({ status: e.target.value as AnthropicTaskStatus })}
+                        title="Status"
+                        className={`text-[11px] font-semibold px-1.5 py-0.5 rounded border shrink-0 outline-none ${ANTHROPIC_STATUS_STYLE[(row?.status || DEFAULT_ANTHROPIC_TASK_STATUS) as AnthropicTaskStatus]}`}>
+                        {ANTHROPIC_TASK_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
                     <span className="w-px self-stretch bg-indigo-200" />
                     <span>
                         <label className="font-semibold cursor-pointer mr-3"><input type="radio" checked={viewMode === 'original'} onChange={() => setViewMode('original')} /> Original</label>
@@ -328,6 +398,7 @@ export default function TaskEditor({ taskId, onClose }: { taskId: string; onClos
                     <div onMouseDown={startResize} title="Drag to resize" className="w-1.5 shrink-0 cursor-col-resize hover:bg-indigo-300 bg-gray-200" />
                     <AnswersPanel schema={schema} answers={bundle.answers} onAnswerChange={setAnswer} saveStatus={saveStatus}
                         pairId={pairId} onClose={() => setShowAnswers(false)} width={answersWidth}
+                        feedback={feedback} onFeedbackChange={setFeedback}
                         downloadPayload={{ answers: bundle.answers, unitState: bundle.unitState, adds: bundle.adds, editSide: bundle.editSide }} />
                 </>
             )}

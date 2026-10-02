@@ -236,3 +236,14 @@ export function formatLocal(iso: string): string {
     const min = (d.getMinutes() < 10 ? '0' : '') + d.getMinutes()
     return d.getDate() + ' ' + MONTHS[d.getMonth()] + ', ' + h12 + ':' + min + ' ' + ampm
 }
+
+/** A raw minutes count as "3h 40min" (or just "40min" under an hour, "3h" on
+ *  the dot) — the label shown next to the Track time / Submit minutes inputs. */
+export function formatMinutes(mins: number | null | undefined): string {
+    if (mins == null || !Number.isFinite(mins) || mins < 0) return ''
+    const h = Math.floor(mins / 60)
+    const m = mins % 60
+    if (h === 0) return `${m}min`
+    if (m === 0) return `${h}h`
+    return `${h}h ${m}min`
+}

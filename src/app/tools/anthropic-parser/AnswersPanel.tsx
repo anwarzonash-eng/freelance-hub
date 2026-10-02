@@ -15,7 +15,7 @@ function copyText(text: string) {
 }
 
 export default function AnswersPanel({
-    schema, answers, onAnswerChange, saveStatus, pairId, onClose, width, downloadPayload,
+    schema, answers, onAnswerChange, saveStatus, pairId, onClose, width, downloadPayload, feedback, onFeedbackChange,
 }: {
     schema: SchemaSection[]
     answers: Record<string, any>
@@ -27,6 +27,10 @@ export default function AnswersPanel({
     /** The full saved bundle (answers + unitState + adds + editSide) — matches what
      *  the "download answers.json" button in task.html exports. */
     downloadPayload: Record<string, any>
+    /** The task's own `feedback` column — the only one of the new tracking fields
+     *  that lives in this panel rather than the header. */
+    feedback: string
+    onFeedbackChange: (v: string) => void
 }) {
     const exportText = () => {
         const lines: string[] = [`CoAT answers — pair ${pairId}`]
@@ -52,6 +56,13 @@ export default function AnswersPanel({
                 <h2 className="text-[15px] font-semibold flex-1">Your answers</h2>
                 <span className="text-[12px] text-gray-500">{saveStatus}</span>
                 <button onClick={onClose} title="Close" className="text-gray-400 hover:text-gray-700"><X size={16} /></button>
+            </div>
+
+            <div className="border border-gray-200 rounded-md px-3.5 py-2.5 my-2.5">
+                <h3 className="text-[15px] font-semibold mt-0">Feedback</h3>
+                <textarea rows={5} value={feedback} onChange={e => onFeedbackChange(e.target.value)}
+                    placeholder="Feedback on this task…"
+                    className="w-full text-[13px] border border-gray-300 rounded px-2 py-1.5 font-inherit" />
             </div>
 
             {schema.map(section => (
