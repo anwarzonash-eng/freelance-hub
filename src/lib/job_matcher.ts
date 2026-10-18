@@ -5,7 +5,7 @@ import OpenAI from "openai";
 import path from "path";
 
 
-const client = new OpenAI({ apiKey: 'sk-REDACTED', dangerouslyAllowBrowser: true });
+const client = new OpenAI({ apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY, dangerouslyAllowBrowser: true });
 const EMBED_MODEL = "text-embedding-3-small";
 
 export type Job = {

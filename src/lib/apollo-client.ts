@@ -7,8 +7,8 @@ const httpLink = createHttpLink({
 });
 
 const authLink = setContext((_, { headers }) => {
-    // Replace YOUR_ACCESS_TOKEN with your actual Upwork API access token
-    const token = 'oauth2v2_REDACTED';
+    // Replace YOUR_ACCESS_TOKEN with your actual Freelance Platform API access token
+    const token = process.env.NEXT_PUBLIC_JOB_API_TOKEN;
     return {
         headers: {
             ...headers,

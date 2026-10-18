@@ -551,7 +551,7 @@ export default function ManageDetailProfiles() {
                         </span>
                       </div>
 
-                      {/* Upwork Show Status & Hide Earnings */}
+                      {/* Freelance Platform Show Status & Hide Earnings */}
                       <div className="shrink-0 flex items-center gap-2">
                         <span
                           className={`inline-block px-2 py-1 text-xs font-semibold rounded whitespace-nowrap ${
@@ -563,9 +563,9 @@ export default function ManageDetailProfiles() {
                           }`}
                         >
                           {profile.upwork_show_status === "show"
-                            ? "Show Upwork"
+                            ? "Show Freelance Platform"
                             : profile.upwork_show_status === "hide"
-                              ? "Hide Upwork"
+                              ? "Hide Freelance Platform"
                               : "Show at End"}
                         </span>
                         {profile.hide_earnings && (

@@ -1,6 +1,6 @@
 # Deck guideline images
 
-Drop your ~8 pictures **into this folder** (`upwork_tool/public/deck-guidelines/`),
+Drop your ~8 pictures **into this folder** (`freelance-hub/public/deck-guidelines/`),
 then list their exact file names in `manifest.json`, e.g.:
 
 ```json

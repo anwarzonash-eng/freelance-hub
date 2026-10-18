@@ -510,7 +510,7 @@ const JobCard = () => {
       )}
 
       <h1 className="text-3xl font-bold text-center my-8">
-        {type == "all" ? "Upwork Job Postings" : "Submitted Proposals"}(
+        {type == "all" ? "Freelance Platform Job Postings" : "Submitted Proposals"}(
         {filteredUpworkJobs.length})
       </h1>
 
@@ -601,7 +601,7 @@ const JobCard = () => {
                     rel="noopener noreferrer"
                     className="px-3 py-1 bg-indigo-600 text-white font-semibold text-sm rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
                   >
-                    Upwork
+                    Freelance Platform
                   </Link>
                 )}
               </div>

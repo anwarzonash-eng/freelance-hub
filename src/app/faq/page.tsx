@@ -256,7 +256,7 @@ export default function FAQPage() {
               setForm({ ...form, is_upwork_allowed: e.target.checked })
             }
           />
-          Allowed for Upwork
+          Allowed for Freelance Platform
         </label>
 
         <button
@@ -310,7 +310,7 @@ export default function FAQPage() {
               <div style={{ fontSize: 13, color: "#666" }}>{i.answer}</div>
               <div style={{ fontSize: 13, color: "#666" }}>Type: {i.type}</div>
               <div style={{ fontSize: 13, color: "#666" }}>
-                Upwork: {i.is_upwork_allowed ? "Yes" : "No"}
+                Freelance Platform: {i.is_upwork_allowed ? "Yes" : "No"}
               </div>
               <button
                 title="Copy ID"

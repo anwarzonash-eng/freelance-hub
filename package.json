@@ -1,6 +1,9 @@
 {
-  "name": "upwork_tool",
+  "name": "freelance-hub",
   "version": "0.1.0",
+  "description": "Dashboard for finding and managing freelance work: job matching, leads, CVs and campaigns",
+  "author": "Zonash",
+  "license": "MIT",
   "private": true,
   "scripts": {
     "dev": "next dev -p 5000",

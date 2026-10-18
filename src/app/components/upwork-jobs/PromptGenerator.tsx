@@ -18,7 +18,7 @@ Required Skills: ${skills}
 
     const sophisticatedPrompt = `
 You are an expert copywriter with a friendly, conversational, and human tone.
-Your task is to write a compelling cover letter for the following Upwork job post.
+Your task is to write a compelling cover letter for the following Freelance Platform job post.
 
 **Job Details:**
 ${upworkJobDetails}

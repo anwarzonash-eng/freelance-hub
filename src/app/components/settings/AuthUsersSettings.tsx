@@ -17,7 +17,7 @@ const NAV_GROUPS = [
         label: "Leads",
         roles: [
             { label: "All Leads", value: "/leads" },
-            { label: "Upwork Jobs", value: "/upwork-jobs" },
+            { label: "Freelance Platform Jobs", value: "/upwork-jobs" },
         ],
     },
     {

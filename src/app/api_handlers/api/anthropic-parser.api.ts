@@ -5,7 +5,7 @@ import { apiClient } from '../api_client'
 import { ApiMethod } from '../api_methods.enum'
 import { AnthropicParserAPIRoutes } from '../api_routes.enums'
 
-// Mirrors ANTHROPIC_TASK_STATUSES on the backend (upwork_tool_backend/src/anthropic_parser/anthropic-task.model.ts).
+// Mirrors ANTHROPIC_TASK_STATUSES on the backend (freelance-hub-api/src/anthropic_parser/anthropic-task.model.ts).
 export const ANTHROPIC_TASK_STATUSES = ['Under Review', 'Failed', 'Passed'] as const
 export type AnthropicTaskStatus = typeof ANTHROPIC_TASK_STATUSES[number]
 export const DEFAULT_ANTHROPIC_TASK_STATUS: AnthropicTaskStatus = 'Under Review'

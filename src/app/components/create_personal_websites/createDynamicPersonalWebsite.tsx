@@ -1740,10 +1740,10 @@ export default function CreateDynamicPersonalWebsite({
                   </div>
                 </div>
 
-                {/* Upwork Settings Category */}
+                {/* Freelance Platform Settings Category */}
                 <div className="mb-4">
                   <h3 className="text-sm font-bold text-gray-800 mb-2 pb-2 border-b border-gray-300">
-                    Upwork Settings
+                    Freelance Platform Settings
                   </h3>
                   <div className="space-y-2">
                     <div>

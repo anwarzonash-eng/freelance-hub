@@ -115,12 +115,12 @@ const navItems: NavItem[] = [
         icon: "UpworkJobs",
       },
       {
-        title: "Upwork Leads",
+        title: "Freelance Platform Leads",
         href: "/upwork-jobs?type=all",
         icon: "Contact",
       },
       // {
-      //   title: "Upwork Submitted Proposals",
+      //   title: "Freelance Platform Submitted Proposals",
       //   href: "/upwork-jobs?type=submitted",
       //   icon: "SubmittedProposals",
       // },
@@ -352,7 +352,7 @@ export function getAllNavRoles(
   return [
     { label: "All", value: "*" },
     { label: "Leads", value: "/leads" },
-    { label: "Upwork Jobs", value: "/upwork-jobs" },
+    { label: "Freelance Platform Jobs", value: "/upwork-jobs" },
     { label: "Manage Detail Profiles", value: "/manage-detail-profiles" },
     { label: "Manage Educations", value: "/manage-educations" },
     { label: "Manage Portfolios", value: "/manage-portfolios" },

@@ -739,7 +739,7 @@ export default function ManageMainProfiles() {
             />
           </div>
           <div className="mb-2">
-            <label className="block font-semibold mb-1">Upwork</label>
+            <label className="block font-semibold mb-1">Freelance Platform</label>
             <input
               className="w-full border px-3 py-2 rounded"
               name="upwork"

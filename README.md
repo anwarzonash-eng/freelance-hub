@@ -1,36 +1,51 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Freelance Hub
 
-## Getting Started
+A web dashboard for freelancers and small agencies to find and manage freelance work. It pulls in job postings from a freelance job platform, scores them against your profile with OpenAI embeddings, helps you write cover letters and tailored CVs, and tracks leads, applicants, clients and email campaigns in one place. It also manages the content of dynamic personal-website profiles (experience, education, skills, portfolios, testimonials).
 
-First, run the development server:
+It is the frontend for [freelance-hub-api](https://github.com/anwarzonash-eng/freelance-hub-api).
+
+## Tech stack
+
+- Next.js 15 (App Router), React 19, TypeScript
+- Tailwind CSS 4, React Aria Components, Flowbite, Lucide icons
+- Apollo Client / GraphQL (job-platform API), OpenAI SDK
+- `react-pdf` / `pdfjs-dist` for CV preview, Quill editor, PapaParse for CSV
+
+## Getting started
+
+Requirements: Node.js 18+ and a running instance of [freelance-hub-api](https://github.com/anwarzonash-eng/freelance-hub-api).
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone https://github.com/anwarzonash-eng/freelance-hub.git
+cd freelance-hub
+npm install
+cp .env.example .env.local     # fill in your own values
+npm run dev                    # http://localhost:5000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Production build: `npm run build && npm start`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Configuration
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+See [.env.example](.env.example). Real keys must never be committed. Note that `NEXT_PUBLIC_*` variables are exposed to the browser; see the roadmap for moving the OpenAI calls server-side.
 
-## Learn More
+## Project structure
 
-To learn more about Next.js, take a look at the following resources:
+```
+src/app/
+  jobs/, leads/, applicants/   work pipeline screens
+  clients/, professionals/     people management
+  campaigns/, newsletters/     email campaigns
+  main-profiles/, manage-*     profile and website content management
+  api_handlers/                typed API clients for the backend
+  components/                  shared UI
+src/lib/                       Apollo client, job matcher
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Roadmap
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+See [ROADMAP.md](ROADMAP.md).
 
-## Deploy on Vercel
+## License
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+[MIT](LICENSE)

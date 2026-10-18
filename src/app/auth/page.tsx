@@ -161,7 +161,7 @@ export default function AuthCrudPage() {
             <option value="admin">Admin</option>
           </select>
         </div>
-        {/* Upwork token fields removed */}
+        {/* Freelance Platform token fields removed */}
         <div className="mb-4">
           <label className="block font-semibold mb-1">Roles</label>
           <div className="flex flex-col gap-2 max-h-60 overflow-y-auto">

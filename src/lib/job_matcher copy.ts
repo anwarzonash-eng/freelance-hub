@@ -5,7 +5,7 @@ import OpenAI from "openai";
 import path from "path";
 import { parse } from "csv-parse/sync";
 
-const client = new OpenAI({ apiKey: 'sk-REDACTED' });
+const client = new OpenAI({ apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY });
 const EMBED_MODEL = "text-embedding-3-small";
 const EMBEDDINGS_FILE = path.join(process.cwd(), "./jobs_with_embeddings.json");
 const JOBS_CSV_WITH_EMBEDDINGS = "completed_jobs_embeddings.csv";

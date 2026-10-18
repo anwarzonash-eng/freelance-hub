@@ -5,7 +5,7 @@ import { apiClient } from '../api_client'
 import { ApiMethod } from '../api_methods.enum'
 import { AntonParserAPIRoutes } from '../api_routes.enums'
 
-// Mirrors ANTON_TASK_STATUSES on the backend (upwork_tool_backend/src/anton_parser/anton-task.model.ts)
+// Mirrors ANTON_TASK_STATUSES on the backend (freelance-hub-api/src/anton_parser/anton-task.model.ts)
 // — the workflow order the status dropdown and filter both use.
 export const ANTON_TASK_STATUSES = [
     'Seeded',
